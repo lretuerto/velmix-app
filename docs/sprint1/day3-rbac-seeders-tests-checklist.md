@@ -11,3 +11,5 @@
 - [ ] Seeder de permisos versionado
 - [ ] Seeder de mapeo rol-permiso versionado
 - [ ] Tests skeleton creados (pendientes de implementación final)
+
+- [ ] PR migration validated in velmix-app
