@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace Tests\Feature\Security;
 
@@ -15,12 +15,12 @@ class TenantContextMiddlewareTest extends TestCase
 
     public function test_allows_request_with_tenant_header(): void
     {
-        $this->withHeaders(['X-Tenant-Id' => 'tenant-A'])
+        $this->withHeaders(['X-Tenant-Id' => '10'])
             ->getJson('/tenant/ping')
             ->assertOk()
             ->assertJson([
                 'ok' => true,
-                'tenant' => 'tenant-A'
+                'tenant' => '10'
             ]);
     }
 }
