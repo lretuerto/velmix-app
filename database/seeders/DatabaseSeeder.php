@@ -8,10 +8,8 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        \->call([
-            RoleSeeder::class,
-            PermissionSeeder::class,
-            RolePermissionSeeder::class,
+        $this->call([
+            RbacCatalogSeeder::class,
         ]);
     }
 }
