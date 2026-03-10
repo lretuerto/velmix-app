@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace App\Http\Middleware;
 
@@ -9,18 +9,21 @@ use Symfony\Component\HttpFoundation\Response;
 class TenantContext
 {
     public function handle(Request $request, Closure $next): Response
-    {
-        $tenantId = $request->header('X-Tenant-Id');
+	{
+  	  $tenantId = (int) $request->header('X-Tenant-Id', 0);
 
-        if (empty($tenantId)) {
-            return response()->json([
-                'message' => 'Tenant context is required'
-            ], 400);
-        }
+   	 if ($tenantId <= 0) {
+  	      return response()->json([
+   	         'message' => 'Tenant context is required',
+  	      ], 400);
+  	  }
 
-        // Guardar contexto para uso posterior
-        app()->instance('currentTenantId', $tenantId);
+  	  // CLAVE: esto lo necesita RequirePermission
+  	  $request->attributes->set('tenant_id', $tenantId);
 
-        return $next($request);
-    }
+  	  // Opcional, pero útil para otras capas
+  	  app()->instance('currentTenantId', $tenantId);
+
+  	  return $next($request);
+	}
 }
