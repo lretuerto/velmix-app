@@ -14,6 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
     $middleware->alias([
         'tenant.context' => \App\Http\Middleware\TenantContext::class,
+        'tenant.access' => \App\Http\Middleware\EnsureTenantAccess::class,
         'perm' => \App\Http\Middleware\RequirePermission::class,
     ]);
 })

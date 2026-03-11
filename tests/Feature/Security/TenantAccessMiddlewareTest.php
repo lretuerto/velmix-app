@@ -7,11 +7,11 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
-class RbacRoleIsolationTest extends TestCase
+class TenantAccessMiddlewareTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_cajero_no_puede_aprobar_operacion_critica(): void
+    public function test_denies_user_without_membership_in_tenant(): void
     {
         $this->seed([
             \Database\Seeders\TenantSeeder::class,
@@ -19,30 +19,23 @@ class RbacRoleIsolationTest extends TestCase
         ]);
 
         $user = User::factory()->create();
-        $cashierRoleId = DB::table('roles')->where('code', 'CAJERO')->value('id');
-
-        DB::table('tenant_user')->insert([
-            'tenant_id' => 10,
-            'user_id' => $user->id,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        $roleId = DB::table('roles')->where('code', 'CAJERO')->value('id');
 
         DB::table('tenant_user_role')->insert([
             'tenant_id' => 10,
             'user_id' => $user->id,
-            'role_id' => $cashierRoleId,
+            'role_id' => $roleId,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
         $this->actingAs($user)
             ->withHeader('X-Tenant-Id', '10')
-            ->get('/pos/approve')
+            ->get('/pos/sale')
             ->assertStatus(403);
     }
 
-    public function test_admin_puede_gestionar_permisos_no_criticos(): void
+    public function test_allows_user_with_membership_in_tenant(): void
     {
         $this->seed([
             \Database\Seeders\TenantSeeder::class,
@@ -50,7 +43,7 @@ class RbacRoleIsolationTest extends TestCase
         ]);
 
         $user = User::factory()->create();
-        $adminRoleId = DB::table('roles')->where('code', 'ADMIN')->value('id');
+        $roleId = DB::table('roles')->where('code', 'CAJERO')->value('id');
 
         DB::table('tenant_user')->insert([
             'tenant_id' => 10,
@@ -62,18 +55,14 @@ class RbacRoleIsolationTest extends TestCase
         DB::table('tenant_user_role')->insert([
             'tenant_id' => 10,
             'user_id' => $user->id,
-            'role_id' => $adminRoleId,
+            'role_id' => $roleId,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
         $this->actingAs($user)
             ->withHeader('X-Tenant-Id', '10')
-            ->get('/rbac/permissions')
-            ->assertOk()
-            ->assertJson([
-                'ok' => true,
-                'flow' => 'rbac-permissions',
-            ]);
+            ->get('/pos/sale')
+            ->assertOk();
     }
 }

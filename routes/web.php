@@ -13,7 +13,7 @@ Route::middleware('tenant.context')->get('/tenant/ping', function () {
     ]);
 });
 
-Route::middleware(['auth', 'tenant.context'])->group(function () {
+Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function () {
     Route::get('/pos/sale', fn () => response()->json(['ok' => true, 'flow' => 'sale']))
         ->middleware('perm:pos.sale.execute');
 

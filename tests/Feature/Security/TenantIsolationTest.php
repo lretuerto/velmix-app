@@ -13,10 +13,20 @@ class TenantIsolationTest extends TestCase
 
     public function test_usuario_no_puede_ver_datos_de_otro_tenant(): void
     {
-        $this->seed(\Database\Seeders\RbacCatalogSeeder::class);
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
 
         $user = User::factory()->create();
         $adminRoleId = DB::table('roles')->where('code', 'ADMIN')->value('id');
+
+        DB::table('tenant_user')->insert([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         DB::table('tenant_user_role')->insert([
             'tenant_id' => 10,
