@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\Inventory\InventorySetupService;
 use App\Services\Inventory\StockMovementService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
@@ -77,6 +78,23 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
         return response()->json(['data' => $products]);
     })->middleware('perm:inventory.product.read');
 
+    Route::post('/inventory/products', function (InventorySetupService $service) {
+        $payload = request()->validate([
+            'sku' => ['required', 'string'],
+            'name' => ['required', 'string'],
+            'is_controlled' => ['required', 'boolean'],
+        ]);
+
+        $result = $service->createProduct(
+            (int) request()->attributes->get('tenant_id'),
+            (string) $payload['sku'],
+            (string) $payload['name'],
+            (bool) $payload['is_controlled'],
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:inventory.product.create');
+
     Route::get('/inventory/lots/{lot}', function (int $lot) {
         $tenantId = (int) request()->attributes->get('tenant_id');
 
@@ -99,4 +117,23 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 
         return response()->json(['data' => $lotData]);
     })->middleware('perm:inventory.lot.read');
+
+    Route::post('/inventory/lots', function (InventorySetupService $service) {
+        $payload = request()->validate([
+            'product_id' => ['required', 'integer'],
+            'code' => ['required', 'string'],
+            'expires_at' => ['required', 'date'],
+            'stock_quantity' => ['required', 'integer', 'min:0'],
+        ]);
+
+        $result = $service->createLot(
+            (int) request()->attributes->get('tenant_id'),
+            (int) $payload['product_id'],
+            (string) $payload['code'],
+            (string) $payload['expires_at'],
+            (int) $payload['stock_quantity'],
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:inventory.lot.create');
 });

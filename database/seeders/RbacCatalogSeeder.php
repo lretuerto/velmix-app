@@ -12,7 +12,9 @@ class RbacCatalogSeeder extends Seeder
         $permissions = [
             ['code' => 'pos.sale.execute', 'name' => 'Ejecutar venta POS'],
             ['code' => 'pos.sale.approve', 'name' => 'Aprobar venta POS'],
+            ['code' => 'inventory.product.create', 'name' => 'Crear productos de inventario'],
             ['code' => 'inventory.product.read', 'name' => 'Ver productos de inventario'],
+            ['code' => 'inventory.lot.create', 'name' => 'Crear lotes de inventario'],
             ['code' => 'inventory.lot.read', 'name' => 'Ver lotes de inventario'],
             ['code' => 'stock.move.create', 'name' => 'Crear movimiento de stock'],
             ['code' => 'rbac.role.assign', 'name' => 'Asignar roles'],
@@ -43,9 +45,9 @@ class RbacCatalogSeeder extends Seeder
         $permIds = DB::table('permissions')->pluck('id', 'code');
 
         $matrix = [
-            'ADMIN' => ['pos.sale.execute', 'pos.sale.approve', 'inventory.product.read', 'inventory.lot.read', 'stock.move.create', 'rbac.role.assign', 'rbac.permission.manage'],
+            'ADMIN' => ['pos.sale.execute', 'pos.sale.approve', 'inventory.product.create', 'inventory.product.read', 'inventory.lot.create', 'inventory.lot.read', 'stock.move.create', 'rbac.role.assign', 'rbac.permission.manage'],
             'CAJERO' => ['pos.sale.execute'],
-            'ALMACENERO' => ['inventory.product.read', 'inventory.lot.read', 'stock.move.create'],
+            'ALMACENERO' => ['inventory.product.create', 'inventory.product.read', 'inventory.lot.create', 'inventory.lot.read', 'stock.move.create'],
         ];
 
         foreach ($matrix as $roleCode => $permCodes) {
