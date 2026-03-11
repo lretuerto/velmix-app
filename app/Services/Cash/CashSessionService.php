@@ -2,6 +2,7 @@
 
 namespace App\Services\Cash;
 
+use App\Services\Audit\TenantActivityLogService;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -44,6 +45,21 @@ class CashSessionService
                 'created_at' => $openedAt,
                 'updated_at' => $openedAt,
             ]);
+
+            app(TenantActivityLogService::class)->record(
+                $tenantId,
+                $userId,
+                'cash',
+                'cash.session.opened',
+                'cash_session',
+                $sessionId,
+                'Caja abierta',
+                [
+                    'cash_session_id' => $sessionId,
+                    'opening_amount' => round($openingAmount, 2),
+                ],
+                $openedAt->toISOString(),
+            );
 
             return [
                 'id' => $sessionId,
@@ -159,6 +175,26 @@ class CashSessionService
             }
 
             $closedByName = DB::table('users')->where('id', $userId)->value('name');
+
+            app(TenantActivityLogService::class)->record(
+                $tenantId,
+                $userId,
+                'cash',
+                'cash.session.closed',
+                'cash_session',
+                $session->id,
+                'Caja cerrada',
+                [
+                    'cash_session_id' => $session->id,
+                    'expected_amount' => round($expectedAmount, 2),
+                    'counted_amount' => round($countedAmount, 2),
+                    'discrepancy_amount' => $discrepancy,
+                    'sales_total' => $summary['sales_total'],
+                    'cash_sales_total' => $summary['cash_sales_total'],
+                    'movement_count' => $summary['movement_count'],
+                ],
+                $closedAt->toISOString(),
+            );
 
             return [
                 'id' => $session->id,

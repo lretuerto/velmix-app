@@ -2,6 +2,7 @@
 
 namespace App\Services\Purchasing;
 
+use App\Services\Audit\TenantActivityLogService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -191,6 +192,26 @@ class PurchaseReturnService
                     $reference,
                 );
             }
+
+            app(TenantActivityLogService::class)->record(
+                $tenantId,
+                $userId,
+                'purchasing',
+                'purchasing.return.processed',
+                'purchase_return',
+                $returnId,
+                'Devolucion a proveedor '.$reference.' procesada',
+                [
+                    'purchase_return_id' => $returnId,
+                    'reference' => $reference,
+                    'purchase_receipt_id' => $receiptId,
+                    'supplier_id' => $receipt->supplier_id,
+                    'reason' => $reason,
+                    'total_amount' => $returnTotal,
+                    'supplier_credit_amount' => $supplierCreditAmount,
+                    'item_count' => count($targetItems),
+                ],
+            );
 
             return [
                 'id' => $returnId,

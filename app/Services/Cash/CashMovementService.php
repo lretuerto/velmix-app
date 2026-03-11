@@ -2,6 +2,7 @@
 
 namespace App\Services\Cash;
 
+use App\Services\Audit\TenantActivityLogService;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -60,6 +61,24 @@ class CashMovementService
                 'created_at' => $createdAt,
                 'updated_at' => $createdAt,
             ]);
+
+            app(TenantActivityLogService::class)->record(
+                $tenantId,
+                $userId,
+                'cash',
+                'cash.movement.created',
+                'cash_movement',
+                $movementId,
+                'Movimiento de caja '.$type.' registrado',
+                [
+                    'cash_movement_id' => $movementId,
+                    'cash_session_id' => $session->id,
+                    'type' => $type,
+                    'amount' => round($amount, 2),
+                    'reference' => $reference,
+                ],
+                $createdAt->toISOString(),
+            );
 
             return [
                 'id' => $movementId,

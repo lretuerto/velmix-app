@@ -2,6 +2,7 @@
 
 namespace App\Services\Sales;
 
+use App\Services\Audit\TenantActivityLogService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -199,6 +200,26 @@ class SaleReceivableService
                 ]);
             }
 
+            app(TenantActivityLogService::class)->record(
+                $tenantId,
+                $userId,
+                'sales',
+                'sales.receivable.payment_registered',
+                'sale_receivable',
+                $receivable->id,
+                'Cobranza registrada para cuenta por cobrar '.$receivable->id,
+                [
+                    'sale_receivable_id' => $receivable->id,
+                    'sale_id' => $receivable->sale_id,
+                    'amount' => round($amount, 2),
+                    'payment_method' => $paymentMethod,
+                    'reference' => $reference,
+                    'cash_movement_id' => $cashMovementId,
+                    'status' => $newStatus,
+                    'outstanding_amount' => $newOutstandingAmount,
+                ],
+            );
+
             return [
                 'payment_id' => $paymentId,
                 'sale_receivable_id' => $receivable->id,
@@ -268,6 +289,25 @@ class SaleReceivableService
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+
+            app(TenantActivityLogService::class)->record(
+                $tenantId,
+                $userId,
+                'sales',
+                'sales.receivable.follow_up_added',
+                'sale_receivable',
+                $receivableId,
+                'Seguimiento registrado para cuenta por cobrar '.$receivableId,
+                [
+                    'sale_receivable_id' => $receivableId,
+                    'type' => $type,
+                    'note' => $note,
+                    'promised_amount' => $type === 'promise' ? $promisedAmount : null,
+                    'promised_at' => $normalizedPromisedAt,
+                    'outstanding_snapshot' => $type === 'promise' ? round((float) $receivable->outstanding_amount, 2) : null,
+                    'follow_up_id' => $followUpId,
+                ],
+            );
 
             return $this->followUpById($followUpId);
         });

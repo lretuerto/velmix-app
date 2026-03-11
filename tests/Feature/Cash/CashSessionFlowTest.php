@@ -29,6 +29,17 @@ class CashSessionFlowTest extends TestCase
             'opened_by_user_id' => $user->id,
             'status' => 'open',
         ]);
+
+        $sessionId = DB::table('cash_sessions')->where('tenant_id', 10)->value('id');
+
+        $this->assertDatabaseHas('tenant_activity_logs', [
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'domain' => 'cash',
+            'event_type' => 'cash.session.opened',
+            'aggregate_type' => 'cash_session',
+            'aggregate_id' => $sessionId,
+        ]);
     }
 
     public function test_cannot_open_second_cash_session_while_one_is_active(): void
@@ -153,6 +164,17 @@ class CashSessionFlowTest extends TestCase
             'expected_amount' => 135.50,
             'counted_amount' => 140.00,
             'discrepancy_amount' => 4.50,
+        ]);
+
+        $sessionId = DB::table('cash_sessions')->where('tenant_id', 10)->value('id');
+
+        $this->assertDatabaseHas('tenant_activity_logs', [
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'domain' => 'cash',
+            'event_type' => 'cash.session.closed',
+            'aggregate_type' => 'cash_session',
+            'aggregate_id' => $sessionId,
         ]);
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Services\Purchasing;
 
+use App\Services\Audit\TenantActivityLogService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -17,6 +18,24 @@ class PurchasePayableService
                 $payableId,
                 $amount,
                 'manual'
+            );
+
+            app(TenantActivityLogService::class)->record(
+                $tenantId,
+                $userId,
+                'purchasing',
+                'purchasing.payable.credits_applied',
+                'purchase_payable',
+                $payableId,
+                'Credito de proveedor aplicado a cuenta por pagar '.$payableId,
+                [
+                    'purchase_payable_id' => $payableId,
+                    'requested_amount' => $amount,
+                    'applied_amount' => $result['applied_amount'],
+                    'outstanding_amount' => $result['outstanding_amount'],
+                    'status' => $result['status'],
+                    'applications' => $result['applications'],
+                ],
             );
 
             return $result;
@@ -209,6 +228,24 @@ class PurchasePayableService
                     'updated_at' => now(),
                 ]);
 
+            app(TenantActivityLogService::class)->record(
+                $tenantId,
+                $userId,
+                'purchasing',
+                'purchasing.payable.payment_registered',
+                'purchase_payable',
+                $payable->id,
+                'Pago registrado para cuenta por pagar '.$payable->id,
+                [
+                    'purchase_payable_id' => $payable->id,
+                    'amount' => round($amount, 2),
+                    'payment_method' => $paymentMethod,
+                    'reference' => $reference,
+                    'status' => $newStatus,
+                    'outstanding_amount' => $newOutstandingAmount,
+                ],
+            );
+
             return [
                 'payment_id' => $paymentId,
                 'purchase_payable_id' => $payable->id,
@@ -277,6 +314,25 @@ class PurchasePayableService
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+
+            app(TenantActivityLogService::class)->record(
+                $tenantId,
+                $userId,
+                'purchasing',
+                'purchasing.payable.follow_up_added',
+                'purchase_payable',
+                $payableId,
+                'Seguimiento registrado para cuenta por pagar '.$payableId,
+                [
+                    'purchase_payable_id' => $payableId,
+                    'type' => $type,
+                    'note' => $note,
+                    'promised_amount' => $type === 'promise' ? $promisedAmount : null,
+                    'promised_at' => $normalizedPromisedAt,
+                    'outstanding_snapshot' => $type === 'promise' ? round((float) $payable->outstanding_amount, 2) : null,
+                    'follow_up_id' => $followUpId,
+                ],
+            );
 
             return $this->followUpById($followUpId);
         });

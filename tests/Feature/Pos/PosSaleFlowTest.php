@@ -94,6 +94,17 @@ class PosSaleFlowTest extends TestCase
             'gross_cost' => 6.00,
             'gross_margin' => 11.50,
         ]);
+
+        $saleId = DB::table('sales')->where('tenant_id', 10)->value('id');
+
+        $this->assertDatabaseHas('tenant_activity_logs', [
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'domain' => 'sales',
+            'event_type' => 'sales.sale.completed',
+            'aggregate_type' => 'sale',
+            'aggregate_id' => $saleId,
+        ]);
     }
 
     public function test_rejects_sale_when_lot_belongs_to_another_tenant(): void

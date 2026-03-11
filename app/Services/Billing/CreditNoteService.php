@@ -2,6 +2,7 @@
 
 namespace App\Services\Billing;
 
+use App\Services\Audit\TenantActivityLogService;
 use App\Services\Cash\CashSessionService;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -221,6 +222,26 @@ class CreditNoteService
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+
+            app(TenantActivityLogService::class)->record(
+                $tenantId,
+                $userId,
+                'billing',
+                'billing.credit_note.issued',
+                'sale_credit_note',
+                $creditNoteId,
+                'Nota de credito '.$series.'-'.$nextNumber.' emitida',
+                [
+                    'sale_credit_note_id' => $creditNoteId,
+                    'sale_id' => $saleId,
+                    'voucher_id' => $voucher->id,
+                    'reason' => $reason,
+                    'total_amount' => $creditedTotal,
+                    'refunded_amount' => round($refundAmount, 2),
+                    'refund_payment_method' => $refundPaymentMethod,
+                    'item_count' => count($targetItems),
+                ],
+            );
 
             return [
                 'id' => $creditNoteId,

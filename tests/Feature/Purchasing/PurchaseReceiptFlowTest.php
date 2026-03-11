@@ -73,6 +73,17 @@ class PurchaseReceiptFlowTest extends TestCase
             'last_cost' => 1.75,
             'average_cost' => 1.75,
         ]);
+
+        $receiptId = DB::table('purchase_receipts')->where('reference', $reference)->value('id');
+
+        $this->assertDatabaseHas('tenant_activity_logs', [
+            'tenant_id' => 10,
+            'user_id' => $warehouseUser->id,
+            'domain' => 'purchasing',
+            'event_type' => 'purchasing.receipt.received',
+            'aggregate_type' => 'purchase_receipt',
+            'aggregate_id' => $receiptId,
+        ]);
     }
 
     public function test_can_receive_purchase_creating_new_lot_inline(): void

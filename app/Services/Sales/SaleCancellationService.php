@@ -2,6 +2,7 @@
 
 namespace App\Services\Sales;
 
+use App\Services\Audit\TenantActivityLogService;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -99,6 +100,21 @@ class SaleCancellationService
                     ->where('id', $receivable->id)
                     ->delete();
             }
+
+            app(TenantActivityLogService::class)->record(
+                $tenantId,
+                $userId,
+                'sales',
+                'sales.sale.cancelled',
+                'sale',
+                $saleId,
+                'Venta '.$sale->reference.' anulada',
+                [
+                    'reference' => $sale->reference,
+                    'reason' => $reason,
+                    'restored_item_count' => $items->count(),
+                ],
+            );
 
             return [
                 'sale_id' => $saleId,

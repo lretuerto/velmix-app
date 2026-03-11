@@ -88,6 +88,19 @@ class DailyReportService
             ")
             ->first();
 
+        $activitySummary = DB::table('tenant_activity_logs')
+            ->where('tenant_id', $tenantId)
+            ->where('occurred_at', '>=', $start)
+            ->where('occurred_at', '<', $end)
+            ->selectRaw("
+                COUNT(*) as activity_count,
+                COALESCE(SUM(CASE WHEN domain = 'sales' THEN 1 ELSE 0 END), 0) as sales_count,
+                COALESCE(SUM(CASE WHEN domain = 'cash' THEN 1 ELSE 0 END), 0) as cash_count,
+                COALESCE(SUM(CASE WHEN domain = 'billing' THEN 1 ELSE 0 END), 0) as billing_count,
+                COALESCE(SUM(CASE WHEN domain = 'purchasing' THEN 1 ELSE 0 END), 0) as purchasing_count
+            ")
+            ->first();
+
         $receivableCollections = DB::table('sale_receivable_payments')
             ->join('sale_receivables', 'sale_receivables.id', '=', 'sale_receivable_payments.sale_receivable_id')
             ->where('sale_receivables.tenant_id', $tenantId)
@@ -207,6 +220,15 @@ class DailyReportService
                 'payables' => $dueReminders['payables']['summary'],
             ],
             'promise_compliance' => $promiseCompliance['summary'],
+            'activity' => [
+                'count' => (int) ($activitySummary->activity_count ?? 0),
+                'by_domain' => [
+                    'sales' => (int) ($activitySummary->sales_count ?? 0),
+                    'cash' => (int) ($activitySummary->cash_count ?? 0),
+                    'billing' => (int) ($activitySummary->billing_count ?? 0),
+                    'purchasing' => (int) ($activitySummary->purchasing_count ?? 0),
+                ],
+            ],
             'cash' => [
                 'opened_count' => (int) $cashOpened,
                 'closed_count' => (int) ($cashClosed->aggregate_count ?? 0),

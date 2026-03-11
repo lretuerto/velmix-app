@@ -2,6 +2,7 @@
 
 namespace App\Services\Sales;
 
+use App\Services\Audit\TenantActivityLogService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -168,6 +169,25 @@ class PosSaleService
                     'outstanding_amount' => $totalAmount,
                 ];
             }
+
+            app(TenantActivityLogService::class)->record(
+                $tenantId,
+                $userId,
+                'sales',
+                'sales.sale.completed',
+                'sale',
+                $saleId,
+                'Venta '.$reference.' registrada',
+                [
+                    'reference' => $reference,
+                    'payment_method' => $paymentMethod,
+                    'customer_id' => $customer?->id,
+                    'item_count' => count($items),
+                    'total_amount' => $totalAmount,
+                    'gross_margin' => $grossMargin,
+                    'receivable_id' => $receivable['id'] ?? null,
+                ],
+            );
 
             return [
                 'sale_id' => $saleId,

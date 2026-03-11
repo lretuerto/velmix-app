@@ -2,12 +2,13 @@
 
 namespace App\Services\Billing;
 
+use App\Services\Audit\TenantActivityLogService;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class VoucherService
 {
-    public function createFromSale(int $tenantId, int $saleId, string $type): array
+    public function createFromSale(int $tenantId, int $saleId, string $type, ?int $userId = null): array
     {
         if ($tenantId <= 0) {
             throw new HttpException(403, 'Tenant context is required.');
@@ -17,7 +18,7 @@ class VoucherService
             throw new HttpException(422, 'Voucher type is invalid.');
         }
 
-        return DB::transaction(function () use ($tenantId, $saleId, $type) {
+        return DB::transaction(function () use ($tenantId, $saleId, $type, $userId) {
             $sale = DB::table('sales')
                 ->where('id', $saleId)
                 ->where('tenant_id', $tenantId)
@@ -72,6 +73,24 @@ class VoucherService
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+
+            app(TenantActivityLogService::class)->record(
+                $tenantId,
+                $userId,
+                'billing',
+                'billing.voucher.issued',
+                'electronic_voucher',
+                $voucherId,
+                'Comprobante '.$series.'-'.$nextNumber.' emitido',
+                [
+                    'voucher_id' => $voucherId,
+                    'sale_id' => $saleId,
+                    'type' => $type,
+                    'series' => $series,
+                    'number' => $nextNumber,
+                    'total_amount' => (float) $sale->total_amount,
+                ],
+            );
 
             return [
                 'id' => $voucherId,

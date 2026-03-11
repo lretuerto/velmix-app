@@ -2,6 +2,7 @@
 
 namespace App\Services\Purchasing;
 
+use App\Services\Audit\TenantActivityLogService;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -210,6 +211,26 @@ class PurchaseReceiptService
                         'updated_at' => now(),
                     ]);
             }
+
+            app(TenantActivityLogService::class)->record(
+                $tenantId,
+                $userId,
+                'purchasing',
+                'purchasing.receipt.received',
+                'purchase_receipt',
+                $receiptId,
+                'Recepcion de compra '.$reference.' registrada',
+                [
+                    'purchase_receipt_id' => $receiptId,
+                    'reference' => $reference,
+                    'supplier_id' => $supplierId,
+                    'purchase_order_id' => $purchaseOrderId,
+                    'item_count' => count($lineItems),
+                    'total_amount' => round($totalAmount, 2),
+                    'purchase_payable_id' => $payableId,
+                    'supplier_credit_applied_amount' => (float) ($creditApplication['applied_amount'] ?? 0),
+                ],
+            );
 
             return [
                 'id' => $receiptId,

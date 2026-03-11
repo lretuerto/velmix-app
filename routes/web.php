@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\Audit\TenantActivityLogService;
 use App\Services\Billing\OutboxDispatchService;
 use App\Services\Billing\VoucherService;
 use App\Services\Billing\CreditNoteService;
@@ -370,6 +371,34 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 
         return response()->json(['data' => $result]);
     })->middleware('perm:cash.movement.create');
+
+    Route::get('/audit/timeline', function (TenantActivityLogService $service) {
+        $payload = request()->validate([
+            'domain' => ['nullable', 'string'],
+            'event_type' => ['nullable', 'string'],
+            'aggregate_type' => ['nullable', 'string'],
+            'user_id' => ['nullable', 'integer'],
+            'date_from' => ['nullable', 'date_format:Y-m-d'],
+            'date_to' => ['nullable', 'date_format:Y-m-d'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:200'],
+        ]);
+
+        $result = $service->list(
+            (int) request()->attributes->get('tenant_id'),
+            $payload,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:audit.timeline.read');
+
+    Route::get('/audit/timeline/{activity}', function (int $activity, TenantActivityLogService $service) {
+        $result = $service->detail(
+            (int) request()->attributes->get('tenant_id'),
+            $activity,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:audit.timeline.read');
 
     Route::get('/reports/daily', function (DailyReportService $service) {
         $payload = request()->validate([
@@ -864,6 +893,7 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
             (int) request()->attributes->get('tenant_id'),
             (int) $payload['sale_id'],
             (string) $payload['type'],
+            (int) optional(request()->user())->id,
         );
 
         return response()->json(['data' => $result]);

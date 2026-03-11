@@ -36,6 +36,15 @@ class BillingVoucherFlowTest extends TestCase
             'event_type' => 'voucher.created',
             'status' => 'pending',
         ]);
+
+        $this->assertDatabaseHas('tenant_activity_logs', [
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'domain' => 'billing',
+            'event_type' => 'billing.voucher.issued',
+            'aggregate_type' => 'electronic_voucher',
+            'aggregate_id' => $voucherId,
+        ]);
     }
 
     public function test_rejects_voucher_creation_for_sale_from_other_tenant(): void
