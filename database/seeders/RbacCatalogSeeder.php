@@ -20,6 +20,9 @@ class RbacCatalogSeeder extends Seeder
             ['code' => 'billing.voucher.read', 'name' => 'Consultar comprobantes electronicos'],
             ['code' => 'billing.outbox.dispatch', 'name' => 'Despachar eventos de facturacion'],
             ['code' => 'billing.outbox.read', 'name' => 'Consultar eventos outbox de facturacion'],
+            ['code' => 'cash.session.open', 'name' => 'Abrir caja'],
+            ['code' => 'cash.session.close', 'name' => 'Cerrar caja'],
+            ['code' => 'cash.session.read', 'name' => 'Consultar caja'],
             ['code' => 'stock.move.create', 'name' => 'Crear movimiento de stock'],
             ['code' => 'rbac.role.assign', 'name' => 'Asignar roles'],
             ['code' => 'rbac.permission.manage', 'name' => 'Gestionar permisos'],
@@ -49,8 +52,8 @@ class RbacCatalogSeeder extends Seeder
         $permIds = DB::table('permissions')->pluck('id', 'code');
 
         $matrix = [
-            'ADMIN' => ['pos.sale.execute', 'pos.sale.approve', 'inventory.product.create', 'inventory.product.read', 'inventory.lot.create', 'inventory.lot.read', 'billing.voucher.issue', 'billing.voucher.read', 'billing.outbox.dispatch', 'billing.outbox.read', 'stock.move.create', 'rbac.role.assign', 'rbac.permission.manage'],
-            'CAJERO' => ['pos.sale.execute', 'billing.voucher.issue', 'billing.voucher.read'],
+            'ADMIN' => ['pos.sale.execute', 'pos.sale.approve', 'inventory.product.create', 'inventory.product.read', 'inventory.lot.create', 'inventory.lot.read', 'billing.voucher.issue', 'billing.voucher.read', 'billing.outbox.dispatch', 'billing.outbox.read', 'cash.session.open', 'cash.session.close', 'cash.session.read', 'stock.move.create', 'rbac.role.assign', 'rbac.permission.manage'],
+            'CAJERO' => ['pos.sale.execute', 'billing.voucher.issue', 'billing.voucher.read', 'cash.session.open', 'cash.session.close', 'cash.session.read'],
             'ALMACENERO' => ['inventory.product.create', 'inventory.product.read', 'inventory.lot.create', 'inventory.lot.read', 'stock.move.create'],
         ];
 

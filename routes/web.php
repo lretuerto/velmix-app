@@ -2,6 +2,7 @@
 
 use App\Services\Billing\OutboxDispatchService;
 use App\Services\Billing\VoucherService;
+use App\Services\Cash\CashSessionService;
 use App\Services\Inventory\InventorySetupService;
 use App\Services\Inventory\LotControlService;
 use App\Services\Inventory\StockMovementService;
@@ -90,6 +91,55 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 
         return response()->json(['data' => $result]);
     })->middleware('perm:pos.sale.approve');
+
+    Route::post('/cash/sessions/open', function (CashSessionService $service) {
+        $payload = request()->validate([
+            'opening_amount' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $result = $service->open(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            (float) $payload['opening_amount'],
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:cash.session.open');
+
+    Route::get('/cash/sessions/current', function (CashSessionService $service) {
+        $result = $service->current((int) request()->attributes->get('tenant_id'));
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:cash.session.read');
+
+    Route::get('/cash/sessions', function (CashSessionService $service) {
+        $result = $service->history((int) request()->attributes->get('tenant_id'));
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:cash.session.read');
+
+    Route::get('/cash/sessions/{session}', function (int $session, CashSessionService $service) {
+        $result = $service->detail(
+            (int) request()->attributes->get('tenant_id'),
+            $session,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:cash.session.read');
+
+    Route::post('/cash/sessions/current/close', function (CashSessionService $service) {
+        $payload = request()->validate([
+            'counted_amount' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $result = $service->close(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            (float) $payload['counted_amount'],
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:cash.session.close');
 
     Route::get('/stock/move', fn () => response()->json(['ok' => true, 'flow' => 'stock']))
         ->middleware('perm:stock.move.create');

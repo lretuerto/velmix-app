@@ -28,6 +28,9 @@ class RbacCatalogSeederTest extends TestCase
         $this->assertDatabaseHas('permissions', ['code' => 'billing.voucher.read']);
         $this->assertDatabaseHas('permissions', ['code' => 'billing.outbox.dispatch']);
         $this->assertDatabaseHas('permissions', ['code' => 'billing.outbox.read']);
+        $this->assertDatabaseHas('permissions', ['code' => 'cash.session.open']);
+        $this->assertDatabaseHas('permissions', ['code' => 'cash.session.close']);
+        $this->assertDatabaseHas('permissions', ['code' => 'cash.session.read']);
         $this->assertDatabaseHas('permissions', ['code' => 'stock.move.create']);
         $this->assertDatabaseHas('permissions', ['code' => 'rbac.role.assign']);
 
