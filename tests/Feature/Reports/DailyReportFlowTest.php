@@ -180,6 +180,105 @@ class DailyReportFlowTest extends TestCase
             ],
         ]);
 
+        $acceptedVoucherId = DB::table('electronic_vouchers')
+            ->where('tenant_id', 10)
+            ->where('sale_id', $completedSaleId)
+            ->value('id');
+        $rejectedVoucherId = DB::table('electronic_vouchers')
+            ->where('tenant_id', 10)
+            ->where('sale_id', $cancelledSaleId)
+            ->value('id');
+
+        DB::table('billing_provider_profiles')->insert([
+            'tenant_id' => 10,
+            'provider_code' => 'fake_sunat',
+            'environment' => 'live',
+            'default_outcome' => 'accepted',
+            'credentials' => null,
+            'health_status' => 'healthy',
+            'health_checked_at' => '2026-03-11 08:55:00',
+            'health_message' => 'Provider fake_sunat is reachable in live mode.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $acceptedEventId = DB::table('outbox_events')->insertGetId([
+            'tenant_id' => 10,
+            'aggregate_type' => 'electronic_voucher',
+            'aggregate_id' => $acceptedVoucherId,
+            'event_type' => 'voucher.created',
+            'payload' => json_encode([
+                'voucher_id' => $acceptedVoucherId,
+                'provider_code' => 'fake_sunat',
+                'provider_environment' => 'live',
+            ], JSON_THROW_ON_ERROR),
+            'status' => 'processed',
+            'retry_count' => 0,
+            'last_error' => null,
+            'created_at' => '2026-03-11 09:05:00',
+            'updated_at' => '2026-03-11 09:06:00',
+        ]);
+
+        $failedEventId = DB::table('outbox_events')->insertGetId([
+            'tenant_id' => 10,
+            'aggregate_type' => 'electronic_voucher',
+            'aggregate_id' => $rejectedVoucherId,
+            'event_type' => 'voucher.created',
+            'payload' => json_encode([
+                'voucher_id' => $rejectedVoucherId,
+                'provider_code' => 'fake_sunat',
+                'provider_environment' => 'live',
+            ], JSON_THROW_ON_ERROR),
+            'status' => 'failed',
+            'retry_count' => 1,
+            'last_error' => 'Temporary billing failure.',
+            'created_at' => '2026-03-11 11:00:00',
+            'updated_at' => '2026-03-11 11:05:00',
+        ]);
+
+        DB::table('outbox_events')->insert([
+            'tenant_id' => 10,
+            'aggregate_type' => 'electronic_voucher',
+            'aggregate_id' => $rejectedVoucherId,
+            'event_type' => 'voucher.created',
+            'payload' => json_encode([
+                'voucher_id' => $rejectedVoucherId,
+                'provider_code' => 'fake_sunat',
+                'provider_environment' => 'live',
+            ], JSON_THROW_ON_ERROR),
+            'status' => 'pending',
+            'retry_count' => 0,
+            'last_error' => null,
+            'replayed_from_event_id' => $failedEventId,
+            'created_at' => '2026-03-11 11:30:00',
+            'updated_at' => '2026-03-11 11:30:00',
+        ]);
+
+        DB::table('outbox_attempts')->insert([
+            [
+                'outbox_event_id' => $acceptedEventId,
+                'status' => 'accepted',
+                'provider_code' => 'fake_sunat',
+                'provider_environment' => 'live',
+                'provider_reference' => 'SUNAT-LIVE-DAILY-001',
+                'sunat_ticket' => 'SUNAT-LIVE-DAILY-001',
+                'error_message' => null,
+                'created_at' => '2026-03-11 09:06:00',
+                'updated_at' => '2026-03-11 09:06:00',
+            ],
+            [
+                'outbox_event_id' => $failedEventId,
+                'status' => 'failed',
+                'provider_code' => 'fake_sunat',
+                'provider_environment' => 'live',
+                'provider_reference' => 'SUNAT-LIVE-DAILY-002',
+                'sunat_ticket' => null,
+                'error_message' => 'Temporary billing failure.',
+                'created_at' => '2026-03-11 11:05:00',
+                'updated_at' => '2026-03-11 11:05:00',
+            ],
+        ]);
+
         $foreignSaleId = DB::table('sales')->insertGetId([
             'tenant_id' => 20,
             'user_id' => User::factory()->create()->id,
@@ -651,6 +750,17 @@ class DailyReportFlowTest extends TestCase
             ->assertJsonPath('data.vouchers.accepted_count', 1)
             ->assertJsonPath('data.vouchers.rejected_count', 1)
             ->assertJsonPath('data.vouchers.failed_count', 0)
+            ->assertJsonPath('data.billing_sla.health.current_status', 'healthy')
+            ->assertJsonPath('data.billing_sla.health.is_stale', false)
+            ->assertJsonPath('data.billing_sla.queue.pending_count', 1)
+            ->assertJsonPath('data.billing_sla.queue.failed_count', 1)
+            ->assertJsonPath('data.billing_sla.performance.event_count', 3)
+            ->assertJsonPath('data.billing_sla.performance.accepted_event_count', 1)
+            ->assertJsonPath('data.billing_sla.performance.failed_event_count', 1)
+            ->assertJsonPath('data.billing_sla.performance.pending_event_count', 1)
+            ->assertJsonPath('data.billing_sla.performance.acceptance_rate', 33.33)
+            ->assertJsonPath('data.billing_sla.replays.created_count', 1)
+            ->assertJsonPath('data.billing_sla.replays.pending_count', 1)
             ->assertJsonPath('data.collections.payment_count', 1)
             ->assertJsonPath('data.collections.total_amount', 9)
             ->assertJsonPath('data.collections.by_payment_method.cash.count', 1)
@@ -681,7 +791,9 @@ class DailyReportFlowTest extends TestCase
             ->assertJsonPath('data.cash.movement_count', 3)
             ->assertJsonPath('data.cash.manual_in_total', 12)
             ->assertJsonPath('data.cash.manual_out_total', 4.5)
-            ->assertJsonPath('data.cash.receivable_in_total', 9);
+            ->assertJsonPath('data.cash.receivable_in_total', 9)
+            ->assertJsonFragment(['code' => 'failed_backlog'])
+            ->assertJsonFragment(['code' => 'replay_backlog']);
     }
 
     public function test_cashier_cannot_read_daily_operational_summary_without_permission(): void

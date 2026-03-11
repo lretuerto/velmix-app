@@ -239,6 +239,139 @@ class BillingReadFlowTest extends TestCase
             ->assertJsonPath('data.recent_attempts.0.provider_reference', 'SUNAT-LIVE-001');
     }
 
+    public function test_reads_provider_metrics_for_current_tenant(): void
+    {
+        [$user, $voucherId, $eventId] = $this->seedVoucherScenario(10, 'ADMIN');
+
+        DB::table('billing_provider_profiles')->insert([
+            'tenant_id' => 10,
+            'provider_code' => 'fake_sunat',
+            'environment' => 'live',
+            'default_outcome' => 'accepted',
+            'credentials' => null,
+            'health_status' => 'healthy',
+            'health_checked_at' => '2026-03-09 08:00:00',
+            'health_message' => 'Provider fake_sunat is reachable in live mode.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('outbox_events')->where('id', $eventId)->update([
+            'payload' => json_encode([
+                'voucher_id' => $voucherId,
+                'provider_code' => 'fake_sunat',
+                'provider_environment' => 'live',
+            ], JSON_THROW_ON_ERROR),
+            'status' => 'processed',
+            'created_at' => '2026-03-10 08:00:00',
+            'updated_at' => '2026-03-10 08:10:00',
+        ]);
+
+        DB::table('outbox_attempts')->insert([
+            'outbox_event_id' => $eventId,
+            'status' => 'accepted',
+            'provider_code' => 'fake_sunat',
+            'provider_environment' => 'live',
+            'provider_reference' => 'SUNAT-LIVE-100',
+            'sunat_ticket' => 'SUNAT-LIVE-100',
+            'error_message' => null,
+            'created_at' => '2026-03-10 08:10:00',
+            'updated_at' => '2026-03-10 08:10:00',
+        ]);
+
+        $saleId = DB::table('sales')->insertGetId([
+            'tenant_id' => 10,
+            'user_id' => User::factory()->create()->id,
+            'reference' => 'SALE-METRICS-10',
+            'status' => 'completed',
+            'total_amount' => 70.00,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $failedVoucherId = DB::table('electronic_vouchers')->insertGetId([
+            'tenant_id' => 10,
+            'sale_id' => $saleId,
+            'type' => 'boleta',
+            'series' => 'B001',
+            'number' => 2,
+            'status' => 'failed',
+            'sunat_ticket' => null,
+            'rejection_reason' => null,
+            'created_at' => '2026-03-11 09:00:00',
+            'updated_at' => '2026-03-11 09:30:00',
+        ]);
+
+        $failedEventId = DB::table('outbox_events')->insertGetId([
+            'tenant_id' => 10,
+            'aggregate_type' => 'electronic_voucher',
+            'aggregate_id' => $failedVoucherId,
+            'event_type' => 'voucher.created',
+            'payload' => json_encode([
+                'voucher_id' => $failedVoucherId,
+                'provider_code' => 'fake_sunat',
+                'provider_environment' => 'live',
+            ], JSON_THROW_ON_ERROR),
+            'status' => 'failed',
+            'retry_count' => 1,
+            'last_error' => 'Timeout contacting provider.',
+            'created_at' => '2026-03-11 09:00:00',
+            'updated_at' => '2026-03-11 09:30:00',
+        ]);
+
+        DB::table('outbox_attempts')->insert([
+            'outbox_event_id' => $failedEventId,
+            'status' => 'failed',
+            'provider_code' => 'fake_sunat',
+            'provider_environment' => 'live',
+            'provider_reference' => 'SUNAT-LIVE-101',
+            'sunat_ticket' => null,
+            'error_message' => 'Timeout contacting provider.',
+            'created_at' => '2026-03-11 09:30:00',
+            'updated_at' => '2026-03-11 09:30:00',
+        ]);
+
+        $replayEventId = DB::table('outbox_events')->insertGetId([
+            'tenant_id' => 10,
+            'aggregate_type' => 'electronic_voucher',
+            'aggregate_id' => $failedVoucherId,
+            'event_type' => 'voucher.created',
+            'payload' => json_encode([
+                'voucher_id' => $failedVoucherId,
+                'provider_code' => 'fake_sunat',
+                'provider_environment' => 'live',
+            ], JSON_THROW_ON_ERROR),
+            'status' => 'pending',
+            'retry_count' => 0,
+            'last_error' => null,
+            'replayed_from_event_id' => $failedEventId,
+            'created_at' => '2026-03-11 10:00:00',
+            'updated_at' => '2026-03-11 10:00:00',
+        ]);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/billing/provider-metrics?date=2026-03-11&days=2&recent_failures_limit=2')
+            ->assertOk()
+            ->assertJsonPath('data.window.days', 2)
+            ->assertJsonPath('data.provider_profile.environment', 'live')
+            ->assertJsonPath('data.health.current_status', 'healthy')
+            ->assertJsonPath('data.health.is_stale', true)
+            ->assertJsonPath('data.queue.pending_count', 1)
+            ->assertJsonPath('data.queue.failed_count', 1)
+            ->assertJsonPath('data.performance.event_count', 3)
+            ->assertJsonPath('data.performance.accepted_event_count', 1)
+            ->assertJsonPath('data.performance.failed_event_count', 1)
+            ->assertJsonPath('data.performance.pending_event_count', 1)
+            ->assertJsonPath('data.replays.created_count', 1)
+            ->assertJsonPath('data.replays.pending_count', 1)
+            ->assertJsonPath('data.by_provider_environment.0.provider_environment', 'live')
+            ->assertJsonPath('data.recent_failures.0.event_id', $failedEventId)
+            ->assertJsonFragment(['code' => 'health_stale'])
+            ->assertJsonFragment(['code' => 'failed_backlog'])
+            ->assertJsonFragment(['code' => 'replay_backlog']);
+    }
+
     public function test_reads_outbox_lineage_for_replayed_document(): void
     {
         [$user, $voucherId, $eventId] = $this->seedVoucherScenario(10, 'ADMIN');

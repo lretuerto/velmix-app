@@ -58,6 +58,7 @@ php artisan test
   - `PUT /billing/provider-profile`
   - `POST /billing/provider-profile/check`
   - `GET /billing/outbox/provider-trace`
+  - `GET /billing/provider-metrics`
   - `GET /billing/outbox/{event}/lineage`
   - `GET /billing/vouchers/{voucher}/payloads`
   - `POST /billing/vouchers/{voucher}/payloads/regenerate`
@@ -96,6 +97,7 @@ composer run velmix:routes
 - Billing: vouchers, outbox y notas de crédito parciales/totales
 - Billing providers: perfil por tenant para sandbox/live y outcome por defecto
 - Billing health: snapshot de salud y trazabilidad de intentos por provider/environment
+- Billing metrics: SLA operativo, backlog, replays y fallos recientes por tenant
 - Billing payloads: snapshots versionados por provider/esquema para voucher y nota de credito
 - Billing replay: regeneracion y reemision controlada sin recrear la venta o la nota
 - Billing lineage: trazabilidad completa payload -> outbox original -> replay -> intentos

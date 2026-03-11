@@ -6,6 +6,7 @@ use App\Services\Billing\VoucherService;
 use App\Services\Billing\CreditNoteService;
 use App\Services\Billing\BillingDocumentPayloadService;
 use App\Services\Billing\BillingProviderHealthService;
+use App\Services\Billing\BillingProviderMetricsService;
 use App\Services\Billing\BillingProviderProfileService;
 use App\Services\Billing\BillingReplayService;
 use App\Services\Billing\BillingOutboxLineageService;
@@ -44,7 +45,7 @@ Route::get('/docs', function () {
     return response()->json([
         'data' => [
             'project' => 'VELMiX ERP',
-            'version' => 'sprint1-day111',
+            'version' => 'sprint1-day114',
             'documents' => [
                 ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
                 ['name' => 'API Guide', 'path' => '/docs/api-guide'],
@@ -1213,6 +1214,23 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         $result = $service->trace(
             (int) request()->attributes->get('tenant_id'),
             (int) ($payload['limit'] ?? 20),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:billing.outbox.read');
+
+    Route::get('/billing/provider-metrics', function (BillingProviderMetricsService $service) {
+        $payload = request()->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'days' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'recent_failures_limit' => ['nullable', 'integer', 'min:1', 'max:20'],
+        ]);
+
+        $result = $service->summary(
+            (int) request()->attributes->get('tenant_id'),
+            $payload['date'] ?? null,
+            (int) ($payload['days'] ?? 7),
+            (int) ($payload['recent_failures_limit'] ?? 5),
         );
 
         return response()->json(['data' => $result]);

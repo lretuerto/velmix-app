@@ -97,6 +97,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `POST /billing/outbox/dispatch`
 - `GET /billing/outbox/summary`
 - `GET /billing/outbox/provider-trace`
+- `GET /billing/provider-metrics`
 - `POST /billing/outbox/{event}/retry`
 - `GET /billing/outbox/{event}/lineage`
 - `GET /billing/outbox/{event}/attempts`
@@ -181,6 +182,11 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - El provider actual es `fake_sunat`
 - Si no se manda `simulate_result` en el outbox, se usa `default_outcome` del perfil
 - `GET /billing/outbox/provider-trace` devuelve resumen e intentos recientes por `provider_code` y `provider_environment`
+- `GET /billing/provider-metrics` devuelve SLA operativo del tenant:
+  - salud vigente/stale del provider
+  - backlog actual de outbox
+  - tasa de aceptacion/rechazo/fallo en la ventana consultada
+  - replay backlog y fallos recientes
 
 ## Payloads versionados de billing
 

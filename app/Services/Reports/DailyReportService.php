@@ -3,6 +3,7 @@
 namespace App\Services\Reports;
 
 use Carbon\CarbonImmutable;
+use App\Services\Billing\BillingProviderMetricsService;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -154,6 +155,7 @@ class DailyReportService
         $grossMarginTotal = round((float) ($completedSales->gross_margin_total ?? 0), 2);
         $dueReminders = app(DueReminderReportService::class)->summary($tenantId, 7, 3, $start->toDateString());
         $promiseCompliance = app(PromiseComplianceReportService::class)->summary($tenantId, $start->toDateString(), 3);
+        $billingMetrics = app(BillingProviderMetricsService::class)->summary($tenantId, $start->toDateString(), 1, 3);
 
         return [
             'tenant_id' => $tenantId,
@@ -193,6 +195,26 @@ class DailyReportService
                 'accepted_count' => (int) ($voucherCounts->accepted_count ?? 0),
                 'rejected_count' => (int) ($voucherCounts->rejected_count ?? 0),
                 'failed_count' => (int) ($voucherCounts->failed_count ?? 0),
+            ],
+            'billing_sla' => [
+                'health' => $billingMetrics['health'],
+                'queue' => [
+                    'pending_count' => $billingMetrics['queue']['pending_count'],
+                    'failed_count' => $billingMetrics['queue']['failed_count'],
+                    'oldest_pending_age_minutes' => $billingMetrics['queue']['oldest_pending_age_minutes'],
+                ],
+                'performance' => [
+                    'event_count' => $billingMetrics['performance']['event_count'],
+                    'accepted_event_count' => $billingMetrics['performance']['accepted_event_count'],
+                    'rejected_event_count' => $billingMetrics['performance']['rejected_event_count'],
+                    'failed_event_count' => $billingMetrics['performance']['failed_event_count'],
+                    'pending_event_count' => $billingMetrics['performance']['pending_event_count'],
+                    'acceptance_rate' => $billingMetrics['performance']['acceptance_rate'],
+                    'avg_first_attempt_delay_minutes' => $billingMetrics['performance']['avg_first_attempt_delay_minutes'],
+                    'avg_resolution_delay_minutes' => $billingMetrics['performance']['avg_resolution_delay_minutes'],
+                ],
+                'replays' => $billingMetrics['replays'],
+                'alerts' => $billingMetrics['alerts'],
             ],
             'collections' => [
                 'payment_count' => (int) ($receivableCollections->payment_count ?? 0),
