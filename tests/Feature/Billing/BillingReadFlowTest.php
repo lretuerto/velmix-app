@@ -239,6 +239,138 @@ class BillingReadFlowTest extends TestCase
             ->assertJsonPath('data.recent_attempts.0.provider_reference', 'SUNAT-LIVE-001');
     }
 
+    public function test_reads_outbox_lineage_for_replayed_document(): void
+    {
+        [$user, $voucherId, $eventId] = $this->seedVoucherScenario(10, 'ADMIN');
+
+        $payloadIdV1 = DB::table('billing_document_payloads')->insertGetId([
+            'tenant_id' => 10,
+            'aggregate_type' => 'electronic_voucher',
+            'aggregate_id' => $voucherId,
+            'provider_code' => 'fake_sunat',
+            'provider_environment' => 'sandbox',
+            'schema_version' => 'fake_sunat.v1',
+            'document_kind' => 'voucher',
+            'document_number' => 'B001-1',
+            'payload_hash' => str_repeat('a', 64),
+            'payload' => json_encode(['version' => 1], JSON_THROW_ON_ERROR),
+            'created_by_user_id' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('outbox_events')->where('id', $eventId)->update([
+            'payload' => json_encode([
+                'voucher_id' => $voucherId,
+                'billing_payload_id' => $payloadIdV1,
+                'provider_code' => 'fake_sunat',
+                'provider_environment' => 'sandbox',
+                'schema_version' => 'fake_sunat.v1',
+                'document_kind' => 'voucher',
+                'document_number' => 'B001-1',
+            ], JSON_THROW_ON_ERROR),
+            'status' => 'processed',
+            'updated_at' => now(),
+        ]);
+
+        DB::table('outbox_attempts')->insert([
+            'outbox_event_id' => $eventId,
+            'status' => 'accepted',
+            'provider_code' => 'fake_sunat',
+            'provider_environment' => 'sandbox',
+            'provider_reference' => 'SUNAT-SBX-001',
+            'sunat_ticket' => 'SUNAT-SBX-001',
+            'error_message' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $payloadIdV2 = DB::table('billing_document_payloads')->insertGetId([
+            'tenant_id' => 10,
+            'aggregate_type' => 'electronic_voucher',
+            'aggregate_id' => $voucherId,
+            'provider_code' => 'fake_sunat',
+            'provider_environment' => 'live',
+            'schema_version' => 'fake_sunat.v1',
+            'document_kind' => 'voucher',
+            'document_number' => 'B001-1',
+            'payload_hash' => str_repeat('b', 64),
+            'payload' => json_encode(['version' => 2], JSON_THROW_ON_ERROR),
+            'created_by_user_id' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $replayEventId = DB::table('outbox_events')->insertGetId([
+            'tenant_id' => 10,
+            'aggregate_type' => 'electronic_voucher',
+            'aggregate_id' => $voucherId,
+            'event_type' => 'voucher.created',
+            'payload' => json_encode([
+                'voucher_id' => $voucherId,
+                'billing_payload_id' => $payloadIdV2,
+                'provider_code' => 'fake_sunat',
+                'provider_environment' => 'live',
+                'schema_version' => 'fake_sunat.v1',
+                'document_kind' => 'voucher',
+                'document_number' => 'B001-1',
+            ], JSON_THROW_ON_ERROR),
+            'status' => 'pending',
+            'retry_count' => 0,
+            'last_error' => null,
+            'replayed_from_event_id' => $eventId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('tenant_activity_logs')->insert([
+            [
+                'tenant_id' => 10,
+                'user_id' => $user->id,
+                'domain' => 'billing',
+                'event_type' => 'billing.payload.regenerated',
+                'aggregate_type' => 'electronic_voucher',
+                'aggregate_id' => $voucherId,
+                'summary' => 'Payload regenerated',
+                'metadata' => json_encode(['billing_payload_id' => $payloadIdV2], JSON_THROW_ON_ERROR),
+                'occurred_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'tenant_id' => 10,
+                'user_id' => $user->id,
+                'domain' => 'billing',
+                'event_type' => 'billing.outbox.replayed',
+                'aggregate_type' => 'outbox_event',
+                'aggregate_id' => $replayEventId,
+                'summary' => 'Replay created',
+                'metadata' => json_encode(['replayed_from_event_id' => $eventId], JSON_THROW_ON_ERROR),
+                'occurred_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/billing/outbox/{$replayEventId}/lineage")
+            ->assertOk()
+            ->assertJsonPath('data.current_event_id', $replayEventId)
+            ->assertJsonPath('data.root_event_id', $eventId)
+            ->assertJsonPath('data.latest_event_id', $replayEventId)
+            ->assertJsonPath('data.lineage.0.event_id', $eventId)
+            ->assertJsonPath('data.lineage.0.replay_depth', 0)
+            ->assertJsonPath('data.lineage.0.attempts.0.status', 'accepted')
+            ->assertJsonPath('data.lineage.1.event_id', $replayEventId)
+            ->assertJsonPath('data.lineage.1.replayed_from_event_id', $eventId)
+            ->assertJsonPath('data.lineage.1.replay_depth', 1)
+            ->assertJsonPath('data.lineage.1.payload_snapshot.provider_environment', 'live')
+            ->assertJsonPath('data.payload_snapshots.1.provider_environment', 'live')
+            ->assertJsonPath('data.activity_logs.0.event_type', 'billing.payload.regenerated')
+            ->assertJsonPath('data.activity_logs.1.event_type', 'billing.outbox.replayed');
+    }
+
     private function seedVoucherScenario(int $tenantId, string $roleCode): array
     {
         $this->seed([

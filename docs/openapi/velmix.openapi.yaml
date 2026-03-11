@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VELMiX ERP API
-  version: sprint1-day108
+  version: sprint1-day111
   description: |
     Contrato OpenAPI de endpoints prioritarios de VELMiX ERP.
     Cubre la convencion multi-tenant y los flujos criticos ya implementados.
@@ -883,6 +883,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataEnvelope'
+    put:
+      tags: [Billing]
+      summary: Actualiza el provider profile de billing del tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillingProviderProfileUpdateRequest'
+      responses:
+        '200':
+          description: Perfil actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
   /billing/provider-profile/check:
     post:
       tags: [Billing]
@@ -912,22 +928,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataEnvelope'
-    put:
-      tags: [Billing]
-      summary: Actualiza el provider profile de billing del tenant
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/BillingProviderProfileUpdateRequest'
-      responses:
-        '200':
-          description: Perfil actualizado
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DataEnvelope'
   /billing/outbox/summary:
     get:
       tags: [Billing]
@@ -948,6 +948,19 @@ paths:
       responses:
         '200':
           description: Retry programado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/outbox/{event}/lineage:
+    get:
+      tags: [Billing]
+      summary: Lee el lineage completo de un evento outbox con payloads, replays e intentos
+      parameters:
+        - $ref: '#/components/parameters/OutboxEventId'
+      responses:
+        '200':
+          description: Lineage del evento outbox
           content:
             application/json:
               schema:

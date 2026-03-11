@@ -98,6 +98,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /billing/outbox/summary`
 - `GET /billing/outbox/provider-trace`
 - `POST /billing/outbox/{event}/retry`
+- `GET /billing/outbox/{event}/lineage`
 - `GET /billing/outbox/{event}/attempts`
 
 ### Reportes y auditoria
@@ -204,6 +205,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `POST /billing/vouchers/{voucher}/replay` crea un nuevo `outbox_event` con lineage hacia el evento anterior
 - `POST /billing/credit-notes/{creditNote}/replay` reencola la nota de credito sin recrear el documento
 - El replay limpia `sunat_ticket` y deja el documento nuevamente en `pending`
+- `GET /billing/outbox/{event}/lineage` devuelve la cadena completa de eventos, payloads, intentos y actividades relacionadas
 
 ## Donde mirar el contrato completo
 

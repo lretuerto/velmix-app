@@ -58,6 +58,7 @@ php artisan test
   - `PUT /billing/provider-profile`
   - `POST /billing/provider-profile/check`
   - `GET /billing/outbox/provider-trace`
+  - `GET /billing/outbox/{event}/lineage`
   - `GET /billing/vouchers/{voucher}/payloads`
   - `POST /billing/vouchers/{voucher}/payloads/regenerate`
   - `POST /billing/vouchers/{voucher}/replay`
@@ -97,6 +98,7 @@ composer run velmix:routes
 - Billing health: snapshot de salud y trazabilidad de intentos por provider/environment
 - Billing payloads: snapshots versionados por provider/esquema para voucher y nota de credito
 - Billing replay: regeneracion y reemision controlada sin recrear la venta o la nota
+- Billing lineage: trazabilidad completa payload -> outbox original -> replay -> intentos
 - Compras: proveedores, órdenes, recepciones, devoluciones y créditos
 - Caja: aperturas, cierres, cobranzas y movimientos no comerciales
 - Reportes: diario, vencimientos, promesas, rentabilidad y riesgo

@@ -8,6 +8,7 @@ use App\Services\Billing\BillingDocumentPayloadService;
 use App\Services\Billing\BillingProviderHealthService;
 use App\Services\Billing\BillingProviderProfileService;
 use App\Services\Billing\BillingReplayService;
+use App\Services\Billing\BillingOutboxLineageService;
 use App\Services\Cash\CashMovementService;
 use App\Services\Cash\CashSessionService;
 use App\Services\Inventory\InventorySetupService;
@@ -43,7 +44,7 @@ Route::get('/docs', function () {
     return response()->json([
         'data' => [
             'project' => 'VELMiX ERP',
-            'version' => 'sprint1-day108',
+            'version' => 'sprint1-day111',
             'documents' => [
                 ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
                 ['name' => 'API Guide', 'path' => '/docs/api-guide'],
@@ -1225,6 +1226,15 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
 
         return response()->json(['data' => $result]);
     })->middleware('perm:billing.outbox.dispatch');
+
+    Route::get('/billing/outbox/{event}/lineage', function (int $event, BillingOutboxLineageService $service) {
+        $result = $service->detail(
+            (int) request()->attributes->get('tenant_id'),
+            $event,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:billing.outbox.read');
 
     Route::get('/billing/outbox/{event}/attempts', function (int $event) {
         $tenantId = (int) request()->attributes->get('tenant_id');
