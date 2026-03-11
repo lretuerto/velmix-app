@@ -7,6 +7,8 @@ use App\Services\Inventory\InventorySetupService;
 use App\Services\Inventory\LotControlService;
 use App\Services\Inventory\StockMovementReadService;
 use App\Services\Inventory\StockMovementService;
+use App\Services\Purchasing\PurchaseReceiptService;
+use App\Services\Purchasing\SupplierService;
 use App\Services\Reports\DailyReportService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
@@ -202,6 +204,56 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 
         return response()->json(['data' => $result]);
     })->middleware('perm:reports.inventory.read');
+
+    Route::get('/purchases/suppliers', function (SupplierService $service) {
+        $result = $service->list((int) request()->attributes->get('tenant_id'));
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:purchase.supplier.read');
+
+    Route::post('/purchases/suppliers', function (SupplierService $service) {
+        $payload = request()->validate([
+            'tax_id' => ['required', 'string'],
+            'name' => ['required', 'string'],
+        ]);
+
+        $result = $service->create(
+            (int) request()->attributes->get('tenant_id'),
+            (string) $payload['tax_id'],
+            (string) $payload['name'],
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:purchase.supplier.create');
+
+    Route::get('/purchases/receipts', function (PurchaseReceiptService $service) {
+        $result = $service->list((int) request()->attributes->get('tenant_id'));
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:purchase.receipt.read');
+
+    Route::post('/purchases/receipts', function (PurchaseReceiptService $service) {
+        $payload = request()->validate([
+            'supplier_id' => ['required', 'integer'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.lot_id' => ['required', 'integer'],
+            'items.*.quantity' => ['required', 'integer', 'min:1'],
+            'items.*.unit_cost' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $result = $service->receive(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            (int) $payload['supplier_id'],
+            array_map(fn (array $item) => [
+                'lot_id' => (int) $item['lot_id'],
+                'quantity' => (int) $item['quantity'],
+                'unit_cost' => (float) $item['unit_cost'],
+            ], $payload['items']),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:purchase.receipt.create');
 
     Route::get('/stock/move', fn () => response()->json(['ok' => true, 'flow' => 'stock']))
         ->middleware('perm:stock.move.create');
