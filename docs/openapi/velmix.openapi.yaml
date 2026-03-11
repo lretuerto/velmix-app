@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VELMiX ERP API
-  version: sprint1-day105
+  version: sprint1-day108
   description: |
     Contrato OpenAPI de endpoints prioritarios de VELMiX ERP.
     Cubre la convencion multi-tenant y los flujos criticos ya implementados.
@@ -752,6 +752,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataEnvelope'
+  /billing/vouchers/{voucher}/payloads/regenerate:
+    post:
+      tags: [Billing]
+      summary: Regenera snapshots de payload para un voucher usando el provider profile actual
+      parameters:
+        - $ref: '#/components/parameters/VoucherId'
+      responses:
+        '200':
+          description: Snapshot regenerado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/vouchers/{voucher}/replay:
+    post:
+      tags: [Billing]
+      summary: Reencola un voucher con el ultimo snapshot disponible
+      parameters:
+        - $ref: '#/components/parameters/VoucherId'
+      responses:
+        '200':
+          description: Replay programado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
   /billing/credit-notes:
     post:
       tags: [Billing]
@@ -791,6 +817,32 @@ paths:
       responses:
         '200':
           description: Payloads de la nota de credito
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/credit-notes/{creditNote}/payloads/regenerate:
+    post:
+      tags: [Billing]
+      summary: Regenera snapshots de payload para una nota de credito usando el provider profile actual
+      parameters:
+        - $ref: '#/components/parameters/CreditNoteId'
+      responses:
+        '200':
+          description: Snapshot regenerado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/credit-notes/{creditNote}/replay:
+    post:
+      tags: [Billing]
+      summary: Reencola una nota de credito con el ultimo snapshot disponible
+      parameters:
+        - $ref: '#/components/parameters/CreditNoteId'
+      responses:
+        '200':
+          description: Replay programado
           content:
             application/json:
               schema:

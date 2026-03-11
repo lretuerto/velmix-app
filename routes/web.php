@@ -7,6 +7,7 @@ use App\Services\Billing\CreditNoteService;
 use App\Services\Billing\BillingDocumentPayloadService;
 use App\Services\Billing\BillingProviderHealthService;
 use App\Services\Billing\BillingProviderProfileService;
+use App\Services\Billing\BillingReplayService;
 use App\Services\Cash\CashMovementService;
 use App\Services\Cash\CashSessionService;
 use App\Services\Inventory\InventorySetupService;
@@ -42,7 +43,7 @@ Route::get('/docs', function () {
     return response()->json([
         'data' => [
             'project' => 'VELMiX ERP',
-            'version' => 'sprint1-day105',
+            'version' => 'sprint1-day108',
             'documents' => [
                 ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
                 ['name' => 'API Guide', 'path' => '/docs/api-guide'],
@@ -1052,6 +1053,26 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         ]);
     })->middleware('perm:billing.voucher.read');
 
+    Route::post('/billing/vouchers/{voucher}/payloads/regenerate', function (int $voucher, BillingDocumentPayloadService $service) {
+        $result = $service->regenerateForVoucher(
+            (int) request()->attributes->get('tenant_id'),
+            $voucher,
+            (int) optional(request()->user())->id,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:billing.provider.manage');
+
+    Route::post('/billing/vouchers/{voucher}/replay', function (int $voucher, BillingReplayService $service) {
+        $result = $service->replayVoucher(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            $voucher,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:billing.outbox.dispatch');
+
     Route::post('/billing/credit-notes', function (CreditNoteService $service) {
         $payload = request()->validate([
             'sale_id' => ['required', 'integer'],
@@ -1100,6 +1121,26 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
             'data' => $service->listForAggregate($tenantId, 'sale_credit_note', $creditNote),
         ]);
     })->middleware('perm:billing.credit-note.read');
+
+    Route::post('/billing/credit-notes/{creditNote}/payloads/regenerate', function (int $creditNote, BillingDocumentPayloadService $service) {
+        $result = $service->regenerateForCreditNote(
+            (int) request()->attributes->get('tenant_id'),
+            $creditNote,
+            (int) optional(request()->user())->id,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:billing.provider.manage');
+
+    Route::post('/billing/credit-notes/{creditNote}/replay', function (int $creditNote, BillingReplayService $service) {
+        $result = $service->replayCreditNote(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            $creditNote,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:billing.outbox.dispatch');
 
     Route::post('/billing/outbox/dispatch', function (OutboxDispatchService $service) {
         $payload = request()->validate([

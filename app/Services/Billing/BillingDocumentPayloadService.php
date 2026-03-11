@@ -3,11 +3,64 @@
 namespace App\Services\Billing;
 
 use App\Models\BillingDocumentPayload;
+use App\Services\Audit\TenantActivityLogService;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class BillingDocumentPayloadService
 {
+    public function regenerateForVoucher(int $tenantId, int $voucherId, int $userId): array
+    {
+        return DB::transaction(function () use ($tenantId, $voucherId, $userId) {
+            $snapshot = $this->createForVoucher($tenantId, $voucherId, $userId);
+            $syncedEventIds = $this->syncOpenOutboxEvents(
+                $tenantId,
+                'electronic_voucher',
+                $voucherId,
+                array_merge(
+                    [
+                        'voucher_id' => $voucherId,
+                        'sale_id' => $snapshot['payload']['sale']['id'],
+                        'sale_reference' => $snapshot['payload']['sale']['reference'],
+                        'series' => $snapshot['payload']['document']['series'],
+                        'number' => $snapshot['payload']['document']['number'],
+                        'total_amount' => $snapshot['payload']['totals']['total_amount'],
+                    ],
+                    $this->outboxEnvelope($snapshot),
+                ),
+            );
+
+            $this->auditRegeneration($tenantId, $userId, 'electronic_voucher', $voucherId, $snapshot, $syncedEventIds);
+
+            return array_merge($snapshot, ['synced_event_ids' => $syncedEventIds]);
+        });
+    }
+
+    public function regenerateForCreditNote(int $tenantId, int $creditNoteId, int $userId): array
+    {
+        return DB::transaction(function () use ($tenantId, $creditNoteId, $userId) {
+            $snapshot = $this->createForCreditNote($tenantId, $creditNoteId, $userId);
+            $syncedEventIds = $this->syncOpenOutboxEvents(
+                $tenantId,
+                'sale_credit_note',
+                $creditNoteId,
+                array_merge(
+                    [
+                        'credit_note_id' => $creditNoteId,
+                        'sale_id' => $snapshot['payload']['sale']['id'],
+                        'series' => $snapshot['payload']['document']['series'],
+                        'number' => $snapshot['payload']['document']['number'],
+                    ],
+                    $this->outboxEnvelope($snapshot),
+                ),
+            );
+
+            $this->auditRegeneration($tenantId, $userId, 'sale_credit_note', $creditNoteId, $snapshot, $syncedEventIds);
+
+            return array_merge($snapshot, ['synced_event_ids' => $syncedEventIds]);
+        });
+    }
+
     public function createForVoucher(int $tenantId, int $voucherId, ?int $userId = null): array
     {
         $voucher = DB::table('electronic_vouchers')
@@ -251,6 +304,56 @@ class BillingDocumentPayloadService
             'document_number' => $snapshot['document_number'],
             'document_payload' => $snapshot['payload'],
         ];
+    }
+
+    private function syncOpenOutboxEvents(int $tenantId, string $aggregateType, int $aggregateId, array $payload): array
+    {
+        $eventIds = DB::table('outbox_events')
+            ->where('tenant_id', $tenantId)
+            ->where('aggregate_type', $aggregateType)
+            ->where('aggregate_id', $aggregateId)
+            ->whereIn('status', ['pending', 'failed'])
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        if ($eventIds !== []) {
+            DB::table('outbox_events')
+                ->whereIn('id', $eventIds)
+                ->update([
+                    'payload' => json_encode($payload, JSON_THROW_ON_ERROR),
+                    'updated_at' => now(),
+                ]);
+        }
+
+        return $eventIds;
+    }
+
+    private function auditRegeneration(
+        int $tenantId,
+        int $userId,
+        string $aggregateType,
+        int $aggregateId,
+        array $snapshot,
+        array $syncedEventIds,
+    ): void {
+        app(TenantActivityLogService::class)->record(
+            $tenantId,
+            $userId,
+            'billing',
+            'billing.payload.regenerated',
+            $aggregateType,
+            $aggregateId,
+            sprintf('Billing payload regenerated for %s.', $snapshot['document_number']),
+            [
+                'billing_payload_id' => $snapshot['id'],
+                'schema_version' => $snapshot['schema_version'],
+                'provider_code' => $snapshot['provider_code'],
+                'provider_environment' => $snapshot['provider_environment'],
+                'synced_event_ids' => $syncedEventIds,
+            ],
+        );
     }
 
     private function persistSnapshot(

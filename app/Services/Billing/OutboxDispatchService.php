@@ -178,11 +178,16 @@ class OutboxDispatchService
             ? 'sale_credit_notes'
             : 'electronic_vouchers';
         $profile = app(BillingProviderProfileService::class)->current($tenantId);
-        $provider = app(BillingDispatchProviderRegistry::class)->forCode((string) $profile['provider_code']);
+        $eventPayload = json_decode((string) DB::table('outbox_events')->where('id', $event->id)->value('payload'), true, 512, JSON_THROW_ON_ERROR);
+        $effectiveProfile = array_merge($profile, [
+            'provider_code' => (string) ($eventPayload['provider_code'] ?? $profile['provider_code']),
+            'environment' => (string) ($eventPayload['provider_environment'] ?? $profile['environment']),
+        ]);
+        $provider = app(BillingDispatchProviderRegistry::class)->forCode((string) $effectiveProfile['provider_code']);
         $dispatch = $provider->dispatch(
             $event,
-            json_decode((string) DB::table('outbox_events')->where('id', $event->id)->value('payload'), true, 512, JSON_THROW_ON_ERROR),
-            $profile,
+            $eventPayload,
+            $effectiveProfile,
             ['simulate_result' => $outcome],
         );
 
@@ -209,7 +214,7 @@ class OutboxDispatchService
                 'outbox_event_id' => $event->id,
                 'status' => 'failed',
                 'provider_code' => $dispatch['provider_code'],
-                'provider_environment' => $profile['environment'],
+                'provider_environment' => $effectiveProfile['environment'],
                 'sunat_ticket' => null,
                 'provider_reference' => $dispatch['provider_reference'],
                 'error_message' => $message,
@@ -231,7 +236,7 @@ class OutboxDispatchService
                 'event_type' => $event->event_type,
                 'status' => 'failed',
                 'provider_code' => $dispatch['provider_code'],
-                'provider_environment' => $profile['environment'],
+                'provider_environment' => $effectiveProfile['environment'],
                 'provider_reference' => $dispatch['provider_reference'],
                 'sunat_ticket' => null,
                 'http_status' => 503,
@@ -262,7 +267,7 @@ class OutboxDispatchService
                 'outbox_event_id' => $event->id,
                 'status' => 'rejected',
                 'provider_code' => $dispatch['provider_code'],
-                'provider_environment' => $profile['environment'],
+                'provider_environment' => $effectiveProfile['environment'],
                 'sunat_ticket' => null,
                 'provider_reference' => $dispatch['provider_reference'],
                 'error_message' => $message,
@@ -284,7 +289,7 @@ class OutboxDispatchService
                 'event_type' => $event->event_type,
                 'status' => 'rejected',
                 'provider_code' => $dispatch['provider_code'],
-                'provider_environment' => $profile['environment'],
+                'provider_environment' => $effectiveProfile['environment'],
                 'provider_reference' => $dispatch['provider_reference'],
                 'sunat_ticket' => null,
             ];
@@ -313,7 +318,7 @@ class OutboxDispatchService
             'outbox_event_id' => $event->id,
             'status' => 'accepted',
             'provider_code' => $dispatch['provider_code'],
-            'provider_environment' => $profile['environment'],
+            'provider_environment' => $effectiveProfile['environment'],
             'sunat_ticket' => $ticket,
             'provider_reference' => $dispatch['provider_reference'],
             'error_message' => null,
@@ -336,7 +341,7 @@ class OutboxDispatchService
             'status' => 'processed',
             'sunat_ticket' => $ticket,
             'provider_code' => $dispatch['provider_code'],
-            'provider_environment' => $profile['environment'],
+            'provider_environment' => $effectiveProfile['environment'],
             'provider_reference' => $dispatch['provider_reference'],
         ];
     }

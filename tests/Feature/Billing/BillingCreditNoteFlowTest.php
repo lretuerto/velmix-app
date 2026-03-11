@@ -312,6 +312,84 @@ class BillingCreditNoteFlowTest extends TestCase
         ]);
     }
 
+    public function test_can_regenerate_and_replay_credit_note_payload_with_new_provider_profile(): void
+    {
+        [$admin, $saleId] = $this->seedCashSaleWithVoucher();
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/cash/sessions/open', [
+                'opening_amount' => 100,
+            ])
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/credit-notes', [
+                'sale_id' => $saleId,
+                'reason' => 'Reemision con nuevo provider profile',
+            ])
+            ->assertOk();
+
+        $creditNoteId = (int) DB::table('sale_credit_notes')->where('sale_id', $saleId)->value('id');
+        $originalEventId = (int) DB::table('outbox_events')
+            ->where('aggregate_type', 'sale_credit_note')
+            ->where('aggregate_id', $creditNoteId)
+            ->value('id');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->putJson('/billing/provider-profile', [
+                'provider_code' => 'fake_sunat',
+                'environment' => 'live',
+                'default_outcome' => 'accepted',
+            ])
+            ->assertOk();
+
+        $regenerated = $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson("/billing/credit-notes/{$creditNoteId}/payloads/regenerate")
+            ->assertOk()
+            ->assertJsonPath('data.provider_environment', 'live')
+            ->assertJsonPath('data.synced_event_ids.0', $originalEventId)
+            ->json('data');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/outbox/dispatch')
+            ->assertOk()
+            ->assertJsonPath('data.document_id', $creditNoteId)
+            ->assertJsonPath('data.provider_environment', 'live');
+
+        $replayResponse = $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson("/billing/credit-notes/{$creditNoteId}/replay")
+            ->assertOk()
+            ->assertJsonPath('data.document_id', $creditNoteId)
+            ->assertJsonPath('data.replayed_from_event_id', $originalEventId)
+            ->json('data');
+
+        $replayEventId = (int) $replayResponse['event_id'];
+        $replayPayload = json_decode((string) DB::table('outbox_events')->where('id', $replayEventId)->value('payload'), true, 512, JSON_THROW_ON_ERROR);
+
+        $this->assertDatabaseHas('outbox_events', [
+            'id' => $replayEventId,
+            'aggregate_type' => 'sale_credit_note',
+            'aggregate_id' => $creditNoteId,
+            'status' => 'pending',
+            'replayed_from_event_id' => $originalEventId,
+        ]);
+
+        $this->assertDatabaseHas('sale_credit_notes', [
+            'id' => $creditNoteId,
+            'status' => 'pending',
+            'sunat_ticket' => null,
+        ]);
+
+        $this->assertSame('live', $replayPayload['provider_environment']);
+        $this->assertSame($regenerated['id'], $replayPayload['billing_payload_id']);
+    }
+
     private function seedCashSaleWithVoucher(): array
     {
         $this->seed([

@@ -59,7 +59,11 @@ php artisan test
   - `POST /billing/provider-profile/check`
   - `GET /billing/outbox/provider-trace`
   - `GET /billing/vouchers/{voucher}/payloads`
+  - `POST /billing/vouchers/{voucher}/payloads/regenerate`
+  - `POST /billing/vouchers/{voucher}/replay`
   - `GET /billing/credit-notes/{creditNote}/payloads`
+  - `POST /billing/credit-notes/{creditNote}/payloads/regenerate`
+  - `POST /billing/credit-notes/{creditNote}/replay`
 
 Archivos fuente:
 
@@ -92,6 +96,7 @@ composer run velmix:routes
 - Billing providers: perfil por tenant para sandbox/live y outcome por defecto
 - Billing health: snapshot de salud y trazabilidad de intentos por provider/environment
 - Billing payloads: snapshots versionados por provider/esquema para voucher y nota de credito
+- Billing replay: regeneracion y reemision controlada sin recrear la venta o la nota
 - Compras: proveedores, órdenes, recepciones, devoluciones y créditos
 - Caja: aperturas, cierres, cobranzas y movimientos no comerciales
 - Reportes: diario, vencimientos, promesas, rentabilidad y riesgo

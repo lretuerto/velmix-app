@@ -84,9 +84,13 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `POST /billing/vouchers`
 - `GET /billing/vouchers/{voucher}`
 - `GET /billing/vouchers/{voucher}/payloads`
+- `POST /billing/vouchers/{voucher}/payloads/regenerate`
+- `POST /billing/vouchers/{voucher}/replay`
 - `POST /billing/credit-notes`
 - `GET /billing/credit-notes/{creditNote}`
 - `GET /billing/credit-notes/{creditNote}/payloads`
+- `POST /billing/credit-notes/{creditNote}/payloads/regenerate`
+- `POST /billing/credit-notes/{creditNote}/replay`
 - `GET /billing/provider-profile`
 - `PUT /billing/provider-profile`
 - `POST /billing/provider-profile/check`
@@ -191,6 +195,15 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - `GET /billing/credit-notes/{creditNote}/payloads`
 - Version inicial actual:
   - `fake_sunat.v1`
+
+## Replay y regeneracion
+
+- `POST /billing/vouchers/{voucher}/payloads/regenerate` crea un snapshot nuevo con el provider profile actual
+- `POST /billing/credit-notes/{creditNote}/payloads/regenerate` hace lo mismo para notas de credito
+- Si existe un outbox `pending` o `failed`, la regeneracion sincroniza ese payload abierto
+- `POST /billing/vouchers/{voucher}/replay` crea un nuevo `outbox_event` con lineage hacia el evento anterior
+- `POST /billing/credit-notes/{creditNote}/replay` reencola la nota de credito sin recrear el documento
+- El replay limpia `sunat_ticket` y deja el documento nuevamente en `pending`
 
 ## Donde mirar el contrato completo
 
