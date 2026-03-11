@@ -42,7 +42,14 @@ class DueReminderReportService
                 'customers.id as customer_id',
                 'customers.name as customer_name',
                 'sales.reference as sale_reference',
-            ])
+            ]);
+
+        $receivableFollowUps = $this->latestReceivableFollowUps(
+            $tenantId,
+            $receivables->pluck('id')->all(),
+        );
+
+        $receivables = $receivables
             ->map(fn (object $receivable) => $this->formatDueItem(
                 'receivable',
                 $receivable,
@@ -52,6 +59,7 @@ class DueReminderReportService
                     'customer_name' => $receivable->customer_name,
                     'sale_id' => $receivable->sale_id,
                     'sale_reference' => $receivable->sale_reference,
+                    'latest_follow_up' => $receivableFollowUps[$receivable->id] ?? null,
                 ],
             ));
 
@@ -69,7 +77,14 @@ class DueReminderReportService
                 'suppliers.id as supplier_id',
                 'suppliers.name as supplier_name',
                 'purchase_receipts.reference as receipt_reference',
-            ])
+            ]);
+
+        $payableFollowUps = $this->latestPayableFollowUps(
+            $tenantId,
+            $payables->pluck('id')->all(),
+        );
+
+        $payables = $payables
             ->map(fn (object $payable) => $this->formatDueItem(
                 'payable',
                 $payable,
@@ -79,6 +94,7 @@ class DueReminderReportService
                     'supplier_name' => $payable->supplier_name,
                     'purchase_receipt_id' => $payable->purchase_receipt_id,
                     'receipt_reference' => $payable->receipt_reference,
+                    'latest_follow_up' => $payableFollowUps[$payable->id] ?? null,
                 ],
             ));
 
@@ -139,6 +155,90 @@ class DueReminderReportService
             'overdue' => $overdue->take($limit)->all(),
             'due_today' => $dueToday->take($limit)->all(),
             'upcoming' => $upcoming->take($limit)->all(),
+        ];
+    }
+
+    private function latestReceivableFollowUps(int $tenantId, array $receivableIds): array
+    {
+        if ($receivableIds === []) {
+            return [];
+        }
+
+        $latest = [];
+
+        $followUps = DB::table('sale_receivable_follow_ups')
+            ->join('users', 'users.id', '=', 'sale_receivable_follow_ups.user_id')
+            ->where('sale_receivable_follow_ups.tenant_id', $tenantId)
+            ->whereIn('sale_receivable_follow_ups.sale_receivable_id', $receivableIds)
+            ->orderByDesc('sale_receivable_follow_ups.id')
+            ->get([
+                'sale_receivable_follow_ups.id',
+                'sale_receivable_follow_ups.sale_receivable_id',
+                'sale_receivable_follow_ups.type',
+                'sale_receivable_follow_ups.note',
+                'sale_receivable_follow_ups.promised_amount',
+                'sale_receivable_follow_ups.promised_at',
+                'sale_receivable_follow_ups.created_at',
+                'users.id as user_id',
+                'users.name as user_name',
+            ]);
+
+        foreach ($followUps as $followUp) {
+            if (! array_key_exists($followUp->sale_receivable_id, $latest)) {
+                $latest[$followUp->sale_receivable_id] = $this->formatFollowUp($followUp);
+            }
+        }
+
+        return $latest;
+    }
+
+    private function latestPayableFollowUps(int $tenantId, array $payableIds): array
+    {
+        if ($payableIds === []) {
+            return [];
+        }
+
+        $latest = [];
+
+        $followUps = DB::table('purchase_payable_follow_ups')
+            ->join('users', 'users.id', '=', 'purchase_payable_follow_ups.user_id')
+            ->where('purchase_payable_follow_ups.tenant_id', $tenantId)
+            ->whereIn('purchase_payable_follow_ups.purchase_payable_id', $payableIds)
+            ->orderByDesc('purchase_payable_follow_ups.id')
+            ->get([
+                'purchase_payable_follow_ups.id',
+                'purchase_payable_follow_ups.purchase_payable_id',
+                'purchase_payable_follow_ups.type',
+                'purchase_payable_follow_ups.note',
+                'purchase_payable_follow_ups.promised_amount',
+                'purchase_payable_follow_ups.promised_at',
+                'purchase_payable_follow_ups.created_at',
+                'users.id as user_id',
+                'users.name as user_name',
+            ]);
+
+        foreach ($followUps as $followUp) {
+            if (! array_key_exists($followUp->purchase_payable_id, $latest)) {
+                $latest[$followUp->purchase_payable_id] = $this->formatFollowUp($followUp);
+            }
+        }
+
+        return $latest;
+    }
+
+    private function formatFollowUp(object $followUp): array
+    {
+        return [
+            'id' => $followUp->id,
+            'type' => $followUp->type,
+            'note' => $followUp->note,
+            'promised_amount' => $followUp->promised_amount !== null ? (float) $followUp->promised_amount : null,
+            'promised_at' => $followUp->promised_at,
+            'created_at' => $followUp->created_at,
+            'user' => [
+                'id' => $followUp->user_id,
+                'name' => $followUp->user_name,
+            ],
         ];
     }
 }

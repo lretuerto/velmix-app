@@ -334,6 +334,41 @@ class CustomerService
             ])
             ->all();
 
+        $followUps = DB::table('sale_receivable_follow_ups')
+            ->join('sale_receivables', 'sale_receivables.id', '=', 'sale_receivable_follow_ups.sale_receivable_id')
+            ->join('sales', 'sales.id', '=', 'sale_receivables.sale_id')
+            ->join('users', 'users.id', '=', 'sale_receivable_follow_ups.user_id')
+            ->where('sale_receivable_follow_ups.tenant_id', $tenantId)
+            ->where('sale_receivables.customer_id', $customerId)
+            ->orderByDesc('sale_receivable_follow_ups.id')
+            ->get([
+                'sale_receivable_follow_ups.id',
+                'sale_receivable_follow_ups.sale_receivable_id',
+                'sale_receivable_follow_ups.type',
+                'sale_receivable_follow_ups.note',
+                'sale_receivable_follow_ups.promised_amount',
+                'sale_receivable_follow_ups.promised_at',
+                'sale_receivable_follow_ups.created_at',
+                'sales.reference as sale_reference',
+                'users.id as user_id',
+                'users.name as user_name',
+            ])
+            ->map(fn (object $followUp) => [
+                'id' => $followUp->id,
+                'sale_receivable_id' => $followUp->sale_receivable_id,
+                'type' => $followUp->type,
+                'note' => $followUp->note,
+                'promised_amount' => $followUp->promised_amount !== null ? (float) $followUp->promised_amount : null,
+                'promised_at' => $followUp->promised_at,
+                'created_at' => $followUp->created_at,
+                'sale_reference' => $followUp->sale_reference,
+                'user' => [
+                    'id' => $followUp->user_id,
+                    'name' => $followUp->user_name,
+                ],
+            ])
+            ->all();
+
         return [
             'customer' => [
                 'id' => $customer->id,
@@ -363,10 +398,13 @@ class CustomerService
                         && $receivable['due_at'] !== null
                         && $receivable['due_at'] < now();
                 })->count(),
+                'follow_up_count' => count($followUps),
+                'promised_follow_up_count' => collect($followUps)->where('type', 'promise')->count(),
             ],
             'sales' => $sales,
             'receivables' => $receivables,
             'payments' => $payments,
+            'follow_ups' => $followUps,
         ];
     }
 

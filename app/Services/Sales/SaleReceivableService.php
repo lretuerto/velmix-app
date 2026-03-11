@@ -78,6 +78,8 @@ class SaleReceivableService
             ])
             ->all();
 
+        $followUps = $this->followUpsForReceivable($tenantId, $receivableId);
+
         return [
             'id' => $receivable->id,
             'total_amount' => (float) $receivable->total_amount,
@@ -98,7 +100,16 @@ class SaleReceivableService
                 'reference' => $receivable->sale_reference,
             ],
             'payments' => $payments,
+            'latest_follow_up' => $followUps[0] ?? null,
+            'follow_ups' => $followUps,
         ];
+    }
+
+    public function followUps(int $tenantId, int $receivableId): array
+    {
+        $this->loadReceivable($tenantId, $receivableId);
+
+        return $this->followUpsForReceivable($tenantId, $receivableId);
     }
 
     public function pay(int $tenantId, int $userId, int $receivableId, float $amount, string $paymentMethod, string $reference): array
@@ -202,6 +213,65 @@ class SaleReceivableService
         });
     }
 
+    public function addFollowUp(
+        int $tenantId,
+        int $userId,
+        int $receivableId,
+        string $type,
+        string $note,
+        ?float $promisedAmount = null,
+        ?string $promisedAt = null
+    ): array {
+        if ($tenantId <= 0 || $userId <= 0) {
+            throw new HttpException(403, 'Tenant context or authenticated user missing.');
+        }
+
+        $type = trim($type);
+        $note = trim($note);
+
+        if (! in_array($type, ['note', 'promise'], true)) {
+            throw new HttpException(422, 'Follow up type is invalid.');
+        }
+
+        if ($note === '') {
+            throw new HttpException(422, 'Follow up note is required.');
+        }
+
+        return DB::transaction(function () use ($tenantId, $userId, $receivableId, $type, $note, $promisedAmount, $promisedAt) {
+            $receivable = $this->loadReceivable($tenantId, $receivableId, true);
+
+            if ($type === 'promise' && $promisedAt === null) {
+                throw new HttpException(422, 'Promise follow up requires promised_at.');
+            }
+
+            if ($promisedAmount !== null && $promisedAmount <= 0) {
+                throw new HttpException(422, 'Promised amount must be valid.');
+            }
+
+            if ($promisedAmount !== null && $promisedAmount > (float) $receivable->outstanding_amount) {
+                throw new HttpException(422, 'Promised amount exceeds outstanding amount.');
+            }
+
+            $normalizedPromisedAt = $type === 'promise' && $promisedAt !== null
+                ? CarbonImmutable::parse($promisedAt)->startOfDay()->toDateTimeString()
+                : null;
+
+            $followUpId = DB::table('sale_receivable_follow_ups')->insertGetId([
+                'tenant_id' => $tenantId,
+                'sale_receivable_id' => $receivableId,
+                'user_id' => $userId,
+                'type' => $type,
+                'note' => $note,
+                'promised_amount' => $type === 'promise' ? $promisedAmount : null,
+                'promised_at' => $normalizedPromisedAt,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            return $this->followUpById($followUpId);
+        });
+    }
+
     public function agingSummary(int $tenantId): array
     {
         if ($tenantId <= 0) {
@@ -236,6 +306,85 @@ class SaleReceivableService
         return [
             'tenant_id' => $tenantId,
             'summary' => $summary,
+        ];
+    }
+
+    private function loadReceivable(int $tenantId, int $receivableId, bool $lockForUpdate = false): object
+    {
+        $query = DB::table('sale_receivables')
+            ->where('tenant_id', $tenantId)
+            ->where('id', $receivableId);
+
+        if ($lockForUpdate) {
+            $query->lockForUpdate();
+        }
+
+        $receivable = $query->first(['id', 'outstanding_amount']);
+
+        if ($receivable === null) {
+            throw new HttpException(404, 'Sale receivable not found.');
+        }
+
+        return $receivable;
+    }
+
+    private function followUpsForReceivable(int $tenantId, int $receivableId): array
+    {
+        return DB::table('sale_receivable_follow_ups')
+            ->join('users', 'users.id', '=', 'sale_receivable_follow_ups.user_id')
+            ->where('sale_receivable_follow_ups.tenant_id', $tenantId)
+            ->where('sale_receivable_follow_ups.sale_receivable_id', $receivableId)
+            ->orderByDesc('sale_receivable_follow_ups.id')
+            ->get([
+                'sale_receivable_follow_ups.id',
+                'sale_receivable_follow_ups.type',
+                'sale_receivable_follow_ups.note',
+                'sale_receivable_follow_ups.promised_amount',
+                'sale_receivable_follow_ups.promised_at',
+                'sale_receivable_follow_ups.created_at',
+                'users.id as user_id',
+                'users.name as user_name',
+            ])
+            ->map(fn (object $followUp) => $this->formatFollowUp($followUp))
+            ->all();
+    }
+
+    private function followUpById(int $followUpId): array
+    {
+        $followUp = DB::table('sale_receivable_follow_ups')
+            ->join('users', 'users.id', '=', 'sale_receivable_follow_ups.user_id')
+            ->where('sale_receivable_follow_ups.id', $followUpId)
+            ->first([
+                'sale_receivable_follow_ups.id',
+                'sale_receivable_follow_ups.type',
+                'sale_receivable_follow_ups.note',
+                'sale_receivable_follow_ups.promised_amount',
+                'sale_receivable_follow_ups.promised_at',
+                'sale_receivable_follow_ups.created_at',
+                'users.id as user_id',
+                'users.name as user_name',
+            ]);
+
+        if ($followUp === null) {
+            throw new HttpException(404, 'Sale receivable follow up not found.');
+        }
+
+        return $this->formatFollowUp($followUp);
+    }
+
+    private function formatFollowUp(object $followUp): array
+    {
+        return [
+            'id' => $followUp->id,
+            'type' => $followUp->type,
+            'note' => $followUp->note,
+            'promised_amount' => $followUp->promised_amount !== null ? (float) $followUp->promised_amount : null,
+            'promised_at' => $followUp->promised_at,
+            'created_at' => $followUp->created_at,
+            'user' => [
+                'id' => $followUp->user_id,
+                'name' => $followUp->user_name,
+            ],
         ];
     }
 

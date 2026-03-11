@@ -116,6 +116,8 @@ class PurchasePayableService
             ])
             ->all();
 
+        $followUps = $this->followUpsForPayable($tenantId, $payableId);
+
         return [
             'id' => $payable->id,
             'total_amount' => (float) $payable->total_amount,
@@ -136,7 +138,16 @@ class PurchasePayableService
             ],
             'payments' => $payments,
             'supplier_credit_applications' => $creditApplications,
+            'latest_follow_up' => $followUps[0] ?? null,
+            'follow_ups' => $followUps,
         ];
+    }
+
+    public function followUps(int $tenantId, int $payableId): array
+    {
+        $this->loadPayable($tenantId, $payableId);
+
+        return $this->followUpsForPayable($tenantId, $payableId);
     }
 
     public function pay(int $tenantId, int $userId, int $payableId, float $amount, string $paymentMethod, string $reference): array
@@ -211,6 +222,65 @@ class PurchasePayableService
         });
     }
 
+    public function addFollowUp(
+        int $tenantId,
+        int $userId,
+        int $payableId,
+        string $type,
+        string $note,
+        ?float $promisedAmount = null,
+        ?string $promisedAt = null
+    ): array {
+        if ($tenantId <= 0 || $userId <= 0) {
+            throw new HttpException(403, 'Tenant context or authenticated user missing.');
+        }
+
+        $type = trim($type);
+        $note = trim($note);
+
+        if (! in_array($type, ['note', 'promise'], true)) {
+            throw new HttpException(422, 'Follow up type is invalid.');
+        }
+
+        if ($note === '') {
+            throw new HttpException(422, 'Follow up note is required.');
+        }
+
+        return DB::transaction(function () use ($tenantId, $userId, $payableId, $type, $note, $promisedAmount, $promisedAt) {
+            $payable = $this->loadPayable($tenantId, $payableId, true);
+
+            if ($type === 'promise' && $promisedAt === null) {
+                throw new HttpException(422, 'Promise follow up requires promised_at.');
+            }
+
+            if ($promisedAmount !== null && $promisedAmount <= 0) {
+                throw new HttpException(422, 'Promised amount must be valid.');
+            }
+
+            if ($promisedAmount !== null && $promisedAmount > (float) $payable->outstanding_amount) {
+                throw new HttpException(422, 'Promised amount exceeds outstanding amount.');
+            }
+
+            $normalizedPromisedAt = $type === 'promise' && $promisedAt !== null
+                ? CarbonImmutable::parse($promisedAt)->startOfDay()->toDateTimeString()
+                : null;
+
+            $followUpId = DB::table('purchase_payable_follow_ups')->insertGetId([
+                'tenant_id' => $tenantId,
+                'purchase_payable_id' => $payableId,
+                'user_id' => $userId,
+                'type' => $type,
+                'note' => $note,
+                'promised_amount' => $type === 'promise' ? $promisedAmount : null,
+                'promised_at' => $normalizedPromisedAt,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            return $this->followUpById($followUpId);
+        });
+    }
+
     public function agingSummary(int $tenantId): array
     {
         if ($tenantId <= 0) {
@@ -246,6 +316,85 @@ class PurchasePayableService
         return [
             'tenant_id' => $tenantId,
             'summary' => $buckets,
+        ];
+    }
+
+    private function loadPayable(int $tenantId, int $payableId, bool $lockForUpdate = false): object
+    {
+        $query = DB::table('purchase_payables')
+            ->where('tenant_id', $tenantId)
+            ->where('id', $payableId);
+
+        if ($lockForUpdate) {
+            $query->lockForUpdate();
+        }
+
+        $payable = $query->first(['id', 'outstanding_amount']);
+
+        if ($payable === null) {
+            throw new HttpException(404, 'Purchase payable not found.');
+        }
+
+        return $payable;
+    }
+
+    private function followUpsForPayable(int $tenantId, int $payableId): array
+    {
+        return DB::table('purchase_payable_follow_ups')
+            ->join('users', 'users.id', '=', 'purchase_payable_follow_ups.user_id')
+            ->where('purchase_payable_follow_ups.tenant_id', $tenantId)
+            ->where('purchase_payable_follow_ups.purchase_payable_id', $payableId)
+            ->orderByDesc('purchase_payable_follow_ups.id')
+            ->get([
+                'purchase_payable_follow_ups.id',
+                'purchase_payable_follow_ups.type',
+                'purchase_payable_follow_ups.note',
+                'purchase_payable_follow_ups.promised_amount',
+                'purchase_payable_follow_ups.promised_at',
+                'purchase_payable_follow_ups.created_at',
+                'users.id as user_id',
+                'users.name as user_name',
+            ])
+            ->map(fn (object $followUp) => $this->formatFollowUp($followUp))
+            ->all();
+    }
+
+    private function followUpById(int $followUpId): array
+    {
+        $followUp = DB::table('purchase_payable_follow_ups')
+            ->join('users', 'users.id', '=', 'purchase_payable_follow_ups.user_id')
+            ->where('purchase_payable_follow_ups.id', $followUpId)
+            ->first([
+                'purchase_payable_follow_ups.id',
+                'purchase_payable_follow_ups.type',
+                'purchase_payable_follow_ups.note',
+                'purchase_payable_follow_ups.promised_amount',
+                'purchase_payable_follow_ups.promised_at',
+                'purchase_payable_follow_ups.created_at',
+                'users.id as user_id',
+                'users.name as user_name',
+            ]);
+
+        if ($followUp === null) {
+            throw new HttpException(404, 'Purchase payable follow up not found.');
+        }
+
+        return $this->formatFollowUp($followUp);
+    }
+
+    private function formatFollowUp(object $followUp): array
+    {
+        return [
+            'id' => $followUp->id,
+            'type' => $followUp->type,
+            'note' => $followUp->note,
+            'promised_amount' => $followUp->promised_amount !== null ? (float) $followUp->promised_amount : null,
+            'promised_at' => $followUp->promised_at,
+            'created_at' => $followUp->created_at,
+            'user' => [
+                'id' => $followUp->user_id,
+                'name' => $followUp->user_name,
+            ],
         ];
     }
 

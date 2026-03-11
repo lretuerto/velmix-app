@@ -206,6 +206,36 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
         return response()->json(['data' => $result]);
     })->middleware('perm:sales.receivable.pay');
 
+    Route::get('/sales/receivables/{receivable}/follow-ups', function (int $receivable, SaleReceivableService $service) {
+        $result = $service->followUps(
+            (int) request()->attributes->get('tenant_id'),
+            $receivable,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:sales.receivable.read');
+
+    Route::post('/sales/receivables/{receivable}/follow-ups', function (int $receivable, SaleReceivableService $service) {
+        $payload = request()->validate([
+            'type' => ['required', 'in:note,promise'],
+            'note' => ['required', 'string'],
+            'promised_amount' => ['nullable', 'numeric', 'min:0.01'],
+            'promised_at' => ['nullable', 'date'],
+        ]);
+
+        $result = $service->addFollowUp(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            $receivable,
+            (string) $payload['type'],
+            (string) $payload['note'],
+            isset($payload['promised_amount']) ? (float) $payload['promised_amount'] : null,
+            $payload['promised_at'] ?? null,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:sales.receivable.follow-up.create');
+
     Route::get('/pos/sales', function (SaleReadService $service) {
         $result = $service->list((int) request()->attributes->get('tenant_id'));
 
@@ -622,6 +652,36 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 
         return response()->json(['data' => $result]);
     })->middleware('perm:purchase.payable.pay');
+
+    Route::get('/purchases/payables/{payable}/follow-ups', function (int $payable, PurchasePayableService $service) {
+        $result = $service->followUps(
+            (int) request()->attributes->get('tenant_id'),
+            $payable,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:purchase.payable.read');
+
+    Route::post('/purchases/payables/{payable}/follow-ups', function (int $payable, PurchasePayableService $service) {
+        $payload = request()->validate([
+            'type' => ['required', 'in:note,promise'],
+            'note' => ['required', 'string'],
+            'promised_amount' => ['nullable', 'numeric', 'min:0.01'],
+            'promised_at' => ['nullable', 'date'],
+        ]);
+
+        $result = $service->addFollowUp(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            $payable,
+            (string) $payload['type'],
+            (string) $payload['note'],
+            isset($payload['promised_amount']) ? (float) $payload['promised_amount'] : null,
+            $payload['promised_at'] ?? null,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:purchase.payable.follow-up.create');
 
     Route::post('/purchases/receipts', function (PurchaseReceiptService $service) {
         $payload = request()->validate([

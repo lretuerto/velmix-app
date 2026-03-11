@@ -130,6 +130,56 @@ class SaleReceivableFlowTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_can_register_receivable_follow_up_and_read_it_from_detail_and_customer_statement(): void
+    {
+        $cashier = $this->seedBaseCatalogAndCashier();
+        [$receivableId, $customerId] = $this->seedReceivableScenario(10, $cashier->id);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson("/sales/receivables/{$receivableId}/follow-ups", [
+                'type' => 'promise',
+                'note' => 'Cliente promete cancelar el viernes',
+                'promised_amount' => 9,
+                'promised_at' => now()->addDays(2)->toDateString(),
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.type', 'promise')
+            ->assertJsonPath('data.promised_amount', 9)
+            ->assertJsonPath('data.user.id', $cashier->id);
+
+        $this->assertDatabaseHas('sale_receivable_follow_ups', [
+            'tenant_id' => 10,
+            'sale_receivable_id' => $receivableId,
+            'type' => 'promise',
+            'note' => 'Cliente promete cancelar el viernes',
+            'promised_amount' => 9.00,
+        ]);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/sales/receivables/{$receivableId}/follow-ups")
+            ->assertOk()
+            ->assertJsonPath('data.0.type', 'promise')
+            ->assertJsonPath('data.0.note', 'Cliente promete cancelar el viernes');
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/sales/receivables/{$receivableId}")
+            ->assertOk()
+            ->assertJsonPath('data.latest_follow_up.type', 'promise')
+            ->assertJsonPath('data.latest_follow_up.note', 'Cliente promete cancelar el viernes');
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/sales/customers/{$customerId}/statement")
+            ->assertOk()
+            ->assertJsonPath('data.summary.follow_up_count', 1)
+            ->assertJsonPath('data.summary.promised_follow_up_count', 1)
+            ->assertJsonPath('data.follow_ups.0.sale_reference', 'SALE-REC-10')
+            ->assertJsonPath('data.follow_ups.0.type', 'promise');
+    }
+
     public function test_reads_receivable_aging_and_customer_statement(): void
     {
         $cashier = $this->seedBaseCatalogAndCashier();

@@ -31,6 +31,30 @@ class DueReminderReportFlowTest extends TestCase
         $this->seedPayable(10, $supplierId, 30.00, now()->addDays(5), 'PUR-PAY-UP');
         $this->seedPayable(20, $foreignSupplierId, 88.00, now()->addDays(2), 'PUR-PAY-FOREIGN');
 
+        DB::table('sale_receivable_follow_ups')->insert([
+            'tenant_id' => 10,
+            'sale_receivable_id' => DB::table('sale_receivables')->where('tenant_id', 10)->where('outstanding_amount', 18)->value('id'),
+            'user_id' => $admin->id,
+            'type' => 'promise',
+            'note' => 'Cliente promete pagar mañana',
+            'promised_amount' => 18.00,
+            'promised_at' => now()->addDay()->startOfDay(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('purchase_payable_follow_ups')->insert([
+            'tenant_id' => 10,
+            'purchase_payable_id' => DB::table('purchase_payables')->where('tenant_id', 10)->where('outstanding_amount', 25)->value('id'),
+            'user_id' => $admin->id,
+            'type' => 'note',
+            'note' => 'Proveedor solicita confirmacion interna',
+            'promised_amount' => null,
+            'promised_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         $this->actingAs($admin)
             ->withHeader('X-Tenant-Id', '10')
             ->getJson('/reports/due-reminders?days_ahead=7&limit=2')
@@ -44,6 +68,8 @@ class DueReminderReportFlowTest extends TestCase
             ->assertJsonPath('data.receivables.summary.upcoming_count', 1)
             ->assertJsonPath('data.receivables.summary.upcoming_amount', 12)
             ->assertJsonPath('data.receivables.overdue.0.sale_reference', 'SALE-RCV-OD')
+            ->assertJsonPath('data.receivables.overdue.0.latest_follow_up.type', 'promise')
+            ->assertJsonPath('data.receivables.overdue.0.latest_follow_up.note', 'Cliente promete pagar mañana')
             ->assertJsonPath('data.receivables.due_today.0.sale_reference', 'SALE-RCV-TODAY')
             ->assertJsonPath('data.receivables.upcoming.0.sale_reference', 'SALE-RCV-UP')
             ->assertJsonPath('data.payables.summary.overdue_count', 1)
@@ -53,6 +79,8 @@ class DueReminderReportFlowTest extends TestCase
             ->assertJsonPath('data.payables.summary.upcoming_count', 1)
             ->assertJsonPath('data.payables.summary.upcoming_amount', 30)
             ->assertJsonPath('data.payables.overdue.0.receipt_reference', 'PUR-PAY-OD')
+            ->assertJsonPath('data.payables.overdue.0.latest_follow_up.type', 'note')
+            ->assertJsonPath('data.payables.overdue.0.latest_follow_up.note', 'Proveedor solicita confirmacion interna')
             ->assertJsonPath('data.payables.due_today.0.receipt_reference', 'PUR-PAY-TODAY')
             ->assertJsonPath('data.payables.upcoming.0.receipt_reference', 'PUR-PAY-UP')
             ->assertJsonMissing(['sale_reference' => 'SALE-RCV-FOREIGN'])

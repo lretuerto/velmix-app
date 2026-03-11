@@ -237,6 +237,57 @@ class PurchasePayableFlowTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_register_payable_follow_up_and_read_it_from_detail_and_supplier_statement(): void
+    {
+        [$admin, $payableId, $supplierId] = $this->seedPayableScenario(10, 'ADMIN');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson("/purchases/payables/{$payableId}/follow-ups", [
+                'type' => 'promise',
+                'note' => 'Proveedor confirma pago diferido para el lunes',
+                'promised_amount' => 15,
+                'promised_at' => now()->addDays(4)->toDateString(),
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.type', 'promise')
+            ->assertJsonPath('data.promised_amount', 15)
+            ->assertJsonPath('data.user.id', $admin->id);
+
+        $this->assertDatabaseHas('purchase_payable_follow_ups', [
+            'tenant_id' => 10,
+            'purchase_payable_id' => $payableId,
+            'type' => 'promise',
+            'note' => 'Proveedor confirma pago diferido para el lunes',
+            'promised_amount' => 15.00,
+        ]);
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/purchases/payables/{$payableId}/follow-ups")
+            ->assertOk()
+            ->assertJsonPath('data.0.type', 'promise')
+            ->assertJsonPath('data.0.note', 'Proveedor confirma pago diferido para el lunes');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/purchases/payables/{$payableId}")
+            ->assertOk()
+            ->assertJsonPath('data.latest_follow_up.type', 'promise')
+            ->assertJsonPath('data.latest_follow_up.note', 'Proveedor confirma pago diferido para el lunes');
+
+        $supplierStatementUser = $this->seedUserWithRole(10, 'ALMACENERO');
+
+        $this->actingAs($supplierStatementUser)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/purchases/suppliers/{$supplierId}/statement")
+            ->assertOk()
+            ->assertJsonPath('data.summary.follow_up_count', 1)
+            ->assertJsonPath('data.summary.promised_follow_up_count', 1)
+            ->assertJsonPath('data.follow_ups.0.purchase_payable_id', $payableId)
+            ->assertJsonPath('data.follow_ups.0.type', 'promise');
+    }
+
     private function seedPayableScenario(int $tenantId, string $roleCode): array
     {
         $this->seed([

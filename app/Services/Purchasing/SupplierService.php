@@ -185,6 +185,41 @@ class SupplierService
             ])
             ->all();
 
+        $followUps = DB::table('purchase_payable_follow_ups')
+            ->join('purchase_payables', 'purchase_payables.id', '=', 'purchase_payable_follow_ups.purchase_payable_id')
+            ->join('purchase_receipts', 'purchase_receipts.id', '=', 'purchase_payables.purchase_receipt_id')
+            ->join('users', 'users.id', '=', 'purchase_payable_follow_ups.user_id')
+            ->where('purchase_payable_follow_ups.tenant_id', $tenantId)
+            ->where('purchase_payables.supplier_id', $supplierId)
+            ->orderByDesc('purchase_payable_follow_ups.id')
+            ->get([
+                'purchase_payable_follow_ups.id',
+                'purchase_payable_follow_ups.purchase_payable_id',
+                'purchase_payable_follow_ups.type',
+                'purchase_payable_follow_ups.note',
+                'purchase_payable_follow_ups.promised_amount',
+                'purchase_payable_follow_ups.promised_at',
+                'purchase_payable_follow_ups.created_at',
+                'purchase_receipts.reference as receipt_reference',
+                'users.id as user_id',
+                'users.name as user_name',
+            ])
+            ->map(fn (object $followUp) => [
+                'id' => $followUp->id,
+                'purchase_payable_id' => $followUp->purchase_payable_id,
+                'type' => $followUp->type,
+                'note' => $followUp->note,
+                'promised_amount' => $followUp->promised_amount !== null ? (float) $followUp->promised_amount : null,
+                'promised_at' => $followUp->promised_at,
+                'created_at' => $followUp->created_at,
+                'receipt_reference' => $followUp->receipt_reference,
+                'user' => [
+                    'id' => $followUp->user_id,
+                    'name' => $followUp->user_name,
+                ],
+            ])
+            ->all();
+
         return [
             'supplier' => [
                 'id' => $supplier->id,
@@ -200,6 +235,8 @@ class SupplierService
                 'supplier_credits_total' => round(array_sum(array_column($supplierCredits, 'remaining_amount')), 2),
                 'supplier_credits_applied_total' => round(array_sum(array_column($creditApplications, 'amount')), 2),
                 'outstanding_total' => round(array_sum(array_column($payables, 'outstanding_amount')), 2),
+                'follow_up_count' => count($followUps),
+                'promised_follow_up_count' => collect($followUps)->where('type', 'promise')->count(),
             ],
             'receipts' => $receipts,
             'payables' => $payables,
@@ -207,6 +244,7 @@ class SupplierService
             'returns' => $returns,
             'supplier_credits' => $supplierCredits,
             'supplier_credit_applications' => $creditApplications,
+            'follow_ups' => $followUps,
         ];
     }
 }
