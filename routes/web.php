@@ -9,6 +9,7 @@ use App\Services\Inventory\StockMovementService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
 use App\Services\Sales\PosSaleService;
+use App\Services\Sales\SaleCancellationService;
 use App\Services\Sales\SaleApprovalService;
 
 Route::get('/', function () {
@@ -86,6 +87,21 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
             (int) request()->attributes->get('tenant_id'),
             (int) optional(request()->user())->id,
             (int) $payload['product_id'],
+            (string) $payload['reason'],
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:pos.sale.approve');
+
+    Route::post('/pos/sales/{sale}/cancel', function (int $sale, SaleCancellationService $service) {
+        $payload = request()->validate([
+            'reason' => ['required', 'string'],
+        ]);
+
+        $result = $service->cancel(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            $sale,
             (string) $payload['reason'],
         );
 

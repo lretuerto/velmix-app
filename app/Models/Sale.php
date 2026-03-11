@@ -11,15 +11,19 @@ class Sale extends Model
     protected $fillable = [
         'tenant_id',
         'user_id',
+        'cancelled_by_user_id',
         'reference',
         'status',
+        'cancel_reason',
         'total_amount',
+        'cancelled_at',
     ];
 
     protected function casts(): array
     {
         return [
             'total_amount' => 'decimal:2',
+            'cancelled_at' => 'datetime',
         ];
     }
 
