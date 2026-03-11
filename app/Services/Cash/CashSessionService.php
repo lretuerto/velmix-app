@@ -118,6 +118,12 @@ class CashSessionService
                 'opening_amount' => round((float) $session->opening_amount, 2),
                 'sales_count' => $summary['sales_count'],
                 'sales_total' => $summary['sales_total'],
+                'cash_sales_total' => $summary['cash_sales_total'],
+                'card_sales_total' => $summary['card_sales_total'],
+                'transfer_sales_total' => $summary['transfer_sales_total'],
+                'gross_cost_total' => $summary['gross_cost_total'],
+                'gross_margin_total' => $summary['gross_margin_total'],
+                'margin_pct' => $summary['margin_pct'],
                 'expected_amount' => round($expectedAmount, 2),
                 'counted_amount' => round($countedAmount, 2),
                 'discrepancy_amount' => $discrepancy,
@@ -146,17 +152,29 @@ class CashSessionService
                 'opened_at',
                 'closed_at',
             ])
-            ->map(fn (object $session) => [
-                'id' => $session->id,
-                'tenant_id' => $session->tenant_id,
-                'status' => $session->status,
-                'opening_amount' => (float) $session->opening_amount,
-                'expected_amount' => (float) $session->expected_amount,
-                'counted_amount' => $session->counted_amount !== null ? (float) $session->counted_amount : null,
-                'discrepancy_amount' => $session->discrepancy_amount !== null ? (float) $session->discrepancy_amount : null,
-                'opened_at' => $session->opened_at,
-                'closed_at' => $session->closed_at,
-            ])
+            ->map(function (object $session) use ($tenantId) {
+                $summary = $this->buildSummary($tenantId, $session);
+
+                return [
+                    'id' => $session->id,
+                    'tenant_id' => $session->tenant_id,
+                    'status' => $session->status,
+                    'opening_amount' => (float) $session->opening_amount,
+                    'expected_amount' => $summary['expected_amount'],
+                    'counted_amount' => $session->counted_amount !== null ? (float) $session->counted_amount : null,
+                    'discrepancy_amount' => $session->discrepancy_amount !== null ? (float) $session->discrepancy_amount : null,
+                    'sales_count' => $summary['sales_count'],
+                    'sales_total' => $summary['sales_total'],
+                    'cash_sales_total' => $summary['cash_sales_total'],
+                    'card_sales_total' => $summary['card_sales_total'],
+                    'transfer_sales_total' => $summary['transfer_sales_total'],
+                    'gross_cost_total' => $summary['gross_cost_total'],
+                    'gross_margin_total' => $summary['gross_margin_total'],
+                    'margin_pct' => $summary['margin_pct'],
+                    'opened_at' => $session->opened_at,
+                    'closed_at' => $session->closed_at,
+                ];
+            })
             ->all();
     }
 
@@ -175,14 +193,24 @@ class CashSessionService
             throw new HttpException(404, 'Cash session not found.');
         }
 
+        $summary = $this->buildSummary($tenantId, $session);
+
         return [
             'id' => $session->id,
             'tenant_id' => $session->tenant_id,
             'status' => $session->status,
             'opening_amount' => (float) $session->opening_amount,
-            'expected_amount' => (float) $session->expected_amount,
+            'expected_amount' => $summary['expected_amount'],
             'counted_amount' => $session->counted_amount !== null ? (float) $session->counted_amount : null,
             'discrepancy_amount' => $session->discrepancy_amount !== null ? (float) $session->discrepancy_amount : null,
+            'sales_count' => $summary['sales_count'],
+            'sales_total' => $summary['sales_total'],
+            'cash_sales_total' => $summary['cash_sales_total'],
+            'card_sales_total' => $summary['card_sales_total'],
+            'transfer_sales_total' => $summary['transfer_sales_total'],
+            'gross_cost_total' => $summary['gross_cost_total'],
+            'gross_margin_total' => $summary['gross_margin_total'],
+            'margin_pct' => $summary['margin_pct'],
             'opened_at' => $session->opened_at,
             'closed_at' => $session->closed_at,
         ];
@@ -190,14 +218,34 @@ class CashSessionService
 
     private function buildSummary(int $tenantId, object $session): array
     {
-        $sales = DB::table('sales')
+        $salesQuery = DB::table('sales')
             ->where('tenant_id', $tenantId)
             ->where('created_at', '>=', $session->opened_at)
-            ->selectRaw('COUNT(*) as sales_count, COALESCE(SUM(total_amount), 0) as sales_total')
+            ->where('status', 'completed');
+
+        if ($session->closed_at !== null) {
+            $salesQuery->where('created_at', '<=', $session->closed_at);
+        }
+
+        $sales = $salesQuery
+            ->selectRaw("
+                COUNT(*) as sales_count,
+                COALESCE(SUM(total_amount), 0) as sales_total,
+                COALESCE(SUM(gross_cost), 0) as gross_cost_total,
+                COALESCE(SUM(gross_margin), 0) as gross_margin_total,
+                COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN total_amount ELSE 0 END), 0) as cash_sales_total,
+                COALESCE(SUM(CASE WHEN payment_method = 'card' THEN total_amount ELSE 0 END), 0) as card_sales_total,
+                COALESCE(SUM(CASE WHEN payment_method = 'transfer' THEN total_amount ELSE 0 END), 0) as transfer_sales_total
+            ")
             ->first();
 
         $salesCount = (int) ($sales->sales_count ?? 0);
         $salesTotal = round((float) ($sales->sales_total ?? 0), 2);
+        $grossCostTotal = round((float) ($sales->gross_cost_total ?? 0), 2);
+        $grossMarginTotal = round((float) ($sales->gross_margin_total ?? 0), 2);
+        $cashSalesTotal = round((float) ($sales->cash_sales_total ?? 0), 2);
+        $cardSalesTotal = round((float) ($sales->card_sales_total ?? 0), 2);
+        $transferSalesTotal = round((float) ($sales->transfer_sales_total ?? 0), 2);
         $openingAmount = round((float) $session->opening_amount, 2);
 
         return [
@@ -207,7 +255,13 @@ class CashSessionService
             'opening_amount' => $openingAmount,
             'sales_count' => $salesCount,
             'sales_total' => $salesTotal,
-            'expected_amount' => round($openingAmount + $salesTotal, 2),
+            'cash_sales_total' => $cashSalesTotal,
+            'card_sales_total' => $cardSalesTotal,
+            'transfer_sales_total' => $transferSalesTotal,
+            'gross_cost_total' => $grossCostTotal,
+            'gross_margin_total' => $grossMarginTotal,
+            'margin_pct' => $salesTotal > 0 ? round(($grossMarginTotal / $salesTotal) * 100, 2) : 0.0,
+            'expected_amount' => round($openingAmount + $cashSalesTotal, 2),
             'opened_at' => $session->opened_at,
         ];
     }

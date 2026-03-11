@@ -67,6 +67,8 @@ class CashSessionFlowTest extends TestCase
             'reference' => 'SALE-CASH-001',
             'status' => 'completed',
             'total_amount' => 25.50,
+            'gross_cost' => 10.00,
+            'gross_margin' => 15.50,
             'created_at' => now()->addMinute(),
             'updated_at' => now()->addMinute(),
         ]);
@@ -77,6 +79,12 @@ class CashSessionFlowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.sales_count', 1)
             ->assertJsonPath('data.sales_total', 25.5)
+            ->assertJsonPath('data.cash_sales_total', 25.5)
+            ->assertJsonPath('data.card_sales_total', 0)
+            ->assertJsonPath('data.transfer_sales_total', 0)
+            ->assertJsonPath('data.gross_cost_total', 10)
+            ->assertJsonPath('data.gross_margin_total', 15.5)
+            ->assertJsonPath('data.margin_pct', 60.78)
             ->assertJsonPath('data.expected_amount', 125.5);
     }
 
@@ -98,6 +106,8 @@ class CashSessionFlowTest extends TestCase
                 'reference' => 'SALE-CASH-001',
                 'status' => 'completed',
                 'total_amount' => 25.50,
+                'gross_cost' => 10.00,
+                'gross_margin' => 15.50,
                 'created_at' => now()->addMinute(),
                 'updated_at' => now()->addMinute(),
             ],
@@ -107,6 +117,8 @@ class CashSessionFlowTest extends TestCase
                 'reference' => 'SALE-CASH-002',
                 'status' => 'completed',
                 'total_amount' => 10.00,
+                'gross_cost' => 4.00,
+                'gross_margin' => 6.00,
                 'created_at' => now()->addMinutes(2),
                 'updated_at' => now()->addMinutes(2),
             ],
@@ -120,6 +132,13 @@ class CashSessionFlowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.status', 'closed')
             ->assertJsonPath('data.sales_count', 2)
+            ->assertJsonPath('data.sales_total', 35.5)
+            ->assertJsonPath('data.cash_sales_total', 35.5)
+            ->assertJsonPath('data.card_sales_total', 0)
+            ->assertJsonPath('data.transfer_sales_total', 0)
+            ->assertJsonPath('data.gross_cost_total', 14)
+            ->assertJsonPath('data.gross_margin_total', 21.5)
+            ->assertJsonPath('data.margin_pct', 60.56)
             ->assertJsonPath('data.expected_amount', 135.5)
             ->assertJsonPath('data.counted_amount', 140)
             ->assertJsonPath('data.discrepancy_amount', 4.5);
@@ -144,10 +163,30 @@ class CashSessionFlowTest extends TestCase
             ])
             ->assertOk();
 
+        DB::table('cash_sessions')
+            ->where('tenant_id', 10)
+            ->where('status', 'open')
+            ->update([
+                'opened_at' => now()->subMinutes(5),
+                'updated_at' => now()->subMinutes(5),
+            ]);
+
+        DB::table('sales')->insert([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'reference' => 'SALE-CASH-HISTORY-001',
+            'status' => 'completed',
+            'total_amount' => 20.00,
+            'gross_cost' => 8.00,
+            'gross_margin' => 12.00,
+            'created_at' => now()->subMinute(),
+            'updated_at' => now()->subMinute(),
+        ]);
+
         $this->actingAs($user)
             ->withHeader('X-Tenant-Id', '10')
             ->postJson('/cash/sessions/current/close', [
-                'counted_amount' => 80,
+                'counted_amount' => 100,
             ])
             ->assertOk();
 
@@ -156,7 +195,119 @@ class CashSessionFlowTest extends TestCase
             ->getJson('/cash/sessions')
             ->assertOk()
             ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.status', 'closed');
+            ->assertJsonPath('data.0.status', 'closed')
+            ->assertJsonPath('data.0.sales_count', 1)
+            ->assertJsonPath('data.0.sales_total', 20)
+            ->assertJsonPath('data.0.cash_sales_total', 20)
+            ->assertJsonPath('data.0.card_sales_total', 0)
+            ->assertJsonPath('data.0.transfer_sales_total', 0)
+            ->assertJsonPath('data.0.gross_cost_total', 8)
+            ->assertJsonPath('data.0.gross_margin_total', 12)
+            ->assertJsonPath('data.0.margin_pct', 60)
+            ->assertJsonPath('data.0.expected_amount', 100);
+    }
+
+    public function test_can_read_cash_session_detail_with_profitability_summary(): void
+    {
+        $user = $this->seedCashierUser();
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/cash/sessions/open', [
+                'opening_amount' => 50,
+            ])
+            ->assertOk();
+
+        DB::table('sales')->insert([
+            [
+                'tenant_id' => 10,
+                'user_id' => $user->id,
+                'reference' => 'SALE-CASH-DETAIL-001',
+                'status' => 'completed',
+                'total_amount' => 30.00,
+                'gross_cost' => 12.00,
+                'gross_margin' => 18.00,
+                'created_at' => now()->addMinute(),
+                'updated_at' => now()->addMinute(),
+            ],
+            [
+                'tenant_id' => 10,
+                'user_id' => $user->id,
+                'reference' => 'SALE-CASH-DETAIL-CANCELLED',
+                'status' => 'cancelled',
+                'total_amount' => 90.00,
+                'gross_cost' => 45.00,
+                'gross_margin' => 45.00,
+                'created_at' => now()->addMinutes(2),
+                'updated_at' => now()->addMinutes(2),
+            ],
+        ]);
+
+        $sessionId = DB::table('cash_sessions')->where('tenant_id', 10)->value('id');
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/cash/sessions/{$sessionId}")
+            ->assertOk()
+            ->assertJsonPath('data.sales_count', 1)
+            ->assertJsonPath('data.sales_total', 30)
+            ->assertJsonPath('data.cash_sales_total', 30)
+            ->assertJsonPath('data.card_sales_total', 0)
+            ->assertJsonPath('data.transfer_sales_total', 0)
+            ->assertJsonPath('data.gross_cost_total', 12)
+            ->assertJsonPath('data.gross_margin_total', 18)
+            ->assertJsonPath('data.margin_pct', 60)
+            ->assertJsonPath('data.expected_amount', 80);
+    }
+
+    public function test_non_cash_sales_do_not_increase_expected_amount(): void
+    {
+        $user = $this->seedCashierUser();
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/cash/sessions/open', [
+                'opening_amount' => 100,
+            ])
+            ->assertOk();
+
+        DB::table('sales')->insert([
+            [
+                'tenant_id' => 10,
+                'user_id' => $user->id,
+                'reference' => 'SALE-CASH-METHOD-001',
+                'status' => 'completed',
+                'payment_method' => 'cash',
+                'total_amount' => 20.00,
+                'gross_cost' => 8.00,
+                'gross_margin' => 12.00,
+                'created_at' => now()->addMinute(),
+                'updated_at' => now()->addMinute(),
+            ],
+            [
+                'tenant_id' => 10,
+                'user_id' => $user->id,
+                'reference' => 'SALE-CASH-METHOD-002',
+                'status' => 'completed',
+                'payment_method' => 'card',
+                'total_amount' => 30.00,
+                'gross_cost' => 10.00,
+                'gross_margin' => 20.00,
+                'created_at' => now()->addMinutes(2),
+                'updated_at' => now()->addMinutes(2),
+            ],
+        ]);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/cash/sessions/current')
+            ->assertOk()
+            ->assertJsonPath('data.sales_count', 2)
+            ->assertJsonPath('data.sales_total', 50)
+            ->assertJsonPath('data.cash_sales_total', 20)
+            ->assertJsonPath('data.card_sales_total', 30)
+            ->assertJsonPath('data.transfer_sales_total', 0)
+            ->assertJsonPath('data.expected_amount', 120);
     }
 
     public function test_rejects_cash_session_detail_from_other_tenant(): void

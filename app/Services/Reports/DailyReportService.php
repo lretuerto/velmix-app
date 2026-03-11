@@ -24,7 +24,18 @@ class DailyReportService
             ->where('status', 'completed')
             ->where('created_at', '>=', $start)
             ->where('created_at', '<', $end)
-            ->selectRaw('COUNT(*) as aggregate_count, COALESCE(SUM(total_amount), 0) as aggregate_total, COALESCE(SUM(gross_cost), 0) as gross_cost_total, COALESCE(SUM(gross_margin), 0) as gross_margin_total')
+            ->selectRaw("
+                COUNT(*) as aggregate_count,
+                COALESCE(SUM(total_amount), 0) as aggregate_total,
+                COALESCE(SUM(gross_cost), 0) as gross_cost_total,
+                COALESCE(SUM(gross_margin), 0) as gross_margin_total,
+                SUM(CASE WHEN payment_method = 'cash' THEN 1 ELSE 0 END) as cash_count,
+                COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN total_amount ELSE 0 END), 0) as cash_total,
+                SUM(CASE WHEN payment_method = 'card' THEN 1 ELSE 0 END) as card_count,
+                COALESCE(SUM(CASE WHEN payment_method = 'card' THEN total_amount ELSE 0 END), 0) as card_total,
+                SUM(CASE WHEN payment_method = 'transfer' THEN 1 ELSE 0 END) as transfer_count,
+                COALESCE(SUM(CASE WHEN payment_method = 'transfer' THEN total_amount ELSE 0 END), 0) as transfer_total
+            ")
             ->first();
 
         $cancelledSales = DB::table('sales')
@@ -102,6 +113,20 @@ class DailyReportService
                 'completed_total' => $completedTotal,
                 'cancelled_count' => (int) ($cancelledSales->aggregate_count ?? 0),
                 'cancelled_total' => round((float) ($cancelledSales->aggregate_total ?? 0), 2),
+                'by_payment_method' => [
+                    'cash' => [
+                        'count' => (int) ($completedSales->cash_count ?? 0),
+                        'total' => round((float) ($completedSales->cash_total ?? 0), 2),
+                    ],
+                    'card' => [
+                        'count' => (int) ($completedSales->card_count ?? 0),
+                        'total' => round((float) ($completedSales->card_total ?? 0), 2),
+                    ],
+                    'transfer' => [
+                        'count' => (int) ($completedSales->transfer_count ?? 0),
+                        'total' => round((float) ($completedSales->transfer_total ?? 0), 2),
+                    ],
+                ],
             ],
             'profitability' => [
                 'gross_cost_total' => $grossCostTotal,

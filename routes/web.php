@@ -37,6 +37,10 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
         ->middleware('perm:pos.sale.execute');
 
     Route::post('/pos/sales', function (PosSaleService $service) {
+        $paymentMethod = (string) (request()->validate([
+            'payment_method' => ['nullable', 'in:cash,card,transfer'],
+        ])['payment_method'] ?? 'cash');
+
         $payload = request()->all();
 
         if (isset($payload['items'])) {
@@ -78,6 +82,7 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
             (int) request()->attributes->get('tenant_id'),
             (int) optional(request()->user())->id,
             $items,
+            $paymentMethod,
         );
 
         return response()->json(['data' => $result]);

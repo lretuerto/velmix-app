@@ -24,6 +24,7 @@ class PosSaleReadFlowTest extends TestCase
             ->assertJsonFragment([
                 'id' => $saleId,
                 'reference' => 'SALE-LIST-10',
+                'payment_method' => 'cash',
             ])
             ->assertJsonMissing([
                 'reference' => 'SALE-LIST-20',
@@ -53,6 +54,7 @@ class PosSaleReadFlowTest extends TestCase
             ->getJson("/pos/sales/{$saleId}")
             ->assertOk()
             ->assertJsonPath('data.id', $saleId)
+            ->assertJsonPath('data.payment_method', 'cash')
             ->assertJsonPath('data.voucher.status', 'accepted')
             ->assertJsonPath('data.movement_count', 1)
             ->assertJsonPath('data.gross_cost', 6.5)

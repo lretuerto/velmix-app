@@ -55,6 +55,7 @@ class PosSaleFlowTest extends TestCase
             ]);
 
         $response->assertOk()
+            ->assertJsonPath('data.payment_method', 'cash')
             ->assertJsonPath('data.items.0.quantity', 5)
             ->assertJsonPath('data.items.0.allocations.0.remaining_stock', 55)
             ->assertJsonPath('data.total_amount', 17.5)
@@ -65,6 +66,7 @@ class PosSaleFlowTest extends TestCase
             'tenant_id' => 10,
             'user_id' => $user->id,
             'status' => 'completed',
+            'payment_method' => 'cash',
             'total_amount' => 17.50,
         ]);
 
@@ -307,6 +309,34 @@ class PosSaleFlowTest extends TestCase
         $response->assertOk()
             ->assertJsonCount(2, 'data.items')
             ->assertJsonPath('data.total_amount', 25.9);
+    }
+
+    public function test_persists_non_cash_payment_method_for_sale(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+            \Database\Seeders\InventoryCatalogSeeder::class,
+        ]);
+
+        $cashier = $this->seedCashierUser();
+        $lotId = DB::table('lots')->where('tenant_id', 10)->value('id');
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/pos/sales', [
+                'lot_id' => $lotId,
+                'quantity' => 2,
+                'unit_price' => 3.50,
+                'payment_method' => 'card',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.payment_method', 'card');
+
+        $this->assertDatabaseHas('sales', [
+            'tenant_id' => 10,
+            'payment_method' => 'card',
+        ]);
     }
 
     public function test_rejects_controlled_product_sale_without_prescription_or_approval(): void

@@ -8,7 +8,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class PosSaleService
 {
-    public function execute(int $tenantId, int $userId, array $items): array
+    public function execute(int $tenantId, int $userId, array $items, string $paymentMethod = 'cash'): array
     {
         if ($tenantId <= 0 || $userId <= 0) {
             throw new HttpException(403, 'Tenant context or authenticated user missing.');
@@ -18,7 +18,11 @@ class PosSaleService
             throw new HttpException(422, 'At least one sale item is required.');
         }
 
-        return DB::transaction(function () use ($tenantId, $userId, $items) {
+        if (! in_array($paymentMethod, ['cash', 'card', 'transfer'], true)) {
+            throw new HttpException(422, 'Payment method is invalid.');
+        }
+
+        return DB::transaction(function () use ($tenantId, $userId, $items, $paymentMethod) {
             $reference = 'SALE-'.str_pad((string) random_int(1, 999999), 6, '0', STR_PAD_LEFT);
             $resolvedItems = collect($items)
                 ->map(fn (array $item) => $this->resolveItem($tenantId, $item));
@@ -32,6 +36,7 @@ class PosSaleService
                 'user_id' => $userId,
                 'reference' => $reference,
                 'status' => 'completed',
+                'payment_method' => $paymentMethod,
                 'total_amount' => $totalAmount,
                 'gross_cost' => $grossCost,
                 'gross_margin' => $grossMargin,
@@ -94,6 +99,7 @@ class PosSaleService
             return [
                 'sale_id' => $saleId,
                 'reference' => $reference,
+                'payment_method' => $paymentMethod,
                 'total_amount' => $totalAmount,
                 'gross_cost' => $grossCost,
                 'gross_margin' => $grossMargin,
