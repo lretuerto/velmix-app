@@ -30,10 +30,20 @@ php artisan test
 
 ## Convenciones de la API
 
-- Los endpoints de negocio usan autenticación Laravel (`auth`)
+- Los endpoints de negocio aceptan sesión Laravel o `Authorization: Bearer <token>`
 - Los endpoints multi-tenant requieren el header `X-Tenant-Id`
 - La mayoría de respuestas siguen el formato `{"data": ...}`
 - Los rechazos por contexto/permiso usan `403`, validación `422`, y recursos ajenos `404`
+
+### Tokens API
+
+- Emisión y revocación por sesión en:
+  - `GET /auth/tokens`
+  - `POST /auth/tokens`
+  - `DELETE /auth/tokens/{token}`
+- Validación de contexto actual:
+  - `GET /auth/me`
+- Si una request trae sesión y bearer token al mismo tiempo, el bearer token tiene prioridad
 
 ## Documentación disponible
 

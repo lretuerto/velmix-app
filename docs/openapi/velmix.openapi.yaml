@@ -20,6 +20,8 @@ tags:
   - name: Reports
   - name: Audit
 security:
+  - bearerAuth: []
+    tenantHeader: []
   - laravelSession: []
     tenantHeader: []
 paths:
@@ -47,6 +49,66 @@ paths:
             application/yaml:
               schema:
                 type: string
+  /auth/me:
+    get:
+      tags: [Tenant]
+      summary: Resuelve el actor autenticado actual
+      responses:
+        '200':
+          description: Usuario y tenant actual
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /auth/tokens:
+    get:
+      tags: [Tenant]
+      summary: Lista tokens del usuario actual en el tenant
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      responses:
+        '200':
+          description: Tokens del usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+    post:
+      tags: [Tenant]
+      summary: Emite token API para el usuario actual
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiTokenCreateRequest'
+      responses:
+        '200':
+          description: Token creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /auth/tokens/{token}:
+    delete:
+      tags: [Tenant]
+      summary: Revoca token API propio
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      parameters:
+        - $ref: '#/components/parameters/TokenId'
+      responses:
+        '200':
+          description: Token revocado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
   /tenant/ping:
     get:
       tags: [Tenant]
@@ -893,6 +955,10 @@ paths:
           $ref: '#/components/responses/NotFound'
 components:
   securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API token
     laravelSession:
       type: apiKey
       in: cookie
@@ -959,6 +1025,11 @@ components:
     ActivityId:
       in: path
       name: activity
+      required: true
+      schema: { type: integer }
+    TokenId:
+      in: path
+      name: token
       required: true
       schema: { type: integer }
   responses:
@@ -1298,3 +1369,16 @@ components:
               quantity:
                 type: integer
                 minimum: 1
+    ApiTokenCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        abilities:
+          type: array
+          items:
+            type: string
+        expires_at:
+          type: string
+          format: date

@@ -20,6 +20,7 @@ use App\Services\Reports\DailyReportService;
 use App\Services\Reports\DueReminderReportService;
 use App\Services\Reports\PromiseComplianceReportService;
 use App\Services\Reports\ReceivableRiskReportService;
+use App\Services\Security\ApiTokenService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
 use App\Services\Reports\SalesProfitabilityReportService;
@@ -45,7 +46,7 @@ Route::get('/docs', function () {
                 ['name' => 'Release Readiness', 'path' => '/docs/release-readiness'],
             ],
             'conventions' => [
-                'Business endpoints require Laravel auth.',
+                'Business endpoints support Laravel session auth or Bearer token auth.',
                 'Multi-tenant endpoints require X-Tenant-Id.',
                 'Most responses are wrapped in a data envelope.',
             ],
@@ -85,6 +86,63 @@ Route::middleware('tenant.context')->get('/tenant/ping', function () {
 });
 
 Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function () {
+    Route::get('/auth/tokens', function (ApiTokenService $service) {
+        $result = $service->listForUser(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+        );
+
+        return response()->json(['data' => $result]);
+    });
+
+    Route::post('/auth/tokens', function (ApiTokenService $service) {
+        $payload = request()->validate([
+            'name' => ['required', 'string'],
+            'abilities' => ['nullable', 'array'],
+            'abilities.*' => ['string'],
+            'expires_at' => ['nullable', 'date'],
+        ]);
+
+        $result = $service->create(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            (string) $payload['name'],
+            $payload['abilities'] ?? [],
+            $payload['expires_at'] ?? null,
+        );
+
+        return response()->json(['data' => $result]);
+    });
+
+    Route::delete('/auth/tokens/{token}', function (int $token, ApiTokenService $service) {
+        $result = $service->revoke(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            $token,
+        );
+
+        return response()->json(['data' => $result]);
+    });
+});
+
+Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(function () {
+    Route::get('/auth/me', function () {
+        $user = request()->user();
+
+        return response()->json([
+            'data' => [
+                'user' => [
+                    'id' => (int) $user->id,
+                    'name' => (string) $user->name,
+                    'email' => (string) $user->email,
+                ],
+                'tenant_id' => (int) request()->attributes->get('tenant_id'),
+                'auth_mode' => (string) request()->attributes->get('auth_mode', 'session'),
+                'api_token_id' => request()->attributes->get('api_token_id'),
+            ],
+        ]);
+    });
+
     Route::get('/pos/sale', fn () => response()->json(['ok' => true, 'flow' => 'sale']))
         ->middleware('perm:pos.sale.execute');
 

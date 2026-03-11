@@ -674,6 +674,7 @@ class DailyReportFlowTest extends TestCase
             ->assertJsonPath('data.promise_compliance.payables.pending.count', 1)
             ->assertJsonPath('data.promise_compliance.payables.fulfilled.count', 0)
             ->assertJsonPath('data.promise_compliance.combined.broken.count', 4)
+            ->assertJsonPath('data.activity.by_domain.security', 0)
             ->assertJsonPath('data.cash.opened_count', 2)
             ->assertJsonPath('data.cash.closed_count', 1)
             ->assertJsonPath('data.cash.discrepancy_total', 0.5)

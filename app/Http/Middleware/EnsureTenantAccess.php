@@ -24,6 +24,14 @@ class EnsureTenantAccess
             abort(404, 'Tenant not found.');
         }
 
+        if (app()->bound('currentApiToken')) {
+            $apiToken = app('currentApiToken');
+
+            if ((int) $apiToken->tenant_id !== $tenantId) {
+                abort(403, 'API token does not belong to tenant.');
+            }
+        }
+
         $hasAccess = DB::table('tenant_user')
             ->where('tenant_id', $tenantId)
             ->where('user_id', $userId)

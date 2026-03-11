@@ -97,7 +97,8 @@ class DailyReportService
                 COALESCE(SUM(CASE WHEN domain = 'sales' THEN 1 ELSE 0 END), 0) as sales_count,
                 COALESCE(SUM(CASE WHEN domain = 'cash' THEN 1 ELSE 0 END), 0) as cash_count,
                 COALESCE(SUM(CASE WHEN domain = 'billing' THEN 1 ELSE 0 END), 0) as billing_count,
-                COALESCE(SUM(CASE WHEN domain = 'purchasing' THEN 1 ELSE 0 END), 0) as purchasing_count
+                COALESCE(SUM(CASE WHEN domain = 'purchasing' THEN 1 ELSE 0 END), 0) as purchasing_count,
+                COALESCE(SUM(CASE WHEN domain = 'security' THEN 1 ELSE 0 END), 0) as security_count
             ")
             ->first();
 
@@ -227,6 +228,7 @@ class DailyReportService
                     'cash' => (int) ($activitySummary->cash_count ?? 0),
                     'billing' => (int) ($activitySummary->billing_count ?? 0),
                     'purchasing' => (int) ($activitySummary->purchasing_count ?? 0),
+                    'security' => (int) ($activitySummary->security_count ?? 0),
                 ],
             ],
             'cash' => [

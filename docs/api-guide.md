@@ -6,7 +6,9 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 
 ## Convenciones base
 
-- Autenticacion: los endpoints de negocio pasan por `auth`
+- Autenticacion: los endpoints de negocio pasan por `auth.hybrid`
+- El backend acepta sesion Laravel o `Authorization: Bearer <token>`
+- Si una request trae sesion y bearer token al mismo tiempo, se evalua el bearer token
 - Contexto tenant: enviar `X-Tenant-Id`
 - Formato de salida: casi todos responden `{"data": ...}`
 - Errores esperados:
@@ -19,6 +21,10 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 
 ### Tenant y seguridad
 
+- `GET /auth/me`
+- `GET /auth/tokens`
+- `POST /auth/tokens`
+- `DELETE /auth/tokens/{token}`
 - `GET /tenant/ping`
 - `GET /rbac/permissions`
 
