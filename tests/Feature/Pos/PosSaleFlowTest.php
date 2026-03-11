@@ -365,6 +365,58 @@ class PosSaleFlowTest extends TestCase
         ]);
     }
 
+    public function test_rejects_sale_for_immobilized_lot(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+            \Database\Seeders\InventoryCatalogSeeder::class,
+        ]);
+
+        $cashier = $this->seedCashierUser();
+        $lotId = DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
+
+        DB::table('lots')->where('id', $lotId)->update([
+            'status' => 'immobilized',
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/pos/sales', [
+                'lot_id' => $lotId,
+                'quantity' => 1,
+                'unit_price' => 3.50,
+            ])
+            ->assertStatus(422);
+    }
+
+    public function test_rejects_sale_for_expired_lot(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+            \Database\Seeders\InventoryCatalogSeeder::class,
+        ]);
+
+        $cashier = $this->seedCashierUser();
+        $lotId = DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
+
+        DB::table('lots')->where('id', $lotId)->update([
+            'expires_at' => now()->subDay()->toDateString(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/pos/sales', [
+                'lot_id' => $lotId,
+                'quantity' => 1,
+                'unit_price' => 3.50,
+            ])
+            ->assertStatus(422);
+    }
+
     private function seedControlledProduct(): int
     {
         $this->seed([

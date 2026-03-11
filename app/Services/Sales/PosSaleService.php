@@ -144,6 +144,8 @@ class PosSaleService
                 'lots.product_id',
                 'lots.code',
                 'lots.stock_quantity',
+                'lots.status',
+                'lots.expires_at',
                 'products.sku',
                 'products.is_controlled',
             ]);
@@ -155,6 +157,8 @@ class PosSaleService
         if ($lot->stock_quantity < $quantity) {
             throw new HttpException(422, 'Insufficient stock for lot.');
         }
+
+        $this->assertLotAvailableForSale((string) $lot->status, (string) $lot->expires_at);
 
         $approval = $this->resolveControlledAuthorization(
             $tenantId,
@@ -210,6 +214,8 @@ class PosSaleService
         $lots = DB::table('lots')
             ->where('tenant_id', $tenantId)
             ->where('product_id', $productId)
+            ->where('status', 'available')
+            ->whereDate('expires_at', '>=', now()->toDateString())
             ->where('stock_quantity', '>', 0)
             ->orderBy('expires_at')
             ->orderBy('id')
@@ -302,5 +308,16 @@ class PosSaleService
         }
 
         return $allocations;
+    }
+
+    private function assertLotAvailableForSale(string $status, string $expiresAt): void
+    {
+        if ($status !== 'available') {
+            throw new HttpException(422, 'Lot is not available for sale.');
+        }
+
+        if ($expiresAt < now()->toDateString()) {
+            throw new HttpException(422, 'Lot is expired.');
+        }
     }
 }

@@ -3,6 +3,7 @@
 use App\Services\Billing\OutboxDispatchService;
 use App\Services\Billing\VoucherService;
 use App\Services\Inventory\InventorySetupService;
+use App\Services\Inventory\LotControlService;
 use App\Services\Inventory\StockMovementService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
@@ -180,6 +181,20 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
             (string) $payload['code'],
             (string) $payload['expires_at'],
             (int) $payload['stock_quantity'],
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:inventory.lot.create');
+
+    Route::post('/inventory/lots/{lot}/immobilize', function (int $lot, LotControlService $service) {
+        $payload = request()->validate([
+            'reason' => ['required', 'string'],
+        ]);
+
+        $result = $service->immobilize(
+            (int) request()->attributes->get('tenant_id'),
+            $lot,
+            (string) $payload['reason'],
         );
 
         return response()->json(['data' => $result]);
