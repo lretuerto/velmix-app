@@ -252,6 +252,7 @@ class PurchasePayableFlowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.type', 'promise')
             ->assertJsonPath('data.promised_amount', 15)
+            ->assertJsonPath('data.outstanding_snapshot', 30)
             ->assertJsonPath('data.user.id', $admin->id);
 
         $this->assertDatabaseHas('purchase_payable_follow_ups', [

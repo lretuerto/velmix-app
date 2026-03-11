@@ -38,7 +38,8 @@ class DueReminderReportFlowTest extends TestCase
             'type' => 'promise',
             'note' => 'Cliente promete pagar mañana',
             'promised_amount' => 18.00,
-            'promised_at' => now()->addDay()->startOfDay(),
+            'outstanding_snapshot' => 18.00,
+            'promised_at' => now()->subDay()->startOfDay(),
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -50,6 +51,7 @@ class DueReminderReportFlowTest extends TestCase
             'type' => 'note',
             'note' => 'Proveedor solicita confirmacion interna',
             'promised_amount' => null,
+            'outstanding_snapshot' => null,
             'promised_at' => null,
             'created_at' => now(),
             'updated_at' => now(),
@@ -70,6 +72,8 @@ class DueReminderReportFlowTest extends TestCase
             ->assertJsonPath('data.receivables.overdue.0.sale_reference', 'SALE-RCV-OD')
             ->assertJsonPath('data.receivables.overdue.0.latest_follow_up.type', 'promise')
             ->assertJsonPath('data.receivables.overdue.0.latest_follow_up.note', 'Cliente promete pagar mañana')
+            ->assertJsonPath('data.receivables.overdue.0.promise_status', 'broken')
+            ->assertJsonPath('data.receivables.overdue.0.escalation_level', 'critical')
             ->assertJsonPath('data.receivables.due_today.0.sale_reference', 'SALE-RCV-TODAY')
             ->assertJsonPath('data.receivables.upcoming.0.sale_reference', 'SALE-RCV-UP')
             ->assertJsonPath('data.payables.summary.overdue_count', 1)
@@ -81,6 +85,8 @@ class DueReminderReportFlowTest extends TestCase
             ->assertJsonPath('data.payables.overdue.0.receipt_reference', 'PUR-PAY-OD')
             ->assertJsonPath('data.payables.overdue.0.latest_follow_up.type', 'note')
             ->assertJsonPath('data.payables.overdue.0.latest_follow_up.note', 'Proveedor solicita confirmacion interna')
+            ->assertJsonPath('data.payables.overdue.0.promise_status', null)
+            ->assertJsonPath('data.payables.overdue.0.escalation_level', 'attention')
             ->assertJsonPath('data.payables.due_today.0.receipt_reference', 'PUR-PAY-TODAY')
             ->assertJsonPath('data.payables.upcoming.0.receipt_reference', 'PUR-PAY-UP')
             ->assertJsonMissing(['sale_reference' => 'SALE-RCV-FOREIGN'])

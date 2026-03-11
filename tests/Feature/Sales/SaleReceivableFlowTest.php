@@ -146,6 +146,7 @@ class SaleReceivableFlowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.type', 'promise')
             ->assertJsonPath('data.promised_amount', 9)
+            ->assertJsonPath('data.outstanding_snapshot', 18)
             ->assertJsonPath('data.user.id', $cashier->id);
 
         $this->assertDatabaseHas('sale_receivable_follow_ups', [

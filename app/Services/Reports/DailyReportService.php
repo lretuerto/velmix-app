@@ -139,6 +139,7 @@ class DailyReportService
         $grossCostTotal = round((float) ($completedSales->gross_cost_total ?? 0), 2);
         $grossMarginTotal = round((float) ($completedSales->gross_margin_total ?? 0), 2);
         $dueReminders = app(DueReminderReportService::class)->summary($tenantId, 7, 3, $start->toDateString());
+        $promiseCompliance = app(PromiseComplianceReportService::class)->summary($tenantId, $start->toDateString(), 3);
 
         return [
             'tenant_id' => $tenantId,
@@ -205,6 +206,7 @@ class DailyReportService
                 'receivables' => $dueReminders['receivables']['summary'],
                 'payables' => $dueReminders['payables']['summary'],
             ],
+            'promise_compliance' => $promiseCompliance['summary'],
             'cash' => [
                 'opened_count' => (int) $cashOpened,
                 'closed_count' => (int) ($cashClosed->aggregate_count ?? 0),

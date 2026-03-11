@@ -27,6 +27,7 @@ class DueReminderReportService
             ? CarbonImmutable::createFromFormat('Y-m-d', $baseDate)->startOfDay()
             : CarbonImmutable::now()->startOfDay();
         $upcomingEnd = $today->addDays($daysAhead);
+        $promiseInsights = app(PromiseInsightService::class);
 
         $receivables = DB::table('sale_receivables')
             ->join('customers', 'customers.id', '=', 'sale_receivables.customer_id')
@@ -48,20 +49,32 @@ class DueReminderReportService
             $tenantId,
             $receivables->pluck('id')->all(),
         );
+        $receivablePromises = $promiseInsights->latestReceivablePromises(
+            $tenantId,
+            $today,
+            $receivables->pluck('id')->all(),
+        );
 
         $receivables = $receivables
-            ->map(fn (object $receivable) => $this->formatDueItem(
-                'receivable',
-                $receivable,
-                $today,
-                [
+            ->map(function (object $receivable) use ($today, $receivableFollowUps, $receivablePromises, $promiseInsights) {
+                $promise = $receivablePromises[$receivable->id] ?? null;
+
+                return $this->formatDueItem(
+                    'receivable',
+                    $receivable,
+                    $today,
+                    [
                     'customer_id' => $receivable->customer_id,
                     'customer_name' => $receivable->customer_name,
                     'sale_id' => $receivable->sale_id,
                     'sale_reference' => $receivable->sale_reference,
                     'latest_follow_up' => $receivableFollowUps[$receivable->id] ?? null,
-                ],
-            ));
+                    'latest_promise' => $promise,
+                    'promise_status' => $promise['status'] ?? null,
+                    'escalation_level' => $promiseInsights->escalationLevel($receivable->due_at, $promise, $today),
+                    ],
+                );
+            });
 
         $payables = DB::table('purchase_payables')
             ->join('suppliers', 'suppliers.id', '=', 'purchase_payables.supplier_id')
@@ -83,20 +96,32 @@ class DueReminderReportService
             $tenantId,
             $payables->pluck('id')->all(),
         );
+        $payablePromises = $promiseInsights->latestPayablePromises(
+            $tenantId,
+            $today,
+            $payables->pluck('id')->all(),
+        );
 
         $payables = $payables
-            ->map(fn (object $payable) => $this->formatDueItem(
-                'payable',
-                $payable,
-                $today,
-                [
+            ->map(function (object $payable) use ($today, $payableFollowUps, $payablePromises, $promiseInsights) {
+                $promise = $payablePromises[$payable->id] ?? null;
+
+                return $this->formatDueItem(
+                    'payable',
+                    $payable,
+                    $today,
+                    [
                     'supplier_id' => $payable->supplier_id,
                     'supplier_name' => $payable->supplier_name,
                     'purchase_receipt_id' => $payable->purchase_receipt_id,
                     'receipt_reference' => $payable->receipt_reference,
                     'latest_follow_up' => $payableFollowUps[$payable->id] ?? null,
-                ],
-            ));
+                    'latest_promise' => $promise,
+                    'promise_status' => $promise['status'] ?? null,
+                    'escalation_level' => $promiseInsights->escalationLevel($payable->due_at, $promise, $today),
+                    ],
+                );
+            });
 
         return [
             'tenant_id' => $tenantId,

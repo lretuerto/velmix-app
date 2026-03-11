@@ -451,6 +451,49 @@ class DailyReportFlowTest extends TestCase
             ],
         ]);
 
+        $dueTodayReceivableId = DB::table('sale_receivables')->where('sale_id', $dueTodaySaleId)->value('id');
+        $overdueReceivableId = DB::table('sale_receivables')->where('sale_id', $overdueSaleId)->value('id');
+        $upcomingReceivableId = DB::table('sale_receivables')->where('sale_id', $upcomingSaleId)->value('id');
+
+        DB::table('sale_receivable_follow_ups')->insert([
+            [
+                'tenant_id' => 10,
+                'sale_receivable_id' => $overdueReceivableId,
+                'user_id' => $admin->id,
+                'type' => 'promise',
+                'note' => 'Cliente ofrecio cancelar ayer',
+                'promised_amount' => 10.00,
+                'outstanding_snapshot' => 13.00,
+                'promised_at' => '2026-03-10 00:00:00',
+                'created_at' => '2026-03-11 16:30:00',
+                'updated_at' => '2026-03-11 16:30:00',
+            ],
+            [
+                'tenant_id' => 10,
+                'sale_receivable_id' => $upcomingReceivableId,
+                'user_id' => $admin->id,
+                'type' => 'promise',
+                'note' => 'Cliente pagara en la fecha acordada',
+                'promised_amount' => 7.00,
+                'outstanding_snapshot' => 7.00,
+                'promised_at' => '2026-03-13 00:00:00',
+                'created_at' => '2026-03-11 16:35:00',
+                'updated_at' => '2026-03-11 16:35:00',
+            ],
+            [
+                'tenant_id' => 10,
+                'sale_receivable_id' => $dueTodayReceivableId,
+                'user_id' => $admin->id,
+                'type' => 'promise',
+                'note' => 'Cliente cumple hoy mismo',
+                'promised_amount' => 11.00,
+                'outstanding_snapshot' => 11.00,
+                'promised_at' => '2026-03-11 00:00:00',
+                'created_at' => '2026-03-11 16:40:00',
+                'updated_at' => '2026-03-11 16:40:00',
+            ],
+        ]);
+
         $dailySupplierId = DB::table('suppliers')->insertGetId([
             'tenant_id' => 10,
             'tax_id' => '20101010101',
@@ -538,6 +581,49 @@ class DailyReportFlowTest extends TestCase
             ],
         ]);
 
+        $dueTodayPayableId = DB::table('purchase_payables')->where('purchase_receipt_id', $dailyReceiptDueToday)->value('id');
+        $overduePayableId = DB::table('purchase_payables')->where('purchase_receipt_id', $dailyReceiptOverdue)->value('id');
+        $upcomingPayableId = DB::table('purchase_payables')->where('purchase_receipt_id', $dailyReceiptUpcoming)->value('id');
+
+        DB::table('purchase_payable_follow_ups')->insert([
+            [
+                'tenant_id' => 10,
+                'purchase_payable_id' => $overduePayableId,
+                'user_id' => $admin->id,
+                'type' => 'promise',
+                'note' => 'Pago proveedor vencido',
+                'promised_amount' => 22.00,
+                'outstanding_snapshot' => 22.00,
+                'promised_at' => '2026-03-09 00:00:00',
+                'created_at' => '2026-03-11 16:45:00',
+                'updated_at' => '2026-03-11 16:45:00',
+            ],
+            [
+                'tenant_id' => 10,
+                'purchase_payable_id' => $dueTodayPayableId,
+                'user_id' => $admin->id,
+                'type' => 'promise',
+                'note' => 'Pago proveedor para hoy',
+                'promised_amount' => 16.00,
+                'outstanding_snapshot' => 16.00,
+                'promised_at' => '2026-03-11 00:00:00',
+                'created_at' => '2026-03-11 16:46:00',
+                'updated_at' => '2026-03-11 16:46:00',
+            ],
+            [
+                'tenant_id' => 10,
+                'purchase_payable_id' => $upcomingPayableId,
+                'user_id' => $admin->id,
+                'type' => 'promise',
+                'note' => 'Pago proveedor programado',
+                'promised_amount' => 19.00,
+                'outstanding_snapshot' => 19.00,
+                'promised_at' => '2026-03-14 00:00:00',
+                'created_at' => '2026-03-11 16:47:00',
+                'updated_at' => '2026-03-11 16:47:00',
+            ],
+        ]);
+
         $this->actingAs($admin)
             ->withHeader('X-Tenant-Id', '10')
             ->getJson('/reports/daily?date=2026-03-11')
@@ -581,6 +667,13 @@ class DailyReportFlowTest extends TestCase
             ->assertJsonPath('data.due_reminders.payables.due_today_amount', 16)
             ->assertJsonPath('data.due_reminders.payables.upcoming_count', 1)
             ->assertJsonPath('data.due_reminders.payables.upcoming_amount', 19)
+            ->assertJsonPath('data.promise_compliance.receivables.broken.count', 2)
+            ->assertJsonPath('data.promise_compliance.receivables.pending.count', 1)
+            ->assertJsonPath('data.promise_compliance.receivables.fulfilled.count', 0)
+            ->assertJsonPath('data.promise_compliance.payables.broken.count', 2)
+            ->assertJsonPath('data.promise_compliance.payables.pending.count', 1)
+            ->assertJsonPath('data.promise_compliance.payables.fulfilled.count', 0)
+            ->assertJsonPath('data.promise_compliance.combined.broken.count', 4)
             ->assertJsonPath('data.cash.opened_count', 2)
             ->assertJsonPath('data.cash.closed_count', 1)
             ->assertJsonPath('data.cash.discrepancy_total', 0.5)
