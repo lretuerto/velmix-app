@@ -41,6 +41,36 @@ class PurchaseOrderFlowTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_create_purchase_order_from_replenishment_suggestion(): void
+    {
+        $this->seedBaseCatalog();
+        $admin = $this->seedUserWithRole(10, 'ADMIN');
+        $supplierId = $this->seedSupplier(10, '20112000000', 'Proveedor Sugerido');
+        $productId = DB::table('products')->where('tenant_id', 10)->where('sku', 'PARA-500')->value('id');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/purchases/orders/from-replenishment', [
+                'supplier_id' => $supplierId,
+                'items' => [[
+                    'product_id' => $productId,
+                    'unit_cost' => 2.25,
+                    'suggested_order_quantity' => 18,
+                    'order_quantity' => 20,
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'open')
+            ->assertJsonPath('data.total_amount', 45)
+            ->assertJsonPath('data.items.0.ordered_quantity', 20);
+
+        $this->assertDatabaseHas('purchase_order_items', [
+            'product_id' => $productId,
+            'ordered_quantity' => 20,
+            'unit_cost' => 2.25,
+        ]);
+    }
+
     public function test_can_list_and_detail_purchase_orders_for_current_tenant_only(): void
     {
         $this->seedBaseCatalog();

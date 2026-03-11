@@ -7,6 +7,27 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class PurchaseOrderService
 {
+    public function createFromReplenishment(int $tenantId, int $userId, int $supplierId, array $items): array
+    {
+        $normalizedItems = array_map(function (array $item) {
+            $quantity = isset($item['order_quantity'])
+                ? (int) $item['order_quantity']
+                : (int) ($item['suggested_order_quantity'] ?? 0);
+
+            if ($quantity <= 0) {
+                throw new HttpException(422, 'Replenishment order quantity must be greater than zero.');
+            }
+
+            return [
+                'product_id' => (int) $item['product_id'],
+                'ordered_quantity' => $quantity,
+                'unit_cost' => (float) $item['unit_cost'],
+            ];
+        }, $items);
+
+        return $this->create($tenantId, $userId, $supplierId, $normalizedItems);
+    }
+
     public function create(int $tenantId, int $userId, int $supplierId, array $items): array
     {
         if ($tenantId <= 0 || $userId <= 0) {

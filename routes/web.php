@@ -291,6 +291,31 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
         return response()->json(['data' => $result]);
     })->middleware('perm:purchase.order.create');
 
+    Route::post('/purchases/orders/from-replenishment', function (PurchaseOrderService $service) {
+        $payload = request()->validate([
+            'supplier_id' => ['required', 'integer'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.product_id' => ['required', 'integer'],
+            'items.*.unit_cost' => ['required', 'numeric', 'min:0'],
+            'items.*.suggested_order_quantity' => ['nullable', 'integer', 'min:1'],
+            'items.*.order_quantity' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $result = $service->createFromReplenishment(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            (int) $payload['supplier_id'],
+            array_map(fn (array $item) => [
+                'product_id' => (int) $item['product_id'],
+                'unit_cost' => (float) $item['unit_cost'],
+                'suggested_order_quantity' => isset($item['suggested_order_quantity']) ? (int) $item['suggested_order_quantity'] : null,
+                'order_quantity' => isset($item['order_quantity']) ? (int) $item['order_quantity'] : null,
+            ], $payload['items']),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:purchase.order.create');
+
     Route::get('/purchases/replenishment-suggestions', function (PurchaseReplenishmentService $service) {
         $payload = request()->validate([
             'lookback_days' => ['nullable', 'integer', 'min:1'],
