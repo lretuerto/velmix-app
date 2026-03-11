@@ -149,6 +149,19 @@ class PurchaseReceiptService
                     'updated_at' => now(),
                 ]);
 
+            DB::table('purchase_payables')->insert([
+                'tenant_id' => $tenantId,
+                'supplier_id' => $supplierId,
+                'purchase_receipt_id' => $receiptId,
+                'total_amount' => round($totalAmount, 2),
+                'paid_amount' => 0,
+                'outstanding_amount' => round($totalAmount, 2),
+                'status' => 'pending',
+                'due_at' => now()->addDays(30),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
             if ($purchaseOrder !== null) {
                 $totals = DB::table('purchase_order_items')
                     ->where('purchase_order_id', $purchaseOrderId)

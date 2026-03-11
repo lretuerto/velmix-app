@@ -30,6 +30,8 @@ class RbacCatalogSeeder extends Seeder
             ['code' => 'purchase.supplier.read', 'name' => 'Consultar proveedores'],
             ['code' => 'purchase.order.create', 'name' => 'Crear ordenes de compra'],
             ['code' => 'purchase.order.read', 'name' => 'Consultar ordenes de compra'],
+            ['code' => 'purchase.payable.read', 'name' => 'Consultar cuentas por pagar'],
+            ['code' => 'purchase.payable.pay', 'name' => 'Registrar pagos a proveedores'],
             ['code' => 'purchase.receipt.create', 'name' => 'Registrar recepcion de compra'],
             ['code' => 'purchase.receipt.read', 'name' => 'Consultar recepciones de compra'],
             ['code' => 'stock.move.create', 'name' => 'Crear movimiento de stock'],
@@ -62,9 +64,9 @@ class RbacCatalogSeeder extends Seeder
         $permIds = DB::table('permissions')->pluck('id', 'code');
 
         $matrix = [
-            'ADMIN' => ['pos.sale.execute', 'pos.sale.read', 'pos.sale.approve', 'inventory.product.create', 'inventory.product.read', 'inventory.lot.create', 'inventory.lot.read', 'billing.voucher.issue', 'billing.voucher.read', 'billing.outbox.dispatch', 'billing.outbox.read', 'cash.session.open', 'cash.session.close', 'cash.session.read', 'reports.daily.read', 'reports.inventory.read', 'purchase.supplier.create', 'purchase.supplier.read', 'purchase.order.create', 'purchase.order.read', 'purchase.receipt.create', 'purchase.receipt.read', 'stock.move.create', 'stock.move.read', 'rbac.role.assign', 'rbac.permission.manage'],
+            'ADMIN' => ['pos.sale.execute', 'pos.sale.read', 'pos.sale.approve', 'inventory.product.create', 'inventory.product.read', 'inventory.lot.create', 'inventory.lot.read', 'billing.voucher.issue', 'billing.voucher.read', 'billing.outbox.dispatch', 'billing.outbox.read', 'cash.session.open', 'cash.session.close', 'cash.session.read', 'reports.daily.read', 'reports.inventory.read', 'purchase.supplier.create', 'purchase.supplier.read', 'purchase.order.create', 'purchase.order.read', 'purchase.payable.read', 'purchase.payable.pay', 'purchase.receipt.create', 'purchase.receipt.read', 'stock.move.create', 'stock.move.read', 'rbac.role.assign', 'rbac.permission.manage'],
             'CAJERO' => ['pos.sale.execute', 'pos.sale.read', 'billing.voucher.issue', 'billing.voucher.read', 'cash.session.open', 'cash.session.close', 'cash.session.read'],
-            'ALMACENERO' => ['inventory.product.create', 'inventory.product.read', 'inventory.lot.create', 'inventory.lot.read', 'reports.inventory.read', 'purchase.supplier.read', 'purchase.order.read', 'purchase.receipt.create', 'purchase.receipt.read', 'stock.move.create', 'stock.move.read'],
+            'ALMACENERO' => ['inventory.product.create', 'inventory.product.read', 'inventory.lot.create', 'inventory.lot.read', 'reports.inventory.read', 'purchase.supplier.read', 'purchase.order.read', 'purchase.payable.read', 'purchase.receipt.create', 'purchase.receipt.read', 'stock.move.create', 'stock.move.read'],
         ];
 
         foreach ($matrix as $roleCode => $permCodes) {

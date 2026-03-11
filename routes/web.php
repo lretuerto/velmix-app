@@ -8,6 +8,7 @@ use App\Services\Inventory\LotControlService;
 use App\Services\Inventory\StockMovementReadService;
 use App\Services\Inventory\StockMovementService;
 use App\Services\Purchasing\PurchaseOrderService;
+use App\Services\Purchasing\PurchasePayableService;
 use App\Services\Purchasing\PurchaseReceiptService;
 use App\Services\Purchasing\SupplierService;
 use App\Services\Reports\DailyReportService;
@@ -279,6 +280,40 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 
         return response()->json(['data' => $result]);
     })->middleware('perm:purchase.order.create');
+
+    Route::get('/purchases/payables', function (PurchasePayableService $service) {
+        $result = $service->list((int) request()->attributes->get('tenant_id'));
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:purchase.payable.read');
+
+    Route::get('/purchases/payables/{payable}', function (int $payable, PurchasePayableService $service) {
+        $result = $service->detail(
+            (int) request()->attributes->get('tenant_id'),
+            $payable,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:purchase.payable.read');
+
+    Route::post('/purchases/payables/{payable}/payments', function (int $payable, PurchasePayableService $service) {
+        $payload = request()->validate([
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'payment_method' => ['required', 'string'],
+            'reference' => ['required', 'string'],
+        ]);
+
+        $result = $service->pay(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            $payable,
+            (float) $payload['amount'],
+            (string) $payload['payment_method'],
+            (string) $payload['reference'],
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:purchase.payable.pay');
 
     Route::post('/purchases/receipts', function (PurchaseReceiptService $service) {
         $payload = request()->validate([

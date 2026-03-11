@@ -55,6 +55,16 @@ class PurchaseReceiptFlowTest extends TestCase
             'quantity' => 12,
             'reference' => $reference,
         ]);
+
+        $this->assertDatabaseHas('purchase_payables', [
+            'tenant_id' => 10,
+            'supplier_id' => $supplierId,
+            'purchase_receipt_id' => DB::table('purchase_receipts')->where('reference', $reference)->value('id'),
+            'total_amount' => 21.00,
+            'paid_amount' => 0.00,
+            'outstanding_amount' => 21.00,
+            'status' => 'pending',
+        ]);
     }
 
     public function test_can_receive_purchase_creating_new_lot_inline(): void
