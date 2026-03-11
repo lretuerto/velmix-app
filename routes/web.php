@@ -1,5 +1,7 @@
 <?php
 
+use App\Services\Billing\OutboxDispatchService;
+use App\Services\Billing\VoucherService;
 use App\Services\Inventory\InventorySetupService;
 use App\Services\Inventory\StockMovementService;
 use Illuminate\Support\Facades\Route;
@@ -159,4 +161,25 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 
         return response()->json(['data' => $result]);
     })->middleware('perm:inventory.lot.create');
+
+    Route::post('/billing/vouchers', function (VoucherService $service) {
+        $payload = request()->validate([
+            'sale_id' => ['required', 'integer'],
+            'type' => ['required', 'string'],
+        ]);
+
+        $result = $service->createFromSale(
+            (int) request()->attributes->get('tenant_id'),
+            (int) $payload['sale_id'],
+            (string) $payload['type'],
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:billing.voucher.issue');
+
+    Route::post('/billing/outbox/dispatch', function (OutboxDispatchService $service) {
+        $result = $service->dispatchNext((int) request()->attributes->get('tenant_id'));
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:billing.outbox.dispatch');
 });
