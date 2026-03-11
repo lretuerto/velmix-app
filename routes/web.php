@@ -184,13 +184,20 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 
     Route::post('/cash/sessions/current/close', function (CashSessionService $service) {
         $payload = request()->validate([
-            'counted_amount' => ['required', 'numeric', 'min:0'],
+            'counted_amount' => ['nullable', 'numeric', 'min:0'],
+            'denominations' => ['nullable', 'array', 'min:1'],
+            'denominations.*.value' => ['required_with:denominations', 'numeric', 'min:0.01'],
+            'denominations.*.quantity' => ['required_with:denominations', 'integer', 'min:1'],
         ]);
 
         $result = $service->close(
             (int) request()->attributes->get('tenant_id'),
             (int) optional(request()->user())->id,
-            (float) $payload['counted_amount'],
+            isset($payload['counted_amount']) ? (float) $payload['counted_amount'] : null,
+            array_map(fn (array $denomination) => [
+                'value' => (float) $denomination['value'],
+                'quantity' => (int) $denomination['quantity'],
+            ], $payload['denominations'] ?? []),
         );
 
         return response()->json(['data' => $result]);

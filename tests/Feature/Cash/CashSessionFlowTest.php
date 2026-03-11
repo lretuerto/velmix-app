@@ -152,6 +152,91 @@ class CashSessionFlowTest extends TestCase
         ]);
     }
 
+    public function test_can_close_cash_session_with_denominations_and_read_user_context(): void
+    {
+        $cashier = $this->seedCashierUser('Caja Apertura');
+        $admin = $this->seedAdminUser('Supervisor Cierre');
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/cash/sessions/open', [
+                'opening_amount' => 100,
+            ])
+            ->assertOk();
+
+        DB::table('sales')->insert([
+            'tenant_id' => 10,
+            'user_id' => $cashier->id,
+            'reference' => 'SALE-CASH-DENOM-001',
+            'status' => 'completed',
+            'payment_method' => 'cash',
+            'total_amount' => 30.00,
+            'gross_cost' => 12.00,
+            'gross_margin' => 18.00,
+            'created_at' => now()->addMinute(),
+            'updated_at' => now()->addMinute(),
+        ]);
+
+        $closeResponse = $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/cash/sessions/current/close', [
+                'denominations' => [
+                    ['value' => 50, 'quantity' => 2],
+                    ['value' => 20, 'quantity' => 1],
+                    ['value' => 10, 'quantity' => 1],
+                ],
+            ]);
+
+        $closeResponse->assertOk()
+            ->assertJsonPath('data.counted_amount', 130)
+            ->assertJsonPath('data.discrepancy_amount', 0)
+            ->assertJsonPath('data.opened_by.name', 'Caja Apertura')
+            ->assertJsonPath('data.closed_by.name', 'Supervisor Cierre')
+            ->assertJsonPath('data.denominations.0.value', 50)
+            ->assertJsonPath('data.denominations.0.quantity', 2);
+
+        $sessionId = DB::table('cash_sessions')->where('tenant_id', 10)->value('id');
+
+        $this->assertDatabaseHas('cash_session_denominations', [
+            'tenant_id' => 10,
+            'cash_session_id' => $sessionId,
+            'value' => 50.00,
+            'quantity' => 2,
+            'subtotal' => 100.00,
+        ]);
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/cash/sessions/{$sessionId}")
+            ->assertOk()
+            ->assertJsonPath('data.opened_by.name', 'Caja Apertura')
+            ->assertJsonPath('data.closed_by.name', 'Supervisor Cierre')
+            ->assertJsonPath('data.denominations.1.value', 20)
+            ->assertJsonPath('data.denominations.2.value', 10);
+    }
+
+    public function test_rejects_close_when_denominations_do_not_match_counted_amount(): void
+    {
+        $cashier = $this->seedCashierUser();
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/cash/sessions/open', [
+                'opening_amount' => 100,
+            ])
+            ->assertOk();
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/cash/sessions/current/close', [
+                'counted_amount' => 90,
+                'denominations' => [
+                    ['value' => 50, 'quantity' => 2],
+                ],
+            ])
+            ->assertStatus(422);
+    }
+
     public function test_can_list_cash_session_history_for_current_tenant(): void
     {
         $user = $this->seedCashierUser();
@@ -347,15 +432,38 @@ class CashSessionFlowTest extends TestCase
             ->assertStatus(404);
     }
 
-    private function seedCashierUser(): User
+    private function seedCashierUser(string $name = 'Cajero Prueba'): User
     {
         $this->seed([
             \Database\Seeders\TenantSeeder::class,
             \Database\Seeders\RbacCatalogSeeder::class,
         ]);
 
-        $user = User::factory()->create();
+        $user = User::factory()->create(['name' => $name]);
         $roleId = DB::table('roles')->where('code', 'CAJERO')->value('id');
+
+        DB::table('tenant_user')->insert([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('tenant_user_role')->insert([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'role_id' => $roleId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $user;
+    }
+
+    private function seedAdminUser(string $name = 'Admin Prueba'): User
+    {
+        $user = User::factory()->create(['name' => $name]);
+        $roleId = DB::table('roles')->where('code', 'ADMIN')->value('id');
 
         DB::table('tenant_user')->insert([
             'tenant_id' => 10,

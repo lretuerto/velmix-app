@@ -62,36 +62,64 @@ class CashSessionService
         }
 
         $session = DB::table('cash_sessions')
+            ->leftJoin('users as opened_by', 'opened_by.id', '=', 'cash_sessions.opened_by_user_id')
+            ->leftJoin('users as closed_by', 'closed_by.id', '=', 'cash_sessions.closed_by_user_id')
             ->where('tenant_id', $tenantId)
             ->where('status', 'open')
-            ->first();
+            ->first([
+                'cash_sessions.*',
+                'opened_by.name as opened_by_name',
+                'closed_by.name as closed_by_name',
+            ]);
 
         if ($session === null) {
             throw new HttpException(404, 'No open cash session.');
         }
 
-        return $this->buildSummary($tenantId, $session);
+        return $this->enrichSession($tenantId, $session);
     }
 
-    public function close(int $tenantId, int $userId, float $countedAmount): array
+    public function close(int $tenantId, int $userId, ?float $countedAmount = null, array $denominations = []): array
     {
         if ($tenantId <= 0 || $userId <= 0) {
             throw new HttpException(403, 'Tenant context or authenticated user missing.');
         }
 
-        if ($countedAmount < 0) {
+        if ($countedAmount !== null && $countedAmount < 0) {
             throw new HttpException(422, 'Counted amount must be valid.');
         }
 
-        return DB::transaction(function () use ($tenantId, $userId, $countedAmount) {
+        return DB::transaction(function () use ($tenantId, $userId, $countedAmount, $denominations) {
             $session = DB::table('cash_sessions')
+                ->leftJoin('users as opened_by', 'opened_by.id', '=', 'cash_sessions.opened_by_user_id')
                 ->where('tenant_id', $tenantId)
                 ->where('status', 'open')
                 ->lockForUpdate()
-                ->first();
+                ->first([
+                    'cash_sessions.*',
+                    'opened_by.name as opened_by_name',
+                ]);
 
             if ($session === null) {
                 throw new HttpException(404, 'No open cash session.');
+            }
+
+            $normalizedDenominations = $this->normalizeDenominations($denominations);
+            $denominationCountedAmount = $this->sumDenominations($normalizedDenominations);
+
+            if ($countedAmount === null && $normalizedDenominations === []) {
+                throw new HttpException(422, 'counted_amount or denominations are required.');
+            }
+
+            if ($countedAmount === null) {
+                $countedAmount = $denominationCountedAmount;
+            }
+
+            if (
+                $normalizedDenominations !== []
+                && abs($countedAmount - $denominationCountedAmount) > 0.009
+            ) {
+                throw new HttpException(422, 'Counted amount does not match denominations total.');
             }
 
             $summary = $this->buildSummary($tenantId, $session);
@@ -111,11 +139,35 @@ class CashSessionService
                     'updated_at' => $closedAt,
                 ]);
 
+            if ($normalizedDenominations !== []) {
+                DB::table('cash_session_denominations')
+                    ->where('cash_session_id', $session->id)
+                    ->delete();
+
+                DB::table('cash_session_denominations')->insert(array_map(
+                    fn (array $denomination) => [
+                        'tenant_id' => $tenantId,
+                        'cash_session_id' => $session->id,
+                        'value' => $denomination['value'],
+                        'quantity' => $denomination['quantity'],
+                        'subtotal' => $denomination['subtotal'],
+                        'created_at' => $closedAt,
+                        'updated_at' => $closedAt,
+                    ],
+                    $normalizedDenominations
+                ));
+            }
+
+            $closedByName = DB::table('users')->where('id', $userId)->value('name');
+
             return [
                 'id' => $session->id,
                 'tenant_id' => $tenantId,
                 'status' => 'closed',
                 'opening_amount' => round((float) $session->opening_amount, 2),
+                'expected_amount' => round($expectedAmount, 2),
+                'counted_amount' => round($countedAmount, 2),
+                'discrepancy_amount' => $discrepancy,
                 'sales_count' => $summary['sales_count'],
                 'sales_total' => $summary['sales_total'],
                 'cash_sales_total' => $summary['cash_sales_total'],
@@ -128,9 +180,16 @@ class CashSessionService
                 'gross_cost_total' => $summary['gross_cost_total'],
                 'gross_margin_total' => $summary['gross_margin_total'],
                 'margin_pct' => $summary['margin_pct'],
-                'expected_amount' => round($expectedAmount, 2),
-                'counted_amount' => round($countedAmount, 2),
-                'discrepancy_amount' => $discrepancy,
+                'opened_by' => [
+                    'id' => $session->opened_by_user_id,
+                    'name' => $session->opened_by_name ?? null,
+                ],
+                'closed_by' => [
+                    'id' => $userId,
+                    'name' => $closedByName,
+                ],
+                'denominations' => $normalizedDenominations,
+                'opened_at' => $session->opened_at,
                 'closed_at' => $closedAt->toISOString(),
             ];
         });
@@ -143,46 +202,16 @@ class CashSessionService
         }
 
         return DB::table('cash_sessions')
+            ->leftJoin('users as opened_by', 'opened_by.id', '=', 'cash_sessions.opened_by_user_id')
+            ->leftJoin('users as closed_by', 'closed_by.id', '=', 'cash_sessions.closed_by_user_id')
             ->where('tenant_id', $tenantId)
-            ->orderByDesc('id')
+            ->orderByDesc('cash_sessions.id')
             ->get([
-                'id',
-                'tenant_id',
-                'status',
-                'opening_amount',
-                'expected_amount',
-                'counted_amount',
-                'discrepancy_amount',
-                'opened_at',
-                'closed_at',
+                'cash_sessions.*',
+                'opened_by.name as opened_by_name',
+                'closed_by.name as closed_by_name',
             ])
-            ->map(function (object $session) use ($tenantId) {
-                $summary = $this->buildSummary($tenantId, $session);
-
-                return [
-                    'id' => $session->id,
-                    'tenant_id' => $session->tenant_id,
-                    'status' => $session->status,
-                    'opening_amount' => (float) $session->opening_amount,
-                    'expected_amount' => $summary['expected_amount'],
-                    'counted_amount' => $session->counted_amount !== null ? (float) $session->counted_amount : null,
-                    'discrepancy_amount' => $session->discrepancy_amount !== null ? (float) $session->discrepancy_amount : null,
-                    'sales_count' => $summary['sales_count'],
-                    'sales_total' => $summary['sales_total'],
-                    'cash_sales_total' => $summary['cash_sales_total'],
-                    'card_sales_total' => $summary['card_sales_total'],
-                    'transfer_sales_total' => $summary['transfer_sales_total'],
-                    'manual_in_total' => $summary['manual_in_total'],
-                    'manual_out_total' => $summary['manual_out_total'],
-                    'net_movement_total' => $summary['net_movement_total'],
-                    'movement_count' => $summary['movement_count'],
-                    'gross_cost_total' => $summary['gross_cost_total'],
-                    'gross_margin_total' => $summary['gross_margin_total'],
-                    'margin_pct' => $summary['margin_pct'],
-                    'opened_at' => $session->opened_at,
-                    'closed_at' => $session->closed_at,
-                ];
-            })
+            ->map(fn (object $session) => $this->enrichSession($tenantId, $session, false))
             ->all();
     }
 
@@ -193,39 +222,21 @@ class CashSessionService
         }
 
         $session = DB::table('cash_sessions')
+            ->leftJoin('users as opened_by', 'opened_by.id', '=', 'cash_sessions.opened_by_user_id')
+            ->leftJoin('users as closed_by', 'closed_by.id', '=', 'cash_sessions.closed_by_user_id')
             ->where('tenant_id', $tenantId)
-            ->where('id', $sessionId)
-            ->first();
+            ->where('cash_sessions.id', $sessionId)
+            ->first([
+                'cash_sessions.*',
+                'opened_by.name as opened_by_name',
+                'closed_by.name as closed_by_name',
+            ]);
 
         if ($session === null) {
             throw new HttpException(404, 'Cash session not found.');
         }
 
-        $summary = $this->buildSummary($tenantId, $session);
-
-        return [
-            'id' => $session->id,
-            'tenant_id' => $session->tenant_id,
-            'status' => $session->status,
-            'opening_amount' => (float) $session->opening_amount,
-            'expected_amount' => $summary['expected_amount'],
-            'counted_amount' => $session->counted_amount !== null ? (float) $session->counted_amount : null,
-            'discrepancy_amount' => $session->discrepancy_amount !== null ? (float) $session->discrepancy_amount : null,
-            'sales_count' => $summary['sales_count'],
-            'sales_total' => $summary['sales_total'],
-            'cash_sales_total' => $summary['cash_sales_total'],
-            'card_sales_total' => $summary['card_sales_total'],
-            'transfer_sales_total' => $summary['transfer_sales_total'],
-            'manual_in_total' => $summary['manual_in_total'],
-            'manual_out_total' => $summary['manual_out_total'],
-            'net_movement_total' => $summary['net_movement_total'],
-            'movement_count' => $summary['movement_count'],
-            'gross_cost_total' => $summary['gross_cost_total'],
-            'gross_margin_total' => $summary['gross_margin_total'],
-            'margin_pct' => $summary['margin_pct'],
-            'opened_at' => $session->opened_at,
-            'closed_at' => $session->closed_at,
-        ];
+        return $this->enrichSession($tenantId, $session);
     }
 
     private function buildSummary(int $tenantId, object $session): array
@@ -293,5 +304,90 @@ class CashSessionService
             'expected_amount' => round($openingAmount + $cashSalesTotal + $netMovementTotal, 2),
             'opened_at' => $session->opened_at,
         ];
+    }
+
+    private function enrichSession(int $tenantId, object $session, bool $includeDenominations = true): array
+    {
+        $summary = $this->buildSummary($tenantId, $session);
+
+        $payload = [
+            'id' => $session->id,
+            'tenant_id' => $session->tenant_id,
+            'status' => $session->status,
+            'opening_amount' => (float) $session->opening_amount,
+            'expected_amount' => $summary['expected_amount'],
+            'counted_amount' => $session->counted_amount !== null ? (float) $session->counted_amount : null,
+            'discrepancy_amount' => $session->discrepancy_amount !== null ? (float) $session->discrepancy_amount : null,
+            'sales_count' => $summary['sales_count'],
+            'sales_total' => $summary['sales_total'],
+            'cash_sales_total' => $summary['cash_sales_total'],
+            'card_sales_total' => $summary['card_sales_total'],
+            'transfer_sales_total' => $summary['transfer_sales_total'],
+            'manual_in_total' => $summary['manual_in_total'],
+            'manual_out_total' => $summary['manual_out_total'],
+            'net_movement_total' => $summary['net_movement_total'],
+            'movement_count' => $summary['movement_count'],
+            'gross_cost_total' => $summary['gross_cost_total'],
+            'gross_margin_total' => $summary['gross_margin_total'],
+            'margin_pct' => $summary['margin_pct'],
+            'opened_by' => [
+                'id' => $session->opened_by_user_id,
+                'name' => $session->opened_by_name ?? null,
+            ],
+            'closed_by' => $session->closed_by_user_id !== null ? [
+                'id' => $session->closed_by_user_id,
+                'name' => $session->closed_by_name ?? null,
+            ] : null,
+            'opened_at' => $session->opened_at,
+            'closed_at' => $session->closed_at,
+        ];
+
+        if ($includeDenominations) {
+            $payload['denominations'] = $this->getDenominations($tenantId, (int) $session->id);
+        }
+
+        return $payload;
+    }
+
+    private function getDenominations(int $tenantId, int $sessionId): array
+    {
+        return DB::table('cash_session_denominations')
+            ->where('tenant_id', $tenantId)
+            ->where('cash_session_id', $sessionId)
+            ->orderByDesc('value')
+            ->get(['value', 'quantity', 'subtotal'])
+            ->map(fn (object $denomination) => [
+                'value' => (float) $denomination->value,
+                'quantity' => (int) $denomination->quantity,
+                'subtotal' => (float) $denomination->subtotal,
+            ])
+            ->all();
+    }
+
+    private function normalizeDenominations(array $denominations): array
+    {
+        return collect($denominations)
+            ->map(function (array $denomination) {
+                $value = round((float) ($denomination['value'] ?? 0), 2);
+                $quantity = (int) ($denomination['quantity'] ?? 0);
+
+                if ($value <= 0 || $quantity <= 0) {
+                    throw new HttpException(422, 'Cash denominations must be valid.');
+                }
+
+                return [
+                    'value' => $value,
+                    'quantity' => $quantity,
+                    'subtotal' => round($value * $quantity, 2),
+                ];
+            })
+            ->sortByDesc('value')
+            ->values()
+            ->all();
+    }
+
+    private function sumDenominations(array $denominations): float
+    {
+        return round(collect($denominations)->sum('subtotal'), 2);
     }
 }
