@@ -55,6 +55,9 @@ class PosSaleReadFlowTest extends TestCase
             ->assertJsonPath('data.id', $saleId)
             ->assertJsonPath('data.voucher.status', 'accepted')
             ->assertJsonPath('data.movement_count', 1)
+            ->assertJsonPath('data.gross_cost', 6.5)
+            ->assertJsonPath('data.gross_margin', 11)
+            ->assertJsonPath('data.items.0.unit_cost_snapshot', 1.3)
             ->assertJsonPath('data.items.0.lot_code', DB::table('lots')->where('id', $lotId)->value('code'));
     }
 
@@ -101,6 +104,8 @@ class PosSaleReadFlowTest extends TestCase
             'cancel_reason' => null,
             'cancelled_at' => null,
             'total_amount' => 17.50,
+            'gross_cost' => 6.50,
+            'gross_margin' => 11.00,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -113,7 +118,10 @@ class PosSaleReadFlowTest extends TestCase
             'product_id' => $productId,
             'quantity' => 5,
             'unit_price' => 3.50,
+            'unit_cost_snapshot' => 1.30,
             'line_total' => 17.50,
+            'cost_amount' => 6.50,
+            'gross_margin' => 11.00,
             'prescription_code' => null,
             'approval_code' => null,
             'created_at' => now(),

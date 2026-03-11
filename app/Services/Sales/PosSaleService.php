@@ -24,6 +24,8 @@ class PosSaleService
                 ->map(fn (array $item) => $this->resolveItem($tenantId, $item));
 
             $totalAmount = round($resolvedItems->sum('line_total'), 2);
+            $grossCost = round($resolvedItems->sum('cost_amount'), 2);
+            $grossMargin = round($totalAmount - $grossCost, 2);
 
             $saleId = DB::table('sales')->insertGetId([
                 'tenant_id' => $tenantId,
@@ -31,19 +33,27 @@ class PosSaleService
                 'reference' => $reference,
                 'status' => 'completed',
                 'total_amount' => $totalAmount,
+                'gross_cost' => $grossCost,
+                'gross_margin' => $grossMargin,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
 
             foreach ($resolvedItems as $item) {
                 foreach ($item['allocations'] as $allocation) {
+                    $costAmount = round($allocation['quantity'] * $item['unit_cost_snapshot'], 2);
+                    $lineTotal = round($allocation['quantity'] * $item['unit_price'], 2);
+
                     DB::table('sale_items')->insert([
                         'sale_id' => $saleId,
                         'lot_id' => $allocation['lot_id'],
                         'product_id' => $item['product_id'],
                         'quantity' => $allocation['quantity'],
                         'unit_price' => $item['unit_price'],
-                        'line_total' => round($allocation['quantity'] * $item['unit_price'], 2),
+                        'unit_cost_snapshot' => $item['unit_cost_snapshot'],
+                        'line_total' => $lineTotal,
+                        'cost_amount' => $costAmount,
+                        'gross_margin' => round($lineTotal - $costAmount, 2),
                         'prescription_code' => $item['prescription_code'],
                         'approval_code' => $item['approval_code'],
                         'created_at' => now(),
@@ -85,12 +95,17 @@ class PosSaleService
                 'sale_id' => $saleId,
                 'reference' => $reference,
                 'total_amount' => $totalAmount,
+                'gross_cost' => $grossCost,
+                'gross_margin' => $grossMargin,
                 'items' => $resolvedItems->map(fn (array $item) => [
                     'product_id' => $item['product_id'],
                     'product_sku' => $item['product_sku'],
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
+                    'unit_cost_snapshot' => $item['unit_cost_snapshot'],
                     'line_total' => $item['line_total'],
+                    'cost_amount' => $item['cost_amount'],
+                    'gross_margin' => $item['gross_margin'],
                     'prescription_code' => $item['prescription_code'],
                     'approval_code' => $item['approval_code'],
                     'allocations' => array_map(fn (array $allocation) => [
@@ -148,6 +163,7 @@ class PosSaleService
                 'lots.expires_at',
                 'products.sku',
                 'products.is_controlled',
+                'products.average_cost',
             ]);
 
         if ($lot === null) {
@@ -173,7 +189,10 @@ class PosSaleService
             'product_sku' => $lot->sku,
             'quantity' => $quantity,
             'unit_price' => $unitPrice,
+            'unit_cost_snapshot' => round((float) $lot->average_cost, 2),
             'line_total' => round($quantity * $unitPrice, 2),
+            'cost_amount' => round($quantity * (float) $lot->average_cost, 2),
+            'gross_margin' => round(($quantity * $unitPrice) - ($quantity * (float) $lot->average_cost), 2),
             'prescription_code' => $prescriptionCode,
             'approval_code' => $approval['approval_code'],
             'approval_id' => $approval['approval_id'],
@@ -197,7 +216,7 @@ class PosSaleService
         $product = DB::table('products')
             ->where('id', $productId)
             ->where('tenant_id', $tenantId)
-            ->first(['id', 'sku', 'is_controlled']);
+            ->first(['id', 'sku', 'is_controlled', 'average_cost']);
 
         if ($product === null) {
             throw new HttpException(404, 'Product not found.');
@@ -227,7 +246,10 @@ class PosSaleService
             'product_sku' => $product->sku,
             'quantity' => $quantity,
             'unit_price' => $unitPrice,
+            'unit_cost_snapshot' => round((float) $product->average_cost, 2),
             'line_total' => round($quantity * $unitPrice, 2),
+            'cost_amount' => round($quantity * (float) $product->average_cost, 2),
+            'gross_margin' => round(($quantity * $unitPrice) - ($quantity * (float) $product->average_cost), 2),
             'prescription_code' => $prescriptionCode,
             'approval_code' => $approval['approval_code'],
             'approval_id' => $approval['approval_id'],

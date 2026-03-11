@@ -15,6 +15,7 @@ use App\Services\Purchasing\SupplierService;
 use App\Services\Reports\DailyReportService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
+use App\Services\Reports\SalesProfitabilityReportService;
 use App\Services\Sales\PosSaleService;
 use App\Services\Sales\SaleCancellationService;
 use App\Services\Sales\SaleReadService;
@@ -207,6 +208,19 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 
         return response()->json(['data' => $result]);
     })->middleware('perm:reports.inventory.read');
+
+    Route::get('/reports/sales-profitability', function (SalesProfitabilityReportService $service) {
+        $payload = request()->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+
+        $result = $service->summary(
+            (int) request()->attributes->get('tenant_id'),
+            $payload['date'] ?? null,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.sales-profitability.read');
 
     Route::get('/purchases/suppliers', function (SupplierService $service) {
         $result = $service->list((int) request()->attributes->get('tenant_id'));

@@ -38,6 +38,14 @@ class PosSaleFlowTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        $productId = DB::table('lots')->where('id', $lotId)->value('product_id');
+
+        DB::table('products')->where('id', $productId)->update([
+            'average_cost' => 1.20,
+            'last_cost' => 1.20,
+            'updated_at' => now(),
+        ]);
+
         $response = $this->actingAs($user)
             ->withHeader('X-Tenant-Id', '10')
             ->postJson('/pos/sales', [
@@ -49,7 +57,9 @@ class PosSaleFlowTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('data.items.0.quantity', 5)
             ->assertJsonPath('data.items.0.allocations.0.remaining_stock', 55)
-            ->assertJsonPath('data.total_amount', 17.5);
+            ->assertJsonPath('data.total_amount', 17.5)
+            ->assertJsonPath('data.gross_cost', 6)
+            ->assertJsonPath('data.gross_margin', 11.5);
 
         $this->assertDatabaseHas('sales', [
             'tenant_id' => 10,
@@ -68,6 +78,19 @@ class PosSaleFlowTest extends TestCase
         $this->assertDatabaseHas('lots', [
             'id' => $lotId,
             'stock_quantity' => 55,
+        ]);
+
+        $this->assertDatabaseHas('sale_items', [
+            'lot_id' => $lotId,
+            'unit_cost_snapshot' => 1.20,
+            'cost_amount' => 6.00,
+            'gross_margin' => 11.50,
+        ]);
+
+        $this->assertDatabaseHas('sales', [
+            'tenant_id' => 10,
+            'gross_cost' => 6.00,
+            'gross_margin' => 11.50,
         ]);
     }
 
