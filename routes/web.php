@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
+use App\Services\Sales\PosSaleService;
 
 Route::get('/', function () {
     return view('welcome');
@@ -17,6 +18,24 @@ Route::middleware('tenant.context')->get('/tenant/ping', function () {
 Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function () {
     Route::get('/pos/sale', fn () => response()->json(['ok' => true, 'flow' => 'sale']))
         ->middleware('perm:pos.sale.execute');
+
+    Route::post('/pos/sales', function (PosSaleService $service) {
+        $payload = request()->validate([
+            'lot_id' => ['required', 'integer'],
+            'quantity' => ['required', 'integer', 'min:1'],
+            'unit_price' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $result = $service->execute(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            (int) $payload['lot_id'],
+            (int) $payload['quantity'],
+            (float) $payload['unit_price'],
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:pos.sale.execute');
 
     Route::get('/pos/approve', fn () => response()->json(['ok' => true, 'flow' => 'approve']))
         ->middleware('perm:pos.sale.approve');
