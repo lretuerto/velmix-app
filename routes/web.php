@@ -213,6 +213,15 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
         return response()->json(['data' => $result]);
     })->middleware('perm:purchase.supplier.read');
 
+    Route::get('/purchases/suppliers/{supplier}/statement', function (int $supplier, SupplierService $service) {
+        $result = $service->statement(
+            (int) request()->attributes->get('tenant_id'),
+            $supplier,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:purchase.supplier.read');
+
     Route::post('/purchases/suppliers', function (SupplierService $service) {
         $payload = request()->validate([
             'tax_id' => ['required', 'string'],
@@ -283,6 +292,12 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 
     Route::get('/purchases/payables', function (PurchasePayableService $service) {
         $result = $service->list((int) request()->attributes->get('tenant_id'));
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:purchase.payable.read');
+
+    Route::get('/purchases/payables/aging', function (PurchasePayableService $service) {
+        $result = $service->agingSummary((int) request()->attributes->get('tenant_id'));
 
         return response()->json(['data' => $result]);
     })->middleware('perm:purchase.payable.read');

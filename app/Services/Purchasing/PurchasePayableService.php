@@ -2,6 +2,7 @@
 
 namespace App\Services\Purchasing;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -29,19 +30,7 @@ class PurchasePayableService
                 'suppliers.name as supplier_name',
                 'purchase_receipts.reference as receipt_reference',
             ])
-            ->map(fn (object $payable) => [
-                'id' => $payable->id,
-                'total_amount' => (float) $payable->total_amount,
-                'paid_amount' => (float) $payable->paid_amount,
-                'outstanding_amount' => (float) $payable->outstanding_amount,
-                'status' => $payable->status,
-                'due_at' => $payable->due_at,
-                'supplier' => [
-                    'tax_id' => $payable->supplier_tax_id,
-                    'name' => $payable->supplier_name,
-                ],
-                'purchase_receipt_reference' => $payable->receipt_reference,
-            ])
+            ->map(fn (object $payable) => $this->formatPayableSummary($payable))
             ->all();
     }
 
@@ -92,6 +81,8 @@ class PurchasePayableService
             'paid_amount' => (float) $payable->paid_amount,
             'outstanding_amount' => (float) $payable->outstanding_amount,
             'status' => $payable->status,
+            'effective_status' => $this->effectiveStatus($payable),
+            'aging_bucket' => $this->agingBucket($payable),
             'due_at' => $payable->due_at,
             'supplier' => [
                 'tax_id' => $payable->supplier_tax_id,
@@ -175,5 +166,105 @@ class PurchasePayableService
                 'status' => $newStatus,
             ];
         });
+    }
+
+    public function agingSummary(int $tenantId): array
+    {
+        if ($tenantId <= 0) {
+            throw new HttpException(403, 'Tenant context is required.');
+        }
+
+        $payables = DB::table('purchase_payables')
+            ->where('tenant_id', $tenantId)
+            ->get(['id', 'total_amount', 'paid_amount', 'outstanding_amount', 'status', 'due_at']);
+
+        $buckets = [
+            'current' => ['count' => 0, 'amount' => 0.0],
+            'overdue_1_30' => ['count' => 0, 'amount' => 0.0],
+            'overdue_31_60' => ['count' => 0, 'amount' => 0.0],
+            'overdue_61_plus' => ['count' => 0, 'amount' => 0.0],
+            'paid' => ['count' => 0, 'amount' => 0.0],
+        ];
+
+        foreach ($payables as $payable) {
+            $bucket = $this->agingBucket($payable);
+            $amount = round((float) $payable->outstanding_amount, 2);
+
+            if ($bucket === 'paid') {
+                $buckets['paid']['count']++;
+                $buckets['paid']['amount'] = round($buckets['paid']['amount'] + (float) $payable->paid_amount, 2);
+                continue;
+            }
+
+            $buckets[$bucket]['count']++;
+            $buckets[$bucket]['amount'] = round($buckets[$bucket]['amount'] + $amount, 2);
+        }
+
+        return [
+            'tenant_id' => $tenantId,
+            'summary' => $buckets,
+        ];
+    }
+
+    private function formatPayableSummary(object $payable): array
+    {
+        return [
+            'id' => $payable->id,
+            'total_amount' => (float) $payable->total_amount,
+            'paid_amount' => (float) $payable->paid_amount,
+            'outstanding_amount' => (float) $payable->outstanding_amount,
+            'status' => $payable->status,
+            'effective_status' => $this->effectiveStatus($payable),
+            'aging_bucket' => $this->agingBucket($payable),
+            'due_at' => $payable->due_at,
+            'supplier' => [
+                'tax_id' => $payable->supplier_tax_id,
+                'name' => $payable->supplier_name,
+            ],
+            'purchase_receipt_reference' => $payable->receipt_reference,
+        ];
+    }
+
+    private function effectiveStatus(object $payable): string
+    {
+        if ((float) $payable->outstanding_amount <= 0) {
+            return 'paid';
+        }
+
+        if ($payable->due_at !== null && CarbonImmutable::parse($payable->due_at)->isPast()) {
+            return 'overdue';
+        }
+
+        return $payable->status;
+    }
+
+    private function agingBucket(object $payable): string
+    {
+        if ((float) $payable->outstanding_amount <= 0) {
+            return 'paid';
+        }
+
+        if ($payable->due_at === null) {
+            return 'current';
+        }
+
+        $now = CarbonImmutable::now();
+        $dueAt = CarbonImmutable::parse($payable->due_at);
+
+        if ($dueAt->isFuture() || $dueAt->isSameDay($now)) {
+            return 'current';
+        }
+
+        $daysOverdue = abs($dueAt->diffInDays($now, false));
+
+        if ($daysOverdue <= 30) {
+            return 'overdue_1_30';
+        }
+
+        if ($daysOverdue <= 60) {
+            return 'overdue_31_60';
+        }
+
+        return 'overdue_61_plus';
     }
 }
