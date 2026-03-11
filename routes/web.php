@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\Inventory\StockMovementService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
 use App\Services\Sales\PosSaleService;
@@ -42,6 +43,25 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 
     Route::get('/stock/move', fn () => response()->json(['ok' => true, 'flow' => 'stock']))
         ->middleware('perm:stock.move.create');
+
+    Route::post('/stock/movements', function (StockMovementService $service) {
+        $payload = request()->validate([
+            'lot_id' => ['required', 'integer'],
+            'type' => ['required', 'string'],
+            'quantity' => ['required', 'integer', 'min:1'],
+            'reference' => ['required', 'string'],
+        ]);
+
+        $result = $service->create(
+            (int) request()->attributes->get('tenant_id'),
+            (int) $payload['lot_id'],
+            (string) $payload['type'],
+            (int) $payload['quantity'],
+            (string) $payload['reference'],
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:stock.move.create');
 
     Route::get('/rbac/permissions', fn () => response()->json(['ok' => true, 'flow' => 'rbac-permissions']))
         ->middleware('perm:rbac.permission.manage');
