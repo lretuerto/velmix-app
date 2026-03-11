@@ -7,6 +7,7 @@ use App\Services\Inventory\InventorySetupService;
 use App\Services\Inventory\LotControlService;
 use App\Services\Inventory\StockMovementReadService;
 use App\Services\Inventory\StockMovementService;
+use App\Services\Purchasing\PurchaseOrderService;
 use App\Services\Purchasing\PurchaseReceiptService;
 use App\Services\Purchasing\SupplierService;
 use App\Services\Reports\DailyReportService;
@@ -241,9 +242,48 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
         return response()->json(['data' => $result]);
     })->middleware('perm:purchase.receipt.read');
 
+    Route::get('/purchases/orders', function (PurchaseOrderService $service) {
+        $result = $service->list((int) request()->attributes->get('tenant_id'));
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:purchase.order.read');
+
+    Route::get('/purchases/orders/{order}', function (int $order, PurchaseOrderService $service) {
+        $result = $service->detail(
+            (int) request()->attributes->get('tenant_id'),
+            $order,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:purchase.order.read');
+
+    Route::post('/purchases/orders', function (PurchaseOrderService $service) {
+        $payload = request()->validate([
+            'supplier_id' => ['required', 'integer'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.product_id' => ['required', 'integer'],
+            'items.*.ordered_quantity' => ['required', 'integer', 'min:1'],
+            'items.*.unit_cost' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $result = $service->create(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            (int) $payload['supplier_id'],
+            array_map(fn (array $item) => [
+                'product_id' => (int) $item['product_id'],
+                'ordered_quantity' => (int) $item['ordered_quantity'],
+                'unit_cost' => (float) $item['unit_cost'],
+            ], $payload['items']),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:purchase.order.create');
+
     Route::post('/purchases/receipts', function (PurchaseReceiptService $service) {
         $payload = request()->validate([
             'supplier_id' => ['required', 'integer'],
+            'purchase_order_id' => ['nullable', 'integer'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.lot_id' => ['nullable', 'integer'],
             'items.*.product_id' => ['nullable', 'integer'],
@@ -257,6 +297,7 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
             (int) request()->attributes->get('tenant_id'),
             (int) optional(request()->user())->id,
             (int) $payload['supplier_id'],
+            isset($payload['purchase_order_id']) ? (int) $payload['purchase_order_id'] : null,
             array_map(fn (array $item) => [
                 'lot_id' => isset($item['lot_id']) ? (int) $item['lot_id'] : null,
                 'product_id' => isset($item['product_id']) ? (int) $item['product_id'] : null,

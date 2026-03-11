@@ -7,7 +7,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class PurchaseReceiptService
 {
-    public function receive(int $tenantId, int $userId, int $supplierId, array $items): array
+    public function receive(int $tenantId, int $userId, int $supplierId, ?int $purchaseOrderId, array $items): array
     {
         if ($tenantId <= 0 || $userId <= 0) {
             throw new HttpException(403, 'Tenant context or authenticated user missing.');
@@ -17,7 +17,7 @@ class PurchaseReceiptService
             throw new HttpException(422, 'Purchase receipt items are required.');
         }
 
-        return DB::transaction(function () use ($tenantId, $userId, $supplierId, $items) {
+        return DB::transaction(function () use ($tenantId, $userId, $supplierId, $purchaseOrderId, $items) {
             $supplier = DB::table('suppliers')
                 ->where('tenant_id', $tenantId)
                 ->where('id', $supplierId)
@@ -27,9 +27,32 @@ class PurchaseReceiptService
                 throw new HttpException(404, 'Supplier not found.');
             }
 
+            $purchaseOrder = null;
+            $orderedItemMap = [];
+
+            if ($purchaseOrderId !== null) {
+                $purchaseOrder = DB::table('purchase_orders')
+                    ->where('tenant_id', $tenantId)
+                    ->where('supplier_id', $supplierId)
+                    ->where('id', $purchaseOrderId)
+                    ->lockForUpdate()
+                    ->first(['id', 'status']);
+
+                if ($purchaseOrder === null) {
+                    throw new HttpException(404, 'Purchase order not found.');
+                }
+
+                $orderedItemMap = DB::table('purchase_order_items')
+                    ->where('purchase_order_id', $purchaseOrderId)
+                    ->get(['id', 'product_id', 'ordered_quantity', 'received_quantity'])
+                    ->keyBy('product_id')
+                    ->all();
+            }
+
             $receiptId = DB::table('purchase_receipts')->insertGetId([
                 'tenant_id' => $tenantId,
                 'supplier_id' => $supplierId,
+                'purchase_order_id' => $purchaseOrderId,
                 'user_id' => $userId,
                 'reference' => 'PENDING',
                 'status' => 'received',
@@ -51,6 +74,30 @@ class PurchaseReceiptService
                 $lineTotal = round($quantity * $unitCost, 2);
                 $resultingStock = $lot->stock_quantity + $quantity;
                 $totalAmount += $lineTotal;
+
+                if ($purchaseOrder !== null) {
+                    $orderedItem = $orderedItemMap[$lot->product_id] ?? null;
+
+                    if ($orderedItem === null) {
+                        throw new HttpException(422, 'Received product is not part of the purchase order.');
+                    }
+
+                    $newReceivedQuantity = (int) $orderedItem->received_quantity + $quantity;
+
+                    if ($newReceivedQuantity > (int) $orderedItem->ordered_quantity) {
+                        throw new HttpException(422, 'Received quantity exceeds ordered quantity.');
+                    }
+
+                    DB::table('purchase_order_items')
+                        ->where('id', $orderedItem->id)
+                        ->update([
+                            'received_quantity' => $newReceivedQuantity,
+                            'updated_at' => now(),
+                        ]);
+
+                    $orderedItem->received_quantity = $newReceivedQuantity;
+                    $orderedItemMap[$lot->product_id] = $orderedItem;
+                }
 
                 DB::table('lots')
                     ->where('id', $lot->id)
@@ -102,11 +149,33 @@ class PurchaseReceiptService
                     'updated_at' => now(),
                 ]);
 
+            if ($purchaseOrder !== null) {
+                $totals = DB::table('purchase_order_items')
+                    ->where('purchase_order_id', $purchaseOrderId)
+                    ->selectRaw('SUM(ordered_quantity) as ordered_total, SUM(received_quantity) as received_total')
+                    ->first();
+
+                $orderedTotal = (int) ($totals->ordered_total ?? 0);
+                $receivedTotal = (int) ($totals->received_total ?? 0);
+                $orderStatus = $receivedTotal <= 0
+                    ? 'open'
+                    : ($receivedTotal < $orderedTotal ? 'partially_received' : 'received');
+
+                DB::table('purchase_orders')
+                    ->where('id', $purchaseOrderId)
+                    ->update([
+                        'status' => $orderStatus,
+                        'received_at' => $orderStatus === 'received' ? now() : null,
+                        'updated_at' => now(),
+                    ]);
+            }
+
             return [
                 'id' => $receiptId,
                 'reference' => $reference,
                 'tenant_id' => $tenantId,
                 'supplier_id' => $supplierId,
+                'purchase_order_id' => $purchaseOrderId,
                 'supplier_name' => $supplier->name,
                 'status' => 'received',
                 'total_amount' => round($totalAmount, 2),
@@ -127,6 +196,7 @@ class PurchaseReceiptService
             ->where('purchase_receipts.id', $receiptId)
             ->first([
                 'purchase_receipts.id',
+                'purchase_receipts.purchase_order_id',
                 'purchase_receipts.reference',
                 'purchase_receipts.status',
                 'purchase_receipts.total_amount',
@@ -166,6 +236,7 @@ class PurchaseReceiptService
 
         return [
             'id' => $receipt->id,
+            'purchase_order_id' => $receipt->purchase_order_id,
             'reference' => $receipt->reference,
             'status' => $receipt->status,
             'total_amount' => (float) $receipt->total_amount,
@@ -190,6 +261,7 @@ class PurchaseReceiptService
             ->orderByDesc('purchase_receipts.id')
             ->get([
                 'purchase_receipts.id',
+                'purchase_receipts.purchase_order_id',
                 'purchase_receipts.reference',
                 'purchase_receipts.status',
                 'purchase_receipts.total_amount',
@@ -199,6 +271,7 @@ class PurchaseReceiptService
             ])
             ->map(fn (object $receipt) => [
                 'id' => $receipt->id,
+                'purchase_order_id' => $receipt->purchase_order_id,
                 'reference' => $receipt->reference,
                 'status' => $receipt->status,
                 'total_amount' => (float) $receipt->total_amount,
