@@ -57,6 +57,38 @@ class PurchaseReceiptFlowTest extends TestCase
         ]);
     }
 
+    public function test_can_receive_purchase_creating_new_lot_inline(): void
+    {
+        $this->seedBaseCatalog();
+        $warehouseUser = $this->seedUserWithRole(10, 'ALMACENERO');
+        $supplierId = $this->seedSupplier(10, '20156565656', 'Proveedor Nuevo Lote');
+        $productId = DB::table('products')->where('tenant_id', 10)->where('sku', 'PARA-500')->value('id');
+
+        $this->actingAs($warehouseUser)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/purchases/receipts', [
+                'supplier_id' => $supplierId,
+                'items' => [[
+                    'product_id' => $productId,
+                    'lot_code' => 'L-PARA-NEW-001',
+                    'expires_at' => '2028-12-31',
+                    'quantity' => 30,
+                    'unit_cost' => 1.20,
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.items.0.created_new_lot', true)
+            ->assertJsonPath('data.items.0.lot_code', 'L-PARA-NEW-001')
+            ->assertJsonPath('data.items.0.resulting_stock', 30);
+
+        $this->assertDatabaseHas('lots', [
+            'tenant_id' => 10,
+            'product_id' => $productId,
+            'code' => 'L-PARA-NEW-001',
+            'stock_quantity' => 30,
+        ]);
+    }
+
     public function test_can_list_purchase_receipts_for_current_tenant_only(): void
     {
         $this->seedBaseCatalog();
@@ -81,6 +113,46 @@ class PurchaseReceiptFlowTest extends TestCase
             ]);
     }
 
+    public function test_can_read_purchase_receipt_detail_for_current_tenant(): void
+    {
+        $this->seedBaseCatalog();
+        $warehouseUser = $this->seedUserWithRole(10, 'ALMACENERO');
+        $supplierId = $this->seedSupplier(10, '20190909090', 'Proveedor Detalle');
+        $lotId = DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
+        $productId = DB::table('lots')->where('id', $lotId)->value('product_id');
+        $receiptId = DB::table('purchase_receipts')->insertGetId([
+            'tenant_id' => 10,
+            'supplier_id' => $supplierId,
+            'user_id' => $warehouseUser->id,
+            'reference' => 'PUR-DETAIL-10',
+            'status' => 'received',
+            'total_amount' => 14.00,
+            'received_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('purchase_receipt_items')->insert([
+            'purchase_receipt_id' => $receiptId,
+            'lot_id' => $lotId,
+            'product_id' => $productId,
+            'quantity' => 4,
+            'unit_cost' => 3.50,
+            'line_total' => 14.00,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($warehouseUser)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/purchases/receipts/{$receiptId}")
+            ->assertOk()
+            ->assertJsonPath('data.reference', 'PUR-DETAIL-10')
+            ->assertJsonPath('data.supplier.name', 'Proveedor Detalle')
+            ->assertJsonPath('data.items.0.product_sku', 'PARA-500')
+            ->assertJsonPath('data.items.0.line_total', 14);
+    }
+
     public function test_rejects_purchase_receipt_with_foreign_tenant_supplier(): void
     {
         $this->seedBaseCatalog();
@@ -98,6 +170,23 @@ class PurchaseReceiptFlowTest extends TestCase
                     'unit_cost' => 1.50,
                 ]],
             ])
+            ->assertStatus(404);
+    }
+
+    public function test_rejects_purchase_receipt_detail_from_other_tenant(): void
+    {
+        $this->seedBaseCatalog();
+        $warehouseUser = $this->seedUserWithRole(10, 'ALMACENERO');
+        $foreignUser = $this->seedUserWithRole(20, 'ALMACENERO');
+        $supplierId = $this->seedSupplier(10, '20133333333', 'Proveedor 10');
+        $lotId = DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
+
+        $this->seedReceipt(10, $warehouseUser->id, $supplierId, $lotId, 'PUR-LOCK-010');
+        $receiptId = DB::table('purchase_receipts')->where('reference', 'PUR-LOCK-010')->value('id');
+
+        $this->actingAs($foreignUser)
+            ->withHeader('X-Tenant-Id', '20')
+            ->getJson("/purchases/receipts/{$receiptId}")
             ->assertStatus(404);
     }
 

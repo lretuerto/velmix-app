@@ -44,22 +44,7 @@ class PurchaseReceiptService
             $lineItems = [];
 
             foreach ($items as $item) {
-                $lot = DB::table('lots')
-                    ->join('products', 'products.id', '=', 'lots.product_id')
-                    ->where('lots.tenant_id', $tenantId)
-                    ->where('lots.id', (int) $item['lot_id'])
-                    ->lockForUpdate()
-                    ->first([
-                        'lots.id',
-                        'lots.product_id',
-                        'lots.stock_quantity',
-                        'lots.code',
-                        'products.sku as product_sku',
-                    ]);
-
-                if ($lot === null) {
-                    throw new HttpException(404, 'Lot not found.');
-                }
+                $lot = $this->resolveLot($tenantId, $item);
 
                 $quantity = (int) $item['quantity'];
                 $unitCost = (float) $item['unit_cost'];
@@ -101,6 +86,7 @@ class PurchaseReceiptService
                     'lot_id' => $lot->id,
                     'lot_code' => $lot->code,
                     'product_sku' => $lot->product_sku,
+                    'created_new_lot' => (bool) ($lot->created_new_lot ?? false),
                     'quantity' => $quantity,
                     'unit_cost' => $unitCost,
                     'line_total' => $lineTotal,
@@ -127,6 +113,69 @@ class PurchaseReceiptService
                 'items' => $lineItems,
             ];
         });
+    }
+
+    public function detail(int $tenantId, int $receiptId): array
+    {
+        if ($tenantId <= 0) {
+            throw new HttpException(403, 'Tenant context is required.');
+        }
+
+        $receipt = DB::table('purchase_receipts')
+            ->join('suppliers', 'suppliers.id', '=', 'purchase_receipts.supplier_id')
+            ->where('purchase_receipts.tenant_id', $tenantId)
+            ->where('purchase_receipts.id', $receiptId)
+            ->first([
+                'purchase_receipts.id',
+                'purchase_receipts.reference',
+                'purchase_receipts.status',
+                'purchase_receipts.total_amount',
+                'purchase_receipts.received_at',
+                'suppliers.tax_id as supplier_tax_id',
+                'suppliers.name as supplier_name',
+            ]);
+
+        if ($receipt === null) {
+            throw new HttpException(404, 'Purchase receipt not found.');
+        }
+
+        $items = DB::table('purchase_receipt_items')
+            ->join('lots', 'lots.id', '=', 'purchase_receipt_items.lot_id')
+            ->join('products', 'products.id', '=', 'purchase_receipt_items.product_id')
+            ->where('purchase_receipt_items.purchase_receipt_id', $receiptId)
+            ->orderBy('purchase_receipt_items.id')
+            ->get([
+                'purchase_receipt_items.id',
+                'purchase_receipt_items.quantity',
+                'purchase_receipt_items.unit_cost',
+                'purchase_receipt_items.line_total',
+                'lots.code as lot_code',
+                'lots.expires_at as lot_expires_at',
+                'products.sku as product_sku',
+            ])
+            ->map(fn (object $item) => [
+                'id' => $item->id,
+                'quantity' => (int) $item->quantity,
+                'unit_cost' => (float) $item->unit_cost,
+                'line_total' => (float) $item->line_total,
+                'lot_code' => $item->lot_code,
+                'lot_expires_at' => $item->lot_expires_at,
+                'product_sku' => $item->product_sku,
+            ])
+            ->all();
+
+        return [
+            'id' => $receipt->id,
+            'reference' => $receipt->reference,
+            'status' => $receipt->status,
+            'total_amount' => (float) $receipt->total_amount,
+            'received_at' => $receipt->received_at,
+            'supplier' => [
+                'tax_id' => $receipt->supplier_tax_id,
+                'name' => $receipt->supplier_name,
+            ],
+            'items' => $items,
+        ];
     }
 
     public function list(int $tenantId): array
@@ -160,5 +209,77 @@ class PurchaseReceiptService
                 ],
             ])
             ->all();
+    }
+
+    private function resolveLot(int $tenantId, array $item): object
+    {
+        if (isset($item['lot_id']) && $item['lot_id'] !== null) {
+            $lot = DB::table('lots')
+                ->join('products', 'products.id', '=', 'lots.product_id')
+                ->where('lots.tenant_id', $tenantId)
+                ->where('lots.id', (int) $item['lot_id'])
+                ->lockForUpdate()
+                ->first([
+                    'lots.id',
+                    'lots.product_id',
+                    'lots.stock_quantity',
+                    'lots.code',
+                    'products.sku as product_sku',
+                ]);
+
+            if ($lot === null) {
+                throw new HttpException(404, 'Lot not found.');
+            }
+
+            $lot->created_new_lot = false;
+
+            return $lot;
+        }
+
+        $productId = (int) ($item['product_id'] ?? 0);
+        $lotCode = trim((string) ($item['lot_code'] ?? ''));
+        $expiresAt = $item['expires_at'] ?? null;
+
+        if ($productId <= 0 || $lotCode === '' || $expiresAt === null) {
+            throw new HttpException(422, 'A new lot requires product_id, lot_code and expires_at.');
+        }
+
+        $product = DB::table('products')
+            ->where('tenant_id', $tenantId)
+            ->where('id', $productId)
+            ->first(['id', 'sku']);
+
+        if ($product === null) {
+            throw new HttpException(404, 'Product not found.');
+        }
+
+        $lotExists = DB::table('lots')
+            ->where('tenant_id', $tenantId)
+            ->where('code', $lotCode)
+            ->exists();
+
+        if ($lotExists) {
+            throw new HttpException(422, 'Lot code already exists for tenant.');
+        }
+
+        $lotId = DB::table('lots')->insertGetId([
+            'tenant_id' => $tenantId,
+            'product_id' => $productId,
+            'code' => $lotCode,
+            'expires_at' => $expiresAt,
+            'stock_quantity' => 0,
+            'status' => 'available',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return (object) [
+            'id' => $lotId,
+            'product_id' => $productId,
+            'stock_quantity' => 0,
+            'code' => $lotCode,
+            'product_sku' => $product->sku,
+            'created_new_lot' => true,
+        ];
     }
 }

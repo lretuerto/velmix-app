@@ -232,11 +232,23 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
         return response()->json(['data' => $result]);
     })->middleware('perm:purchase.receipt.read');
 
+    Route::get('/purchases/receipts/{receipt}', function (int $receipt, PurchaseReceiptService $service) {
+        $result = $service->detail(
+            (int) request()->attributes->get('tenant_id'),
+            $receipt,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:purchase.receipt.read');
+
     Route::post('/purchases/receipts', function (PurchaseReceiptService $service) {
         $payload = request()->validate([
             'supplier_id' => ['required', 'integer'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.lot_id' => ['required', 'integer'],
+            'items.*.lot_id' => ['nullable', 'integer'],
+            'items.*.product_id' => ['nullable', 'integer'],
+            'items.*.lot_code' => ['nullable', 'string'],
+            'items.*.expires_at' => ['nullable', 'date'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
             'items.*.unit_cost' => ['required', 'numeric', 'min:0'],
         ]);
@@ -246,7 +258,10 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
             (int) optional(request()->user())->id,
             (int) $payload['supplier_id'],
             array_map(fn (array $item) => [
-                'lot_id' => (int) $item['lot_id'],
+                'lot_id' => isset($item['lot_id']) ? (int) $item['lot_id'] : null,
+                'product_id' => isset($item['product_id']) ? (int) $item['product_id'] : null,
+                'lot_code' => $item['lot_code'] ?? null,
+                'expires_at' => $item['expires_at'] ?? null,
                 'quantity' => (int) $item['quantity'],
                 'unit_cost' => (float) $item['unit_cost'],
             ], $payload['items']),
