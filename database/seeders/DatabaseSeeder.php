@@ -11,6 +11,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             TenantSeeder::class,
             RbacCatalogSeeder::class,
+            InventoryCatalogSeeder::class,
         ]);
     }
 }
