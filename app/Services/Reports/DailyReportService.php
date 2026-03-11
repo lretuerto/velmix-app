@@ -24,7 +24,7 @@ class DailyReportService
             ->where('status', 'completed')
             ->where('created_at', '>=', $start)
             ->where('created_at', '<', $end)
-            ->selectRaw('COUNT(*) as aggregate_count, COALESCE(SUM(total_amount), 0) as aggregate_total')
+            ->selectRaw('COUNT(*) as aggregate_count, COALESCE(SUM(total_amount), 0) as aggregate_total, COALESCE(SUM(gross_cost), 0) as gross_cost_total, COALESCE(SUM(gross_margin), 0) as gross_margin_total')
             ->first();
 
         $cancelledSales = DB::table('sales')
@@ -62,14 +62,52 @@ class DailyReportService
             ->selectRaw('COUNT(*) as aggregate_count, COALESCE(SUM(discrepancy_amount), 0) as discrepancy_total')
             ->first();
 
+        $topProducts = DB::table('sale_items')
+            ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
+            ->join('products', 'products.id', '=', 'sale_items.product_id')
+            ->where('sales.tenant_id', $tenantId)
+            ->where('sales.status', 'completed')
+            ->where('sales.created_at', '>=', $start)
+            ->where('sales.created_at', '<', $end)
+            ->groupBy('sale_items.product_id', 'products.sku', 'products.name')
+            ->orderByRaw('SUM(sale_items.line_total) DESC')
+            ->limit(5)
+            ->get([
+                'sale_items.product_id',
+                'products.sku',
+                'products.name',
+                DB::raw('SUM(sale_items.quantity) as quantity_sold'),
+                DB::raw('SUM(sale_items.line_total) as revenue_total'),
+                DB::raw('SUM(sale_items.gross_margin) as gross_margin_total'),
+            ])
+            ->map(fn (object $product) => [
+                'product_id' => $product->product_id,
+                'sku' => $product->sku,
+                'name' => $product->name,
+                'quantity_sold' => (int) $product->quantity_sold,
+                'revenue_total' => round((float) $product->revenue_total, 2),
+                'gross_margin_total' => round((float) $product->gross_margin_total, 2),
+            ])
+            ->all();
+
+        $completedTotal = round((float) ($completedSales->aggregate_total ?? 0), 2);
+        $grossCostTotal = round((float) ($completedSales->gross_cost_total ?? 0), 2);
+        $grossMarginTotal = round((float) ($completedSales->gross_margin_total ?? 0), 2);
+
         return [
             'tenant_id' => $tenantId,
             'date' => $start->toDateString(),
             'sales' => [
                 'completed_count' => (int) ($completedSales->aggregate_count ?? 0),
-                'completed_total' => round((float) ($completedSales->aggregate_total ?? 0), 2),
+                'completed_total' => $completedTotal,
                 'cancelled_count' => (int) ($cancelledSales->aggregate_count ?? 0),
                 'cancelled_total' => round((float) ($cancelledSales->aggregate_total ?? 0), 2),
+            ],
+            'profitability' => [
+                'gross_cost_total' => $grossCostTotal,
+                'gross_margin_total' => $grossMarginTotal,
+                'margin_pct' => $completedTotal > 0 ? round(($grossMarginTotal / $completedTotal) * 100, 2) : 0.0,
+                'top_products' => $topProducts,
             ],
             'vouchers' => [
                 'pending_count' => (int) ($voucherCounts->pending_count ?? 0),

@@ -27,6 +27,8 @@ class DailyReportFlowTest extends TestCase
                 'cancel_reason' => null,
                 'cancelled_at' => null,
                 'total_amount' => 40.50,
+                'gross_cost' => 20.00,
+                'gross_margin' => 20.50,
                 'created_at' => '2026-03-11 09:00:00',
                 'updated_at' => '2026-03-11 09:00:00',
             ],
@@ -39,6 +41,8 @@ class DailyReportFlowTest extends TestCase
                 'cancel_reason' => 'Cliente desistio',
                 'cancelled_at' => '2026-03-11 12:30:00',
                 'total_amount' => 15.00,
+                'gross_cost' => 7.00,
+                'gross_margin' => 8.00,
                 'created_at' => '2026-03-11 10:00:00',
                 'updated_at' => '2026-03-11 12:30:00',
             ],
@@ -51,6 +55,8 @@ class DailyReportFlowTest extends TestCase
                 'cancel_reason' => null,
                 'cancelled_at' => null,
                 'total_amount' => 99.00,
+                'gross_cost' => 55.00,
+                'gross_margin' => 44.00,
                 'created_at' => '2026-03-10 08:00:00',
                 'updated_at' => '2026-03-10 08:00:00',
             ],
@@ -58,6 +64,60 @@ class DailyReportFlowTest extends TestCase
 
         $completedSaleId = DB::table('sales')->where('reference', 'SALE-REPORT-OK')->value('id');
         $cancelledSaleId = DB::table('sales')->where('reference', 'SALE-REPORT-CANCEL')->value('id');
+        $productId = DB::table('products')->insertGetId([
+            'tenant_id' => 10,
+            'sku' => 'DASH-001',
+            'name' => 'Producto Dashboard',
+            'status' => 'active',
+            'is_controlled' => false,
+            'last_cost' => 5.00,
+            'average_cost' => 5.00,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $lotId = DB::table('lots')->insertGetId([
+            'tenant_id' => 10,
+            'product_id' => $productId,
+            'code' => 'L-DASH-001',
+            'expires_at' => '2028-12-31',
+            'stock_quantity' => 100,
+            'status' => 'available',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('sale_items')->insert([
+            [
+                'sale_id' => $completedSaleId,
+                'lot_id' => $lotId,
+                'product_id' => $productId,
+                'quantity' => 3,
+                'unit_price' => 13.50,
+                'unit_cost_snapshot' => 6.67,
+                'line_total' => 40.50,
+                'cost_amount' => 20.00,
+                'gross_margin' => 20.50,
+                'prescription_code' => null,
+                'approval_code' => null,
+                'created_at' => '2026-03-11 09:00:00',
+                'updated_at' => '2026-03-11 09:00:00',
+            ],
+            [
+                'sale_id' => $cancelledSaleId,
+                'lot_id' => $lotId,
+                'product_id' => $productId,
+                'quantity' => 1,
+                'unit_price' => 15.00,
+                'unit_cost_snapshot' => 7.00,
+                'line_total' => 15.00,
+                'cost_amount' => 7.00,
+                'gross_margin' => 8.00,
+                'prescription_code' => null,
+                'approval_code' => null,
+                'created_at' => '2026-03-11 10:00:00',
+                'updated_at' => '2026-03-11 10:00:00',
+            ],
+        ]);
 
         DB::table('electronic_vouchers')->insert([
             [
@@ -95,6 +155,8 @@ class DailyReportFlowTest extends TestCase
             'cancel_reason' => null,
             'cancelled_at' => null,
             'total_amount' => 999.00,
+            'gross_cost' => 400.00,
+            'gross_margin' => 599.00,
             'created_at' => '2026-03-11 09:15:00',
             'updated_at' => '2026-03-11 09:15:00',
         ]);
@@ -167,6 +229,12 @@ class DailyReportFlowTest extends TestCase
             ->assertJsonPath('data.sales.completed_total', 40.5)
             ->assertJsonPath('data.sales.cancelled_count', 1)
             ->assertJsonPath('data.sales.cancelled_total', 15)
+            ->assertJsonPath('data.profitability.gross_cost_total', 20)
+            ->assertJsonPath('data.profitability.gross_margin_total', 20.5)
+            ->assertJsonPath('data.profitability.margin_pct', 50.62)
+            ->assertJsonPath('data.profitability.top_products.0.sku', 'DASH-001')
+            ->assertJsonPath('data.profitability.top_products.0.quantity_sold', 3)
+            ->assertJsonPath('data.profitability.top_products.0.revenue_total', 40.5)
             ->assertJsonPath('data.vouchers.accepted_count', 1)
             ->assertJsonPath('data.vouchers.rejected_count', 1)
             ->assertJsonPath('data.vouchers.failed_count', 0)
