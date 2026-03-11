@@ -153,29 +153,7 @@ class PurchaseReceiptService
             ]);
 
             foreach (array_keys($receivedProductIds) as $productId) {
-                $costs = DB::table('purchase_receipt_items')
-                    ->where('product_id', $productId)
-                    ->selectRaw('SUM(quantity) as total_quantity, SUM(line_total) as total_cost')
-                    ->first();
-
-                $lastCost = (float) DB::table('purchase_receipt_items')
-                    ->where('product_id', $productId)
-                    ->orderByDesc('id')
-                    ->value('unit_cost');
-
-                $totalQuantity = (int) ($costs->total_quantity ?? 0);
-                $averageCost = $totalQuantity > 0
-                    ? round(((float) ($costs->total_cost ?? 0)) / $totalQuantity, 2)
-                    : 0.0;
-
-                DB::table('products')
-                    ->where('tenant_id', $tenantId)
-                    ->where('id', $productId)
-                    ->update([
-                        'last_cost' => round($lastCost, 2),
-                        'average_cost' => $averageCost,
-                        'updated_at' => now(),
-                    ]);
+                $this->recalculateProductCosts($tenantId, (int) $productId);
             }
 
             DB::table('purchase_payables')->insert([
@@ -396,5 +374,42 @@ class PurchaseReceiptService
             'product_sku' => $product->sku,
             'created_new_lot' => true,
         ];
+    }
+
+    private function recalculateProductCosts(int $tenantId, int $productId): void
+    {
+        $returnSummary = DB::table('purchase_return_items')
+            ->selectRaw('purchase_receipt_item_id, COALESCE(SUM(quantity), 0) as returned_quantity')
+            ->groupBy('purchase_receipt_item_id');
+
+        $summary = DB::table('purchase_receipt_items')
+            ->leftJoinSub($returnSummary, 'returned_items', 'returned_items.purchase_receipt_item_id', '=', 'purchase_receipt_items.id')
+            ->where('purchase_receipt_items.product_id', $productId)
+            ->selectRaw('
+                COALESCE(SUM(purchase_receipt_items.quantity - COALESCE(returned_items.returned_quantity, 0)), 0) as net_quantity,
+                COALESCE(SUM((purchase_receipt_items.quantity - COALESCE(returned_items.returned_quantity, 0)) * purchase_receipt_items.unit_cost), 0) as net_cost
+            ')
+            ->first();
+
+        $lastCost = (float) DB::table('purchase_receipt_items')
+            ->leftJoinSub($returnSummary, 'returned_items', 'returned_items.purchase_receipt_item_id', '=', 'purchase_receipt_items.id')
+            ->where('purchase_receipt_items.product_id', $productId)
+            ->whereRaw('(purchase_receipt_items.quantity - COALESCE(returned_items.returned_quantity, 0)) > 0')
+            ->orderByDesc('purchase_receipt_items.id')
+            ->value('purchase_receipt_items.unit_cost');
+
+        $netQuantity = round((float) ($summary->net_quantity ?? 0), 2);
+        $averageCost = $netQuantity > 0
+            ? round(((float) ($summary->net_cost ?? 0)) / $netQuantity, 2)
+            : 0.0;
+
+        DB::table('products')
+            ->where('tenant_id', $tenantId)
+            ->where('id', $productId)
+            ->update([
+                'last_cost' => round($lastCost, 2),
+                'average_cost' => $averageCost,
+                'updated_at' => now(),
+            ]);
     }
 }

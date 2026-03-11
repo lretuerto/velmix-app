@@ -60,9 +60,9 @@ class PurchasePayableReadFlowTest extends TestCase
             'tenant_id' => 10,
             'supplier_id' => $supplierId,
             'purchase_receipt_id' => $receiptId,
-            'total_amount' => 25.00,
+            'total_amount' => 20.00,
             'paid_amount' => 10.00,
-            'outstanding_amount' => 15.00,
+            'outstanding_amount' => 10.00,
             'status' => 'partial_paid',
             'due_at' => now()->addDays(20),
             'created_at' => now(),
@@ -80,6 +80,34 @@ class PurchasePayableReadFlowTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        $returnId = DB::table('purchase_returns')->insertGetId([
+            'tenant_id' => 10,
+            'supplier_id' => $supplierId,
+            'purchase_receipt_id' => $receiptId,
+            'purchase_payable_id' => $payableId,
+            'user_id' => $warehouseUser->id,
+            'reference' => 'PRT-STMT-01',
+            'status' => 'processed',
+            'reason' => 'Producto dañado',
+            'total_amount' => 5.00,
+            'returned_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('supplier_credits')->insert([
+            'tenant_id' => 10,
+            'supplier_id' => $supplierId,
+            'purchase_payable_id' => $payableId,
+            'purchase_return_id' => $returnId,
+            'amount' => 2.00,
+            'remaining_amount' => 2.00,
+            'status' => 'available',
+            'reference' => 'PRT-STMT-01-CREDIT',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         $foreignUser = $this->seedUserWithRole(20, 'ALMACENERO');
 
         $this->actingAs($warehouseUser)
@@ -88,11 +116,15 @@ class PurchasePayableReadFlowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.supplier.name', 'Proveedor Estado')
             ->assertJsonPath('data.summary.receipts_total', 25)
-            ->assertJsonPath('data.summary.payables_total', 25)
+            ->assertJsonPath('data.summary.payables_total', 20)
             ->assertJsonPath('data.summary.payments_total', 10)
-            ->assertJsonPath('data.summary.outstanding_total', 15)
+            ->assertJsonPath('data.summary.returns_total', 5)
+            ->assertJsonPath('data.summary.supplier_credits_total', 2)
+            ->assertJsonPath('data.summary.outstanding_total', 10)
             ->assertJsonPath('data.receipts.0.reference', 'PUR-STMT-10')
-            ->assertJsonPath('data.payments.0.reference', 'PAY-STMT-01');
+            ->assertJsonPath('data.payments.0.reference', 'PAY-STMT-01')
+            ->assertJsonPath('data.returns.0.reference', 'PRT-STMT-01')
+            ->assertJsonPath('data.supplier_credits.0.reference', 'PRT-STMT-01-CREDIT');
 
         $this->actingAs($foreignUser)
             ->withHeader('X-Tenant-Id', '20')

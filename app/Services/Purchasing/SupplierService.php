@@ -127,6 +127,37 @@ class SupplierService
             ])
             ->all();
 
+        $returns = DB::table('purchase_returns')
+            ->where('tenant_id', $tenantId)
+            ->where('supplier_id', $supplierId)
+            ->orderByDesc('id')
+            ->get(['id', 'purchase_receipt_id', 'reference', 'reason', 'total_amount', 'returned_at'])
+            ->map(fn (object $return) => [
+                'id' => $return->id,
+                'purchase_receipt_id' => $return->purchase_receipt_id,
+                'reference' => $return->reference,
+                'reason' => $return->reason,
+                'total_amount' => (float) $return->total_amount,
+                'returned_at' => $return->returned_at,
+            ])
+            ->all();
+
+        $supplierCredits = DB::table('supplier_credits')
+            ->where('tenant_id', $tenantId)
+            ->where('supplier_id', $supplierId)
+            ->orderByDesc('id')
+            ->get(['id', 'purchase_payable_id', 'purchase_return_id', 'amount', 'remaining_amount', 'status', 'reference'])
+            ->map(fn (object $credit) => [
+                'id' => $credit->id,
+                'purchase_payable_id' => $credit->purchase_payable_id,
+                'purchase_return_id' => $credit->purchase_return_id,
+                'amount' => (float) $credit->amount,
+                'remaining_amount' => (float) $credit->remaining_amount,
+                'status' => $credit->status,
+                'reference' => $credit->reference,
+            ])
+            ->all();
+
         return [
             'supplier' => [
                 'id' => $supplier->id,
@@ -138,11 +169,15 @@ class SupplierService
                 'receipts_total' => round(array_sum(array_column($receipts, 'total_amount')), 2),
                 'payables_total' => round(array_sum(array_column($payables, 'total_amount')), 2),
                 'payments_total' => round(array_sum(array_column($payments, 'amount')), 2),
+                'returns_total' => round(array_sum(array_column($returns, 'total_amount')), 2),
+                'supplier_credits_total' => round(array_sum(array_column($supplierCredits, 'remaining_amount')), 2),
                 'outstanding_total' => round(array_sum(array_column($payables, 'outstanding_amount')), 2),
             ],
             'receipts' => $receipts,
             'payables' => $payables,
             'payments' => $payments,
+            'returns' => $returns,
+            'supplier_credits' => $supplierCredits,
         ];
     }
 }

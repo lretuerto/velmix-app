@@ -227,6 +227,10 @@ class PurchasePayableService
 
     private function effectiveStatus(object $payable): string
     {
+        if ($payable->status === 'adjusted') {
+            return 'adjusted';
+        }
+
         if ((float) $payable->outstanding_amount <= 0) {
             return 'paid';
         }

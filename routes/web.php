@@ -13,6 +13,7 @@ use App\Services\Purchasing\PurchaseOrderService;
 use App\Services\Purchasing\PurchasePayableService;
 use App\Services\Purchasing\PurchaseReplenishmentService;
 use App\Services\Purchasing\PurchaseReceiptService;
+use App\Services\Purchasing\PurchaseReturnService;
 use App\Services\Purchasing\SupplierService;
 use App\Services\Reports\DailyReportService;
 use App\Services\Reports\ReceivableRiskReportService;
@@ -429,6 +430,43 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 
         return response()->json(['data' => $result]);
     })->middleware('perm:purchase.receipt.read');
+
+    Route::get('/purchases/returns', function (PurchaseReturnService $service) {
+        $result = $service->list((int) request()->attributes->get('tenant_id'));
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:purchase.return.read');
+
+    Route::get('/purchases/returns/{return}', function (int $return, PurchaseReturnService $service) {
+        $result = $service->detail(
+            (int) request()->attributes->get('tenant_id'),
+            $return,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:purchase.return.read');
+
+    Route::post('/purchases/receipts/{receipt}/returns', function (int $receipt, PurchaseReturnService $service) {
+        $payload = request()->validate([
+            'reason' => ['required', 'string'],
+            'items' => ['nullable', 'array', 'min:1'],
+            'items.*.purchase_receipt_item_id' => ['required_with:items', 'integer'],
+            'items.*.quantity' => ['required_with:items', 'integer', 'min:1'],
+        ]);
+
+        $result = $service->create(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            $receipt,
+            (string) $payload['reason'],
+            array_map(fn (array $item) => [
+                'purchase_receipt_item_id' => (int) $item['purchase_receipt_item_id'],
+                'quantity' => (int) $item['quantity'],
+            ], $payload['items'] ?? []),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:purchase.return.create');
 
     Route::get('/purchases/orders', function (PurchaseOrderService $service) {
         $result = $service->list((int) request()->attributes->get('tenant_id'));
