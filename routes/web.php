@@ -22,18 +22,41 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
         ->middleware('perm:pos.sale.execute');
 
     Route::post('/pos/sales', function (PosSaleService $service) {
-        $payload = request()->validate([
-            'lot_id' => ['required', 'integer'],
-            'quantity' => ['required', 'integer', 'min:1'],
-            'unit_price' => ['required', 'numeric', 'min:0'],
-        ]);
+        $payload = request()->all();
+
+        if (isset($payload['items'])) {
+            request()->validate([
+                'items' => ['required', 'array', 'min:1'],
+                'items.*.lot_id' => ['nullable', 'integer'],
+                'items.*.product_id' => ['nullable', 'integer'],
+                'items.*.quantity' => ['required', 'integer', 'min:1'],
+                'items.*.unit_price' => ['required', 'numeric', 'min:0'],
+            ]);
+
+            $items = array_map(fn (array $item) => [
+                'lot_id' => $item['lot_id'] ?? null,
+                'product_id' => $item['product_id'] ?? null,
+                'quantity' => $item['quantity'],
+                'unit_price' => $item['unit_price'],
+            ], $payload['items']);
+        } else {
+            $single = request()->validate([
+                'lot_id' => ['required', 'integer'],
+                'quantity' => ['required', 'integer', 'min:1'],
+                'unit_price' => ['required', 'numeric', 'min:0'],
+            ]);
+
+            $items = [[
+                'lot_id' => (int) $single['lot_id'],
+                'quantity' => (int) $single['quantity'],
+                'unit_price' => (float) $single['unit_price'],
+            ]];
+        }
 
         $result = $service->execute(
             (int) request()->attributes->get('tenant_id'),
             (int) optional(request()->user())->id,
-            (int) $payload['lot_id'],
-            (int) $payload['quantity'],
-            (float) $payload['unit_price'],
+            $items,
         );
 
         return response()->json(['data' => $result]);

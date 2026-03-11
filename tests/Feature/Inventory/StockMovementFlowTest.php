@@ -50,7 +50,7 @@ class StockMovementFlowTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('data.type', 'manual_in')
             ->assertJsonPath('data.quantity', 30)
-            ->assertJsonPath('data.resulting_stock', 150);
+            ->assertJsonPath('data.resulting_stock', 90);
 
         $this->assertDatabaseHas('stock_movements', [
             'tenant_id' => 10,

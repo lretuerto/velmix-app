@@ -47,8 +47,16 @@ class InventoryCatalogSeeder extends Seeder
                 'tenant_id' => 10,
                 'product_sku' => 'PARA-500',
                 'code' => 'L-PARA-001',
+                'expires_at' => '2027-06-30',
+                'stock_quantity' => 60,
+                'status' => 'available',
+            ],
+            [
+                'tenant_id' => 10,
+                'product_sku' => 'PARA-500',
+                'code' => 'L-PARA-002',
                 'expires_at' => '2027-12-31',
-                'stock_quantity' => 120,
+                'stock_quantity' => 60,
                 'status' => 'available',
             ],
             [

@@ -2,97 +2,211 @@
 
 namespace App\Services\Sales;
 
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class PosSaleService
 {
-    public function execute(int $tenantId, int $userId, int $lotId, int $quantity, float $unitPrice): array
+    public function execute(int $tenantId, int $userId, array $items): array
     {
         if ($tenantId <= 0 || $userId <= 0) {
             throw new HttpException(403, 'Tenant context or authenticated user missing.');
         }
 
-        if ($quantity <= 0 || $unitPrice < 0) {
-            throw new HttpException(422, 'Quantity and unit price must be valid.');
+        if ($items === []) {
+            throw new HttpException(422, 'At least one sale item is required.');
         }
 
-        return DB::transaction(function () use ($tenantId, $userId, $lotId, $quantity, $unitPrice) {
-            $lot = DB::table('lots')
-                ->join('products', 'products.id', '=', 'lots.product_id')
-                ->where('lots.id', $lotId)
-                ->where('lots.tenant_id', $tenantId)
-                ->lockForUpdate()
-                ->first([
-                    'lots.id',
-                    'lots.tenant_id',
-                    'lots.product_id',
-                    'lots.code',
-                    'lots.stock_quantity',
-                    'products.sku',
-                    'products.name',
-                ]);
-
-            if ($lot === null) {
-                throw new HttpException(404, 'Lot not found.');
-            }
-
-            if ($lot->stock_quantity < $quantity) {
-                throw new HttpException(422, 'Insufficient stock for lot.');
-            }
-
+        return DB::transaction(function () use ($tenantId, $userId, $items) {
             $reference = 'SALE-'.str_pad((string) random_int(1, 999999), 6, '0', STR_PAD_LEFT);
-            $lineTotal = round($quantity * $unitPrice, 2);
+            $resolvedItems = collect($items)
+                ->map(fn (array $item) => $this->resolveItem($tenantId, $item));
+
+            $totalAmount = round($resolvedItems->sum('line_total'), 2);
 
             $saleId = DB::table('sales')->insertGetId([
                 'tenant_id' => $tenantId,
                 'user_id' => $userId,
                 'reference' => $reference,
                 'status' => 'completed',
-                'total_amount' => $lineTotal,
+                'total_amount' => $totalAmount,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
 
-            DB::table('sale_items')->insert([
-                'sale_id' => $saleId,
-                'lot_id' => $lot->id,
-                'product_id' => $lot->product_id,
-                'quantity' => $quantity,
-                'unit_price' => $unitPrice,
-                'line_total' => $lineTotal,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+            foreach ($resolvedItems as $item) {
+                foreach ($item['allocations'] as $allocation) {
+                    DB::table('sale_items')->insert([
+                        'sale_id' => $saleId,
+                        'lot_id' => $allocation['lot_id'],
+                        'product_id' => $item['product_id'],
+                        'quantity' => $allocation['quantity'],
+                        'unit_price' => $item['unit_price'],
+                        'line_total' => round($allocation['quantity'] * $item['unit_price'], 2),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
 
-            DB::table('lots')
-                ->where('id', $lot->id)
-                ->update([
-                    'stock_quantity' => $lot->stock_quantity - $quantity,
-                    'updated_at' => now(),
-                ]);
+                    DB::table('lots')
+                        ->where('id', $allocation['lot_id'])
+                        ->update([
+                            'stock_quantity' => $allocation['remaining_stock'],
+                            'updated_at' => now(),
+                        ]);
 
-            DB::table('stock_movements')->insert([
-                'tenant_id' => $tenantId,
-                'lot_id' => $lot->id,
-                'product_id' => $lot->product_id,
-                'sale_id' => $saleId,
-                'type' => 'sale',
-                'quantity' => -$quantity,
-                'reference' => $reference,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+                    DB::table('stock_movements')->insert([
+                        'tenant_id' => $tenantId,
+                        'lot_id' => $allocation['lot_id'],
+                        'product_id' => $item['product_id'],
+                        'sale_id' => $saleId,
+                        'type' => 'sale',
+                        'quantity' => -$allocation['quantity'],
+                        'reference' => $reference,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+            }
 
             return [
                 'sale_id' => $saleId,
                 'reference' => $reference,
-                'lot_id' => $lot->id,
-                'product_sku' => $lot->sku,
-                'quantity' => $quantity,
-                'remaining_stock' => $lot->stock_quantity - $quantity,
-                'total_amount' => $lineTotal,
+                'total_amount' => $totalAmount,
+                'items' => $resolvedItems->map(fn (array $item) => [
+                    'product_id' => $item['product_id'],
+                    'product_sku' => $item['product_sku'],
+                    'quantity' => $item['quantity'],
+                    'unit_price' => $item['unit_price'],
+                    'line_total' => $item['line_total'],
+                    'allocations' => array_map(fn (array $allocation) => [
+                        'lot_id' => $allocation['lot_id'],
+                        'lot_code' => $allocation['lot_code'],
+                        'quantity' => $allocation['quantity'],
+                        'remaining_stock' => $allocation['remaining_stock'],
+                    ], $item['allocations']),
+                ])->values()->all(),
             ];
         });
+    }
+
+    private function resolveItem(int $tenantId, array $item): array
+    {
+        $quantity = (int) ($item['quantity'] ?? 0);
+        $unitPrice = (float) ($item['unit_price'] ?? -1);
+
+        if ($quantity <= 0 || $unitPrice < 0) {
+            throw new HttpException(422, 'Quantity and unit price must be valid.');
+        }
+
+        if (array_key_exists('lot_id', $item) && $item['lot_id'] !== null) {
+            return $this->resolveDirectLotItem($tenantId, (int) $item['lot_id'], $quantity, $unitPrice);
+        }
+
+        if (array_key_exists('product_id', $item) && $item['product_id'] !== null) {
+            return $this->resolveFifoProductItem($tenantId, (int) $item['product_id'], $quantity, $unitPrice);
+        }
+
+        throw new HttpException(422, 'Each item must include lot_id or product_id.');
+    }
+
+    private function resolveDirectLotItem(int $tenantId, int $lotId, int $quantity, float $unitPrice): array
+    {
+        $lot = DB::table('lots')
+            ->join('products', 'products.id', '=', 'lots.product_id')
+            ->where('lots.id', $lotId)
+            ->where('lots.tenant_id', $tenantId)
+            ->lockForUpdate()
+            ->first([
+                'lots.id',
+                'lots.product_id',
+                'lots.code',
+                'lots.stock_quantity',
+                'products.sku',
+            ]);
+
+        if ($lot === null) {
+            throw new HttpException(404, 'Lot not found.');
+        }
+
+        if ($lot->stock_quantity < $quantity) {
+            throw new HttpException(422, 'Insufficient stock for lot.');
+        }
+
+        return [
+            'product_id' => $lot->product_id,
+            'product_sku' => $lot->sku,
+            'quantity' => $quantity,
+            'unit_price' => $unitPrice,
+            'line_total' => round($quantity * $unitPrice, 2),
+            'allocations' => [[
+                'lot_id' => $lot->id,
+                'lot_code' => $lot->code,
+                'quantity' => $quantity,
+                'remaining_stock' => $lot->stock_quantity - $quantity,
+            ]],
+        ];
+    }
+
+    private function resolveFifoProductItem(int $tenantId, int $productId, int $quantity, float $unitPrice): array
+    {
+        $product = DB::table('products')
+            ->where('id', $productId)
+            ->where('tenant_id', $tenantId)
+            ->first(['id', 'sku']);
+
+        if ($product === null) {
+            throw new HttpException(404, 'Product not found.');
+        }
+
+        $lots = DB::table('lots')
+            ->where('tenant_id', $tenantId)
+            ->where('product_id', $productId)
+            ->where('stock_quantity', '>', 0)
+            ->orderBy('expires_at')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get(['id', 'code', 'stock_quantity']);
+
+        return [
+            'product_id' => $product->id,
+            'product_sku' => $product->sku,
+            'quantity' => $quantity,
+            'unit_price' => $unitPrice,
+            'line_total' => round($quantity * $unitPrice, 2),
+            'allocations' => $this->allocateFifoLots($lots, $quantity),
+        ];
+    }
+
+    private function allocateFifoLots(Collection $lots, int $quantity): array
+    {
+        $remaining = $quantity;
+        $allocations = [];
+
+        foreach ($lots as $lot) {
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $taken = min($remaining, (int) $lot->stock_quantity);
+
+            if ($taken <= 0) {
+                continue;
+            }
+
+            $remaining -= $taken;
+            $allocations[] = [
+                'lot_id' => $lot->id,
+                'lot_code' => $lot->code,
+                'quantity' => $taken,
+                'remaining_stock' => (int) $lot->stock_quantity - $taken,
+            ];
+        }
+
+        if ($remaining > 0) {
+            throw new HttpException(422, 'Insufficient stock for product.');
+        }
+
+        return $allocations;
     }
 }

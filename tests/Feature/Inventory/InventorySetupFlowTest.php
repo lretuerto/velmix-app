@@ -119,16 +119,16 @@ class InventorySetupFlowTest extends TestCase
             ->withHeader('X-Tenant-Id', '10')
             ->postJson('/inventory/lots', [
                 'product_id' => $productId,
-                'code' => 'L-PARA-002',
+                'code' => 'L-PARA-003',
                 'expires_at' => '2028-01-31',
                 'stock_quantity' => 80,
             ])
             ->assertOk()
-            ->assertJsonPath('data.code', 'L-PARA-002');
+            ->assertJsonPath('data.code', 'L-PARA-003');
 
         $this->assertDatabaseHas('lots', [
             'tenant_id' => 10,
-            'code' => 'L-PARA-002',
+            'code' => 'L-PARA-003',
             'stock_quantity' => 80,
         ]);
     }
