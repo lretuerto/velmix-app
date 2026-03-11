@@ -23,7 +23,9 @@ class BillingProviderProfileFlowTest extends TestCase
             ->assertJsonPath('data.tenant_id', 10)
             ->assertJsonPath('data.provider_code', 'fake_sunat')
             ->assertJsonPath('data.environment', 'sandbox')
-            ->assertJsonPath('data.default_outcome', 'accepted');
+            ->assertJsonPath('data.default_outcome', 'accepted')
+            ->assertJsonPath('data.health_status', 'unknown')
+            ->assertJsonPath('data.health_checked_at', null);
     }
 
     public function test_admin_can_update_provider_profile_and_dispatch_uses_it(): void
@@ -38,9 +40,11 @@ class BillingProviderProfileFlowTest extends TestCase
                 'provider_code' => 'fake_sunat',
                 'environment' => 'sandbox',
                 'default_outcome' => 'rejected',
+                'credentials' => ['endpoint' => 'sandbox'],
             ])
             ->assertOk()
-            ->assertJsonPath('data.default_outcome', 'rejected');
+            ->assertJsonPath('data.default_outcome', 'rejected')
+            ->assertJsonPath('data.health_status', 'unknown');
 
         $this->actingAs($admin)
             ->withHeader('X-Tenant-Id', '10')
@@ -48,7 +52,8 @@ class BillingProviderProfileFlowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.document_id', $voucherId)
             ->assertJsonPath('data.status', 'rejected')
-            ->assertJsonPath('data.provider_code', 'fake_sunat');
+            ->assertJsonPath('data.provider_code', 'fake_sunat')
+            ->assertJsonPath('data.provider_environment', 'sandbox');
 
         $this->assertDatabaseHas('electronic_vouchers', [
             'id' => $voucherId,
@@ -59,6 +64,7 @@ class BillingProviderProfileFlowTest extends TestCase
             'outbox_event_id' => $eventId,
             'status' => 'rejected',
             'provider_code' => 'fake_sunat',
+            'provider_environment' => 'sandbox',
         ]);
 
         $this->assertDatabaseHas('tenant_activity_logs', [
@@ -86,6 +92,40 @@ class BillingProviderProfileFlowTest extends TestCase
                 'default_outcome' => 'rejected',
             ])
             ->assertStatus(403);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/provider-profile/check')
+            ->assertStatus(403);
+    }
+
+    public function test_admin_can_check_provider_health_and_persist_snapshot(): void
+    {
+        $this->seedBaseCatalog();
+        $admin = $this->seedBillingUser(10, 'ADMIN');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/provider-profile/check')
+            ->assertOk()
+            ->assertJsonPath('data.provider_code', 'fake_sunat')
+            ->assertJsonPath('data.environment', 'sandbox')
+            ->assertJsonPath('data.health_status', 'healthy')
+            ->assertJsonPath('data.capabilities.simulated', true);
+
+        $this->assertDatabaseHas('billing_provider_profiles', [
+            'tenant_id' => 10,
+            'provider_code' => 'fake_sunat',
+            'health_status' => 'healthy',
+        ]);
+
+        $this->assertDatabaseHas('tenant_activity_logs', [
+            'tenant_id' => 10,
+            'user_id' => $admin->id,
+            'domain' => 'billing',
+            'event_type' => 'billing.provider_health.checked',
+            'aggregate_type' => 'billing_provider_profile',
+        ]);
     }
 
     private function seedBaseCatalog(): void

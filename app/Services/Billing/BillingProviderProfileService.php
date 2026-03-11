@@ -20,12 +20,28 @@ class BillingProviderProfileService
         }
 
         $profile = $this->ensureModel($tenantId);
+        $providerCode = $attributes['provider_code'] ?? $profile->provider_code;
+        $environment = $attributes['environment'] ?? $profile->environment;
+        $credentials = array_key_exists('credentials', $attributes) ? $attributes['credentials'] : $profile->credentials;
+        $healthBecameStale = $providerCode !== $profile->provider_code
+            || $environment !== $profile->environment
+            || $credentials !== $profile->credentials;
+
         $profile->fill([
-            'provider_code' => $attributes['provider_code'] ?? $profile->provider_code,
-            'environment' => $attributes['environment'] ?? $profile->environment,
+            'provider_code' => $providerCode,
+            'environment' => $environment,
             'default_outcome' => $attributes['default_outcome'] ?? $profile->default_outcome,
-            'credentials' => array_key_exists('credentials', $attributes) ? $attributes['credentials'] : $profile->credentials,
+            'credentials' => $credentials,
         ]);
+
+        if ($healthBecameStale) {
+            $profile->fill([
+                'health_status' => 'unknown',
+                'health_checked_at' => null,
+                'health_message' => null,
+            ]);
+        }
+
         $profile->save();
 
         app(TenantActivityLogService::class)->record(
@@ -40,6 +56,7 @@ class BillingProviderProfileService
                 'provider_code' => $profile->provider_code,
                 'environment' => $profile->environment,
                 'default_outcome' => $profile->default_outcome,
+                'health_status' => $profile->health_status,
             ],
         );
 
@@ -59,6 +76,9 @@ class BillingProviderProfileService
                 'environment' => 'sandbox',
                 'default_outcome' => 'accepted',
                 'credentials' => null,
+                'health_status' => 'unknown',
+                'health_checked_at' => null,
+                'health_message' => null,
             ],
         );
     }
@@ -72,6 +92,9 @@ class BillingProviderProfileService
             'environment' => $profile->environment,
             'default_outcome' => $profile->default_outcome,
             'credentials' => $profile->credentials,
+            'health_status' => $profile->health_status,
+            'health_checked_at' => $profile->health_checked_at?->toIso8601String(),
+            'health_message' => $profile->health_message,
         ];
     }
 }

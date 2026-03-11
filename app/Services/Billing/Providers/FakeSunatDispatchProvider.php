@@ -11,6 +11,21 @@ class FakeSunatDispatchProvider implements BillingDispatchProvider
         return 'fake_sunat';
     }
 
+    public function checkHealth(array $profile): array
+    {
+        $environment = (string) ($profile['environment'] ?? 'sandbox');
+
+        return [
+            'status' => 'healthy',
+            'message' => sprintf('Provider %s is reachable in %s mode.', $this->code(), $environment),
+            'capabilities' => [
+                'voucher_dispatch' => true,
+                'credit_note_dispatch' => true,
+                'simulated' => true,
+            ],
+        ];
+    }
+
     public function dispatch(object $event, array $payload, array $profile, array $options = []): array
     {
         $outcome = (string) ($options['simulate_result'] ?? $profile['default_outcome'] ?? 'accepted');

@@ -56,6 +56,8 @@ php artisan test
 - Perfil/provider billing por tenant:
   - `GET /billing/provider-profile`
   - `PUT /billing/provider-profile`
+  - `POST /billing/provider-profile/check`
+  - `GET /billing/outbox/provider-trace`
 
 Archivos fuente:
 
@@ -86,6 +88,7 @@ composer run velmix:routes
 - POS y ventas: ventas FIFO, crédito, cancelaciones y rentabilidad
 - Billing: vouchers, outbox y notas de crédito parciales/totales
 - Billing providers: perfil por tenant para sandbox/live y outcome por defecto
+- Billing health: snapshot de salud y trazabilidad de intentos por provider/environment
 - Compras: proveedores, órdenes, recepciones, devoluciones y créditos
 - Caja: aperturas, cierres, cobranzas y movimientos no comerciales
 - Reportes: diario, vencimientos, promesas, rentabilidad y riesgo

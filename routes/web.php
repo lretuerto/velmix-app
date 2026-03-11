@@ -4,6 +4,7 @@ use App\Services\Audit\TenantActivityLogService;
 use App\Services\Billing\OutboxDispatchService;
 use App\Services\Billing\VoucherService;
 use App\Services\Billing\CreditNoteService;
+use App\Services\Billing\BillingProviderHealthService;
 use App\Services\Billing\BillingProviderProfileService;
 use App\Services\Cash\CashMovementService;
 use App\Services\Cash\CashSessionService;
@@ -40,7 +41,7 @@ Route::get('/docs', function () {
     return response()->json([
         'data' => [
             'project' => 'VELMiX ERP',
-            'version' => 'sprint1-day99',
+            'version' => 'sprint1-day102',
             'documents' => [
                 ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
                 ['name' => 'API Guide', 'path' => '/docs/api-guide'],
@@ -1101,6 +1102,15 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         return response()->json(['data' => $result]);
     })->middleware('perm:billing.provider.manage');
 
+    Route::post('/billing/provider-profile/check', function (BillingProviderHealthService $service) {
+        $result = $service->check(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:billing.provider.manage');
+
     Route::put('/billing/provider-profile', function (BillingProviderProfileService $service) {
         $payload = request()->validate([
             'provider_code' => ['sometimes', 'in:fake_sunat'],
@@ -1117,6 +1127,19 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
 
         return response()->json(['data' => $result]);
     })->middleware('perm:billing.provider.manage');
+
+    Route::get('/billing/outbox/provider-trace', function (BillingProviderHealthService $service) {
+        $payload = request()->validate([
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $result = $service->trace(
+            (int) request()->attributes->get('tenant_id'),
+            (int) ($payload['limit'] ?? 20),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:billing.outbox.read');
 
     Route::post('/billing/outbox/{event}/retry', function (int $event, OutboxDispatchService $service) {
         $result = $service->retryFailed(
@@ -1147,6 +1170,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
                 'outbox_event_id',
                 'status',
                 'provider_code',
+                'provider_environment',
                 'provider_reference',
                 'sunat_ticket',
                 'error_message',

@@ -19,6 +19,7 @@ class BillingReadFlowTest extends TestCase
             'outbox_event_id' => $eventId,
             'status' => 'accepted',
             'provider_code' => 'fake_sunat',
+            'provider_environment' => 'sandbox',
             'sunat_ticket' => 'SUNAT-000123',
             'provider_reference' => 'SUNAT-000123',
             'error_message' => null,
@@ -55,6 +56,7 @@ class BillingReadFlowTest extends TestCase
                 'outbox_event_id' => $eventId,
                 'status' => 'failed',
                 'provider_code' => 'fake_sunat',
+                'provider_environment' => 'sandbox',
                 'sunat_ticket' => null,
                 'provider_reference' => null,
                 'error_message' => 'Temporary transport failure.',
@@ -65,6 +67,7 @@ class BillingReadFlowTest extends TestCase
                 'outbox_event_id' => $eventId,
                 'status' => 'accepted',
                 'provider_code' => 'fake_sunat',
+                'provider_environment' => 'sandbox',
                 'sunat_ticket' => 'SUNAT-000123',
                 'provider_reference' => 'SUNAT-000123',
                 'error_message' => null,
@@ -80,6 +83,7 @@ class BillingReadFlowTest extends TestCase
             ->assertJsonCount(2, 'data')
             ->assertJsonPath('data.0.status', 'failed')
             ->assertJsonPath('data.0.provider_code', 'fake_sunat')
+            ->assertJsonPath('data.0.provider_environment', 'sandbox')
             ->assertJsonPath('data.1.status', 'accepted')
             ->assertJsonPath('data.1.provider_reference', 'SUNAT-000123');
     }
@@ -128,6 +132,7 @@ class BillingReadFlowTest extends TestCase
             'outbox_event_id' => $processedEventId,
             'status' => 'accepted',
             'provider_code' => 'fake_sunat',
+            'provider_environment' => 'sandbox',
             'sunat_ticket' => 'SUNAT-READY',
             'provider_reference' => 'SUNAT-READY',
             'error_message' => null,
@@ -180,12 +185,58 @@ class BillingReadFlowTest extends TestCase
             ->assertJsonPath('data.failed_count', 1)
             ->assertJsonPath('data.processed_count', 1)
             ->assertJsonPath('data.provider_profile.provider_code', 'fake_sunat')
+            ->assertJsonPath('data.provider_profile.health_status', 'unknown')
             ->assertJsonPath('data.oldest_pending.event_id', $eventId)
             ->assertJsonPath('data.latest_attempt.event_id', $processedEventId)
             ->assertJsonPath('data.latest_attempt.status', 'accepted')
             ->assertJsonPath('data.latest_attempt.provider_code', 'fake_sunat')
+            ->assertJsonPath('data.latest_attempt.provider_environment', 'sandbox')
             ->assertJsonPath('data.latest_attempt.provider_reference', 'SUNAT-READY')
             ->assertJsonPath('data.oldest_pending.aggregate_id', $voucherId);
+    }
+
+    public function test_reads_provider_trace_for_current_tenant(): void
+    {
+        [$user, , $eventId] = $this->seedVoucherScenario(10, 'ADMIN');
+
+        DB::table('billing_provider_profiles')->insert([
+            'tenant_id' => 10,
+            'provider_code' => 'fake_sunat',
+            'environment' => 'live',
+            'default_outcome' => 'accepted',
+            'credentials' => null,
+            'health_status' => 'healthy',
+            'health_checked_at' => now(),
+            'health_message' => 'Provider fake_sunat is reachable in live mode.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('outbox_attempts')->insert([
+            'outbox_event_id' => $eventId,
+            'status' => 'accepted',
+            'provider_code' => 'fake_sunat',
+            'provider_environment' => 'live',
+            'sunat_ticket' => 'SUNAT-LIVE-001',
+            'provider_reference' => 'SUNAT-LIVE-001',
+            'error_message' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/billing/outbox/provider-trace?limit=5')
+            ->assertOk()
+            ->assertJsonPath('data.tenant_id', 10)
+            ->assertJsonPath('data.provider_profile.environment', 'live')
+            ->assertJsonPath('data.provider_profile.health_status', 'healthy')
+            ->assertJsonPath('data.status_breakdown.0.provider_code', 'fake_sunat')
+            ->assertJsonPath('data.status_breakdown.0.provider_environment', 'live')
+            ->assertJsonPath('data.status_breakdown.0.status', 'accepted')
+            ->assertJsonPath('data.status_breakdown.0.attempts_count', 1)
+            ->assertJsonPath('data.recent_attempts.0.provider_environment', 'live')
+            ->assertJsonPath('data.recent_attempts.0.provider_reference', 'SUNAT-LIVE-001');
     }
 
     private function seedVoucherScenario(int $tenantId, string $roleCode): array

@@ -87,8 +87,10 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /billing/credit-notes/{creditNote}`
 - `GET /billing/provider-profile`
 - `PUT /billing/provider-profile`
+- `POST /billing/provider-profile/check`
 - `POST /billing/outbox/dispatch`
 - `GET /billing/outbox/summary`
+- `GET /billing/outbox/provider-trace`
 - `POST /billing/outbox/{event}/retry`
 - `GET /billing/outbox/{event}/attempts`
 
@@ -165,8 +167,13 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - `environment`
   - `default_outcome`
   - `credentials`
+- `POST /billing/provider-profile/check` ejecuta un health check y persiste:
+  - `health_status`
+  - `health_checked_at`
+  - `health_message`
 - El provider actual es `fake_sunat`
 - Si no se manda `simulate_result` en el outbox, se usa `default_outcome` del perfil
+- `GET /billing/outbox/provider-trace` devuelve resumen e intentos recientes por `provider_code` y `provider_environment`
 
 ## Donde mirar el contrato completo
 

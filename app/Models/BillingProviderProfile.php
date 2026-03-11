@@ -13,12 +13,16 @@ class BillingProviderProfile extends Model
         'environment',
         'default_outcome',
         'credentials',
+        'health_status',
+        'health_checked_at',
+        'health_message',
     ];
 
     protected function casts(): array
     {
         return [
             'credentials' => 'array',
+            'health_checked_at' => 'datetime',
         ];
     }
 
