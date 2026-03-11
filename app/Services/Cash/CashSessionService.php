@@ -121,6 +121,10 @@ class CashSessionService
                 'cash_sales_total' => $summary['cash_sales_total'],
                 'card_sales_total' => $summary['card_sales_total'],
                 'transfer_sales_total' => $summary['transfer_sales_total'],
+                'manual_in_total' => $summary['manual_in_total'],
+                'manual_out_total' => $summary['manual_out_total'],
+                'net_movement_total' => $summary['net_movement_total'],
+                'movement_count' => $summary['movement_count'],
                 'gross_cost_total' => $summary['gross_cost_total'],
                 'gross_margin_total' => $summary['gross_margin_total'],
                 'margin_pct' => $summary['margin_pct'],
@@ -168,6 +172,10 @@ class CashSessionService
                     'cash_sales_total' => $summary['cash_sales_total'],
                     'card_sales_total' => $summary['card_sales_total'],
                     'transfer_sales_total' => $summary['transfer_sales_total'],
+                    'manual_in_total' => $summary['manual_in_total'],
+                    'manual_out_total' => $summary['manual_out_total'],
+                    'net_movement_total' => $summary['net_movement_total'],
+                    'movement_count' => $summary['movement_count'],
                     'gross_cost_total' => $summary['gross_cost_total'],
                     'gross_margin_total' => $summary['gross_margin_total'],
                     'margin_pct' => $summary['margin_pct'],
@@ -208,6 +216,10 @@ class CashSessionService
             'cash_sales_total' => $summary['cash_sales_total'],
             'card_sales_total' => $summary['card_sales_total'],
             'transfer_sales_total' => $summary['transfer_sales_total'],
+            'manual_in_total' => $summary['manual_in_total'],
+            'manual_out_total' => $summary['manual_out_total'],
+            'net_movement_total' => $summary['net_movement_total'],
+            'movement_count' => $summary['movement_count'],
             'gross_cost_total' => $summary['gross_cost_total'],
             'gross_margin_total' => $summary['gross_margin_total'],
             'margin_pct' => $summary['margin_pct'],
@@ -246,6 +258,19 @@ class CashSessionService
         $cashSalesTotal = round((float) ($sales->cash_sales_total ?? 0), 2);
         $cardSalesTotal = round((float) ($sales->card_sales_total ?? 0), 2);
         $transferSalesTotal = round((float) ($sales->transfer_sales_total ?? 0), 2);
+        $movementTotals = DB::table('cash_movements')
+            ->where('tenant_id', $tenantId)
+            ->where('cash_session_id', $session->id)
+            ->selectRaw("
+                COUNT(*) as movement_count,
+                COALESCE(SUM(CASE WHEN type = 'manual_in' THEN amount ELSE 0 END), 0) as manual_in_total,
+                COALESCE(SUM(CASE WHEN type = 'manual_out' THEN amount ELSE 0 END), 0) as manual_out_total
+            ")
+            ->first();
+        $movementCount = (int) ($movementTotals->movement_count ?? 0);
+        $manualInTotal = round((float) ($movementTotals->manual_in_total ?? 0), 2);
+        $manualOutTotal = round((float) ($movementTotals->manual_out_total ?? 0), 2);
+        $netMovementTotal = round($manualInTotal - $manualOutTotal, 2);
         $openingAmount = round((float) $session->opening_amount, 2);
 
         return [
@@ -258,10 +283,14 @@ class CashSessionService
             'cash_sales_total' => $cashSalesTotal,
             'card_sales_total' => $cardSalesTotal,
             'transfer_sales_total' => $transferSalesTotal,
+            'manual_in_total' => $manualInTotal,
+            'manual_out_total' => $manualOutTotal,
+            'net_movement_total' => $netMovementTotal,
+            'movement_count' => $movementCount,
             'gross_cost_total' => $grossCostTotal,
             'gross_margin_total' => $grossMarginTotal,
             'margin_pct' => $salesTotal > 0 ? round(($grossMarginTotal / $salesTotal) * 100, 2) : 0.0,
-            'expected_amount' => round($openingAmount + $cashSalesTotal, 2),
+            'expected_amount' => round($openingAmount + $cashSalesTotal + $netMovementTotal, 2),
             'opened_at' => $session->opened_at,
         ];
     }

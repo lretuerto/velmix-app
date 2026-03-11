@@ -73,6 +73,17 @@ class DailyReportService
             ->selectRaw('COUNT(*) as aggregate_count, COALESCE(SUM(discrepancy_amount), 0) as discrepancy_total')
             ->first();
 
+        $cashMovements = DB::table('cash_movements')
+            ->where('tenant_id', $tenantId)
+            ->where('created_at', '>=', $start)
+            ->where('created_at', '<', $end)
+            ->selectRaw("
+                COUNT(*) as movement_count,
+                COALESCE(SUM(CASE WHEN type = 'manual_in' THEN amount ELSE 0 END), 0) as manual_in_total,
+                COALESCE(SUM(CASE WHEN type = 'manual_out' THEN amount ELSE 0 END), 0) as manual_out_total
+            ")
+            ->first();
+
         $topProducts = DB::table('sale_items')
             ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
             ->join('products', 'products.id', '=', 'sale_items.product_id')
@@ -144,6 +155,9 @@ class DailyReportService
                 'opened_count' => (int) $cashOpened,
                 'closed_count' => (int) ($cashClosed->aggregate_count ?? 0),
                 'discrepancy_total' => round((float) ($cashClosed->discrepancy_total ?? 0), 2),
+                'movement_count' => (int) ($cashMovements->movement_count ?? 0),
+                'manual_in_total' => round((float) ($cashMovements->manual_in_total ?? 0), 2),
+                'manual_out_total' => round((float) ($cashMovements->manual_out_total ?? 0), 2),
             ],
         ];
     }

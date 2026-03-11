@@ -254,6 +254,51 @@ class DailyReportFlowTest extends TestCase
             ],
         ]);
 
+        $tenant10SessionId = DB::table('cash_sessions')
+            ->where('tenant_id', 10)
+            ->where('opened_at', '2026-03-11 08:00:00')
+            ->value('id');
+
+        $tenant20SessionId = DB::table('cash_sessions')
+            ->where('tenant_id', 20)
+            ->value('id');
+
+        DB::table('cash_movements')->insert([
+            [
+                'tenant_id' => 10,
+                'cash_session_id' => $tenant10SessionId,
+                'created_by_user_id' => $admin->id,
+                'type' => 'manual_in',
+                'amount' => 12.00,
+                'reference' => 'ING-REPORT-001',
+                'notes' => 'Refuerzo de caja',
+                'created_at' => '2026-03-11 09:30:00',
+                'updated_at' => '2026-03-11 09:30:00',
+            ],
+            [
+                'tenant_id' => 10,
+                'cash_session_id' => $tenant10SessionId,
+                'created_by_user_id' => $admin->id,
+                'type' => 'manual_out',
+                'amount' => 4.50,
+                'reference' => 'EGR-REPORT-001',
+                'notes' => 'Compra menor',
+                'created_at' => '2026-03-11 10:30:00',
+                'updated_at' => '2026-03-11 10:30:00',
+            ],
+            [
+                'tenant_id' => 20,
+                'cash_session_id' => $tenant20SessionId,
+                'created_by_user_id' => User::factory()->create()->id,
+                'type' => 'manual_in',
+                'amount' => 99.00,
+                'reference' => 'ING-OTHER-TENANT',
+                'notes' => null,
+                'created_at' => '2026-03-11 09:45:00',
+                'updated_at' => '2026-03-11 09:45:00',
+            ],
+        ]);
+
         $this->actingAs($admin)
             ->withHeader('X-Tenant-Id', '10')
             ->getJson('/reports/daily?date=2026-03-11')
@@ -281,7 +326,10 @@ class DailyReportFlowTest extends TestCase
             ->assertJsonPath('data.vouchers.failed_count', 0)
             ->assertJsonPath('data.cash.opened_count', 2)
             ->assertJsonPath('data.cash.closed_count', 1)
-            ->assertJsonPath('data.cash.discrepancy_total', 0.5);
+            ->assertJsonPath('data.cash.discrepancy_total', 0.5)
+            ->assertJsonPath('data.cash.movement_count', 2)
+            ->assertJsonPath('data.cash.manual_in_total', 12)
+            ->assertJsonPath('data.cash.manual_out_total', 4.5);
     }
 
     public function test_cashier_cannot_read_daily_operational_summary_without_permission(): void

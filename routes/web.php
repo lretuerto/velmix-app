@@ -2,6 +2,7 @@
 
 use App\Services\Billing\OutboxDispatchService;
 use App\Services\Billing\VoucherService;
+use App\Services\Cash\CashMovementService;
 use App\Services\Cash\CashSessionService;
 use App\Services\Inventory\InventorySetupService;
 use App\Services\Inventory\LotControlService;
@@ -172,6 +173,15 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
         return response()->json(['data' => $result]);
     })->middleware('perm:cash.session.read');
 
+    Route::get('/cash/sessions/{session}/movements', function (int $session, CashMovementService $service) {
+        $result = $service->listForSession(
+            (int) request()->attributes->get('tenant_id'),
+            $session,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:cash.movement.read');
+
     Route::post('/cash/sessions/current/close', function (CashSessionService $service) {
         $payload = request()->validate([
             'counted_amount' => ['required', 'numeric', 'min:0'],
@@ -185,6 +195,26 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 
         return response()->json(['data' => $result]);
     })->middleware('perm:cash.session.close');
+
+    Route::post('/cash/movements', function (CashMovementService $service) {
+        $payload = request()->validate([
+            'type' => ['required', 'in:manual_in,manual_out'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'reference' => ['required', 'string'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        $result = $service->create(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            (string) $payload['type'],
+            (float) $payload['amount'],
+            (string) $payload['reference'],
+            $payload['notes'] ?? null,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:cash.movement.create');
 
     Route::get('/reports/daily', function (DailyReportService $service) {
         $payload = request()->validate([
