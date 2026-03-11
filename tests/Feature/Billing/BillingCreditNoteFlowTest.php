@@ -249,6 +249,43 @@ class BillingCreditNoteFlowTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_rejects_credit_note_when_same_sale_item_is_repeated_and_exceeds_remaining_quantity(): void
+    {
+        [$admin, $saleId, $lotId] = $this->seedCashSaleWithVoucher();
+        $saleItemId = DB::table('sale_items')->where('sale_id', $saleId)->value('id');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/cash/sessions/open', [
+                'opening_amount' => 100,
+            ])
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/credit-notes', [
+                'sale_id' => $saleId,
+                'reason' => 'Payload duplicado',
+                'items' => [
+                    [
+                        'sale_item_id' => $saleItemId,
+                        'quantity' => 4,
+                    ],
+                    [
+                        'sale_item_id' => $saleItemId,
+                        'quantity' => 3,
+                    ],
+                ],
+            ])
+            ->assertStatus(422);
+
+        $this->assertSame(0, DB::table('sale_credit_notes')->where('sale_id', $saleId)->count());
+        $this->assertDatabaseHas('lots', [
+            'id' => $lotId,
+            'stock_quantity' => 54,
+        ]);
+    }
+
     private function seedCashSaleWithVoucher(): array
     {
         $this->seed([

@@ -472,6 +472,7 @@ class CreditNoteService
         }
 
         $resolved = [];
+        $requestedByItem = [];
 
         foreach ($requestedItems as $requestedItem) {
             $saleItemId = (int) ($requestedItem['sale_item_id'] ?? 0);
@@ -487,9 +488,10 @@ class CreditNoteService
                 throw new HttpException(404, 'Sale item not found for credit note.');
             }
 
+            $requestedByItem[$saleItemId] = ($requestedByItem[$saleItemId] ?? 0) + $quantity;
             $remainingQuantity = (int) ($remainingItems[$saleItemId] ?? 0);
 
-            if ($quantity > $remainingQuantity) {
+            if ($requestedByItem[$saleItemId] > $remainingQuantity) {
                 throw new HttpException(422, 'Credit note quantity exceeds remaining sale quantity.');
             }
 
