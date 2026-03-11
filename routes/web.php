@@ -5,7 +5,9 @@ use App\Services\Billing\VoucherService;
 use App\Services\Cash\CashSessionService;
 use App\Services\Inventory\InventorySetupService;
 use App\Services\Inventory\LotControlService;
+use App\Services\Inventory\StockMovementReadService;
 use App\Services\Inventory\StockMovementService;
+use App\Services\Reports\DailyReportService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
 use App\Services\Sales\PosSaleService;
@@ -173,8 +175,51 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
         return response()->json(['data' => $result]);
     })->middleware('perm:cash.session.close');
 
+    Route::get('/reports/daily', function (DailyReportService $service) {
+        $payload = request()->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+
+        $result = $service->summary(
+            (int) request()->attributes->get('tenant_id'),
+            $payload['date'] ?? null,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.daily.read');
+
+    Route::get('/reports/inventory-alerts', function (\App\Services\Reports\InventoryAlertReportService $service) {
+        $payload = request()->validate([
+            'low_stock_threshold' => ['nullable', 'integer', 'min:1'],
+            'expiring_within_days' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $result = $service->summary(
+            (int) request()->attributes->get('tenant_id'),
+            (int) ($payload['low_stock_threshold'] ?? 10),
+            (int) ($payload['expiring_within_days'] ?? 30),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.inventory.read');
+
     Route::get('/stock/move', fn () => response()->json(['ok' => true, 'flow' => 'stock']))
         ->middleware('perm:stock.move.create');
+
+    Route::get('/inventory/movements', function (StockMovementReadService $service) {
+        $payload = request()->validate([
+            'lot_id' => ['nullable', 'integer'],
+            'product_id' => ['nullable', 'integer'],
+            'type' => ['nullable', 'string'],
+        ]);
+
+        $result = $service->list(
+            (int) request()->attributes->get('tenant_id'),
+            array_filter($payload, fn ($value) => $value !== null),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:stock.move.read');
 
     Route::post('/stock/movements', function (StockMovementService $service) {
         $payload = request()->validate([

@@ -1,0 +1,219 @@
+<?php
+
+namespace Tests\Feature\Reports;
+
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
+
+class DailyReportFlowTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_reads_daily_operational_summary_for_current_tenant(): void
+    {
+        $this->seedBaseCatalog();
+        $admin = $this->seedUserWithRole(10, 'ADMIN');
+        $saleUserId = User::factory()->create()->id;
+
+        DB::table('sales')->insert([
+            [
+                'tenant_id' => 10,
+                'user_id' => $saleUserId,
+                'cancelled_by_user_id' => null,
+                'reference' => 'SALE-REPORT-OK',
+                'status' => 'completed',
+                'cancel_reason' => null,
+                'cancelled_at' => null,
+                'total_amount' => 40.50,
+                'created_at' => '2026-03-11 09:00:00',
+                'updated_at' => '2026-03-11 09:00:00',
+            ],
+            [
+                'tenant_id' => 10,
+                'user_id' => $saleUserId,
+                'cancelled_by_user_id' => $admin->id,
+                'reference' => 'SALE-REPORT-CANCEL',
+                'status' => 'cancelled',
+                'cancel_reason' => 'Cliente desistio',
+                'cancelled_at' => '2026-03-11 12:30:00',
+                'total_amount' => 15.00,
+                'created_at' => '2026-03-11 10:00:00',
+                'updated_at' => '2026-03-11 12:30:00',
+            ],
+            [
+                'tenant_id' => 10,
+                'user_id' => $saleUserId,
+                'cancelled_by_user_id' => null,
+                'reference' => 'SALE-REPORT-OLD',
+                'status' => 'completed',
+                'cancel_reason' => null,
+                'cancelled_at' => null,
+                'total_amount' => 99.00,
+                'created_at' => '2026-03-10 08:00:00',
+                'updated_at' => '2026-03-10 08:00:00',
+            ],
+        ]);
+
+        $completedSaleId = DB::table('sales')->where('reference', 'SALE-REPORT-OK')->value('id');
+        $cancelledSaleId = DB::table('sales')->where('reference', 'SALE-REPORT-CANCEL')->value('id');
+
+        DB::table('electronic_vouchers')->insert([
+            [
+                'tenant_id' => 10,
+                'sale_id' => $completedSaleId,
+                'type' => 'boleta',
+                'series' => 'B001',
+                'number' => 1,
+                'status' => 'accepted',
+                'sunat_ticket' => 'SUNAT-101010',
+                'rejection_reason' => null,
+                'created_at' => '2026-03-11 09:05:00',
+                'updated_at' => '2026-03-11 09:06:00',
+            ],
+            [
+                'tenant_id' => 10,
+                'sale_id' => $cancelledSaleId,
+                'type' => 'boleta',
+                'series' => 'B001',
+                'number' => 2,
+                'status' => 'rejected',
+                'sunat_ticket' => null,
+                'rejection_reason' => 'Rejected by SUNAT validation.',
+                'created_at' => '2026-03-11 11:00:00',
+                'updated_at' => '2026-03-11 11:01:00',
+            ],
+        ]);
+
+        $foreignSaleId = DB::table('sales')->insertGetId([
+            'tenant_id' => 20,
+            'user_id' => User::factory()->create()->id,
+            'cancelled_by_user_id' => null,
+            'reference' => 'SALE-OTHER-TENANT',
+            'status' => 'completed',
+            'cancel_reason' => null,
+            'cancelled_at' => null,
+            'total_amount' => 999.00,
+            'created_at' => '2026-03-11 09:15:00',
+            'updated_at' => '2026-03-11 09:15:00',
+        ]);
+
+        DB::table('electronic_vouchers')->insert([
+            'tenant_id' => 20,
+            'sale_id' => $foreignSaleId,
+            'type' => 'boleta',
+            'series' => 'B001',
+            'number' => 1,
+            'status' => 'failed',
+            'sunat_ticket' => null,
+            'rejection_reason' => null,
+            'created_at' => '2026-03-11 09:20:00',
+            'updated_at' => '2026-03-11 09:21:00',
+        ]);
+
+        DB::table('cash_sessions')->insert([
+            [
+                'tenant_id' => 10,
+                'opened_by_user_id' => $admin->id,
+                'closed_by_user_id' => $admin->id,
+                'opening_amount' => 100.00,
+                'expected_amount' => 140.50,
+                'counted_amount' => 141.00,
+                'discrepancy_amount' => 0.50,
+                'status' => 'closed',
+                'opened_at' => '2026-03-11 08:00:00',
+                'closed_at' => '2026-03-11 18:00:00',
+                'created_at' => '2026-03-11 08:00:00',
+                'updated_at' => '2026-03-11 18:00:00',
+            ],
+            [
+                'tenant_id' => 10,
+                'opened_by_user_id' => $admin->id,
+                'closed_by_user_id' => null,
+                'opening_amount' => 80.00,
+                'expected_amount' => 80.00,
+                'counted_amount' => null,
+                'discrepancy_amount' => null,
+                'status' => 'open',
+                'opened_at' => '2026-03-11 19:00:00',
+                'closed_at' => null,
+                'created_at' => '2026-03-11 19:00:00',
+                'updated_at' => '2026-03-11 19:00:00',
+            ],
+            [
+                'tenant_id' => 20,
+                'opened_by_user_id' => User::factory()->create()->id,
+                'closed_by_user_id' => null,
+                'opening_amount' => 500.00,
+                'expected_amount' => 500.00,
+                'counted_amount' => null,
+                'discrepancy_amount' => null,
+                'status' => 'open',
+                'opened_at' => '2026-03-11 07:00:00',
+                'closed_at' => null,
+                'created_at' => '2026-03-11 07:00:00',
+                'updated_at' => '2026-03-11 07:00:00',
+            ],
+        ]);
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/reports/daily?date=2026-03-11')
+            ->assertOk()
+            ->assertJsonPath('data.tenant_id', 10)
+            ->assertJsonPath('data.date', '2026-03-11')
+            ->assertJsonPath('data.sales.completed_count', 1)
+            ->assertJsonPath('data.sales.completed_total', 40.5)
+            ->assertJsonPath('data.sales.cancelled_count', 1)
+            ->assertJsonPath('data.sales.cancelled_total', 15)
+            ->assertJsonPath('data.vouchers.accepted_count', 1)
+            ->assertJsonPath('data.vouchers.rejected_count', 1)
+            ->assertJsonPath('data.vouchers.failed_count', 0)
+            ->assertJsonPath('data.cash.opened_count', 2)
+            ->assertJsonPath('data.cash.closed_count', 1)
+            ->assertJsonPath('data.cash.discrepancy_total', 0.5);
+    }
+
+    public function test_cashier_cannot_read_daily_operational_summary_without_permission(): void
+    {
+        $this->seedBaseCatalog();
+        $cashier = $this->seedUserWithRole(10, 'CAJERO');
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/reports/daily?date=2026-03-11')
+            ->assertStatus(403);
+    }
+
+    private function seedBaseCatalog(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+    }
+
+    private function seedUserWithRole(int $tenantId, string $roleCode): User
+    {
+        $user = User::factory()->create();
+        $roleId = DB::table('roles')->where('code', $roleCode)->value('id');
+
+        DB::table('tenant_user')->insert([
+            'tenant_id' => $tenantId,
+            'user_id' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('tenant_user_role')->insert([
+            'tenant_id' => $tenantId,
+            'user_id' => $user->id,
+            'role_id' => $roleId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $user;
+    }
+}
