@@ -361,6 +361,183 @@ class DailyReportFlowTest extends TestCase
             'updated_at' => '2026-03-11 14:00:00',
         ]);
 
+        $dueTodaySaleId = DB::table('sales')->insertGetId([
+            'tenant_id' => 10,
+            'user_id' => $saleUserId,
+            'customer_id' => $customerId,
+            'cancelled_by_user_id' => null,
+            'reference' => 'SALE-REPORT-DUE-TODAY',
+            'status' => 'completed',
+            'payment_method' => 'credit',
+            'cancel_reason' => null,
+            'cancelled_at' => null,
+            'total_amount' => 11.00,
+            'gross_cost' => 4.00,
+            'gross_margin' => 7.00,
+            'created_at' => '2026-03-08 08:30:00',
+            'updated_at' => '2026-03-08 08:30:00',
+        ]);
+
+        $overdueSaleId = DB::table('sales')->insertGetId([
+            'tenant_id' => 10,
+            'user_id' => $saleUserId,
+            'customer_id' => $customerId,
+            'cancelled_by_user_id' => null,
+            'reference' => 'SALE-REPORT-DUE-OVERDUE',
+            'status' => 'completed',
+            'payment_method' => 'credit',
+            'cancel_reason' => null,
+            'cancelled_at' => null,
+            'total_amount' => 13.00,
+            'gross_cost' => 5.00,
+            'gross_margin' => 8.00,
+            'created_at' => '2026-03-10 08:30:00',
+            'updated_at' => '2026-03-10 08:30:00',
+        ]);
+
+        $upcomingSaleId = DB::table('sales')->insertGetId([
+            'tenant_id' => 10,
+            'user_id' => $saleUserId,
+            'customer_id' => $customerId,
+            'cancelled_by_user_id' => null,
+            'reference' => 'SALE-REPORT-DUE-UPCOMING',
+            'status' => 'completed',
+            'payment_method' => 'credit',
+            'cancel_reason' => null,
+            'cancelled_at' => null,
+            'total_amount' => 7.00,
+            'gross_cost' => 3.00,
+            'gross_margin' => 4.00,
+            'created_at' => '2026-03-08 15:00:00',
+            'updated_at' => '2026-03-08 15:00:00',
+        ]);
+
+        DB::table('sale_receivables')->insert([
+            [
+                'tenant_id' => 10,
+                'customer_id' => $customerId,
+                'sale_id' => $dueTodaySaleId,
+                'total_amount' => 11.00,
+                'paid_amount' => 0.00,
+                'outstanding_amount' => 11.00,
+                'status' => 'pending',
+                'due_at' => '2026-03-11 00:00:00',
+                'created_at' => '2026-03-11 08:30:00',
+                'updated_at' => '2026-03-11 08:30:00',
+            ],
+            [
+                'tenant_id' => 10,
+                'customer_id' => $customerId,
+                'sale_id' => $overdueSaleId,
+                'total_amount' => 13.00,
+                'paid_amount' => 0.00,
+                'outstanding_amount' => 13.00,
+                'status' => 'pending',
+                'due_at' => '2026-03-10 00:00:00',
+                'created_at' => '2026-03-10 08:30:00',
+                'updated_at' => '2026-03-10 08:30:00',
+            ],
+            [
+                'tenant_id' => 10,
+                'customer_id' => $customerId,
+                'sale_id' => $upcomingSaleId,
+                'total_amount' => 7.00,
+                'paid_amount' => 0.00,
+                'outstanding_amount' => 7.00,
+                'status' => 'pending',
+                'due_at' => '2026-03-14 00:00:00',
+                'created_at' => '2026-03-11 15:00:00',
+                'updated_at' => '2026-03-11 15:00:00',
+            ],
+        ]);
+
+        $dailySupplierId = DB::table('suppliers')->insertGetId([
+            'tenant_id' => 10,
+            'tax_id' => '20101010101',
+            'name' => 'Proveedor Daily',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $dailyReceiptDueToday = DB::table('purchase_receipts')->insertGetId([
+            'tenant_id' => 10,
+            'supplier_id' => $dailySupplierId,
+            'purchase_order_id' => null,
+            'user_id' => $admin->id,
+            'reference' => 'PUR-DAILY-TODAY',
+            'status' => 'received',
+            'total_amount' => 16.00,
+            'received_at' => '2026-03-11 08:10:00',
+            'created_at' => '2026-03-11 08:10:00',
+            'updated_at' => '2026-03-11 08:10:00',
+        ]);
+
+        $dailyReceiptOverdue = DB::table('purchase_receipts')->insertGetId([
+            'tenant_id' => 10,
+            'supplier_id' => $dailySupplierId,
+            'purchase_order_id' => null,
+            'user_id' => $admin->id,
+            'reference' => 'PUR-DAILY-OVERDUE',
+            'status' => 'received',
+            'total_amount' => 22.00,
+            'received_at' => '2026-03-10 08:10:00',
+            'created_at' => '2026-03-10 08:10:00',
+            'updated_at' => '2026-03-10 08:10:00',
+        ]);
+
+        $dailyReceiptUpcoming = DB::table('purchase_receipts')->insertGetId([
+            'tenant_id' => 10,
+            'supplier_id' => $dailySupplierId,
+            'purchase_order_id' => null,
+            'user_id' => $admin->id,
+            'reference' => 'PUR-DAILY-UPCOMING',
+            'status' => 'received',
+            'total_amount' => 19.00,
+            'received_at' => '2026-03-11 16:10:00',
+            'created_at' => '2026-03-11 16:10:00',
+            'updated_at' => '2026-03-11 16:10:00',
+        ]);
+
+        DB::table('purchase_payables')->insert([
+            [
+                'tenant_id' => 10,
+                'supplier_id' => $dailySupplierId,
+                'purchase_receipt_id' => $dailyReceiptDueToday,
+                'total_amount' => 16.00,
+                'paid_amount' => 0.00,
+                'outstanding_amount' => 16.00,
+                'status' => 'pending',
+                'due_at' => '2026-03-11 00:00:00',
+                'created_at' => '2026-03-11 08:10:00',
+                'updated_at' => '2026-03-11 08:10:00',
+            ],
+            [
+                'tenant_id' => 10,
+                'supplier_id' => $dailySupplierId,
+                'purchase_receipt_id' => $dailyReceiptOverdue,
+                'total_amount' => 22.00,
+                'paid_amount' => 0.00,
+                'outstanding_amount' => 22.00,
+                'status' => 'pending',
+                'due_at' => '2026-03-09 00:00:00',
+                'created_at' => '2026-03-10 08:10:00',
+                'updated_at' => '2026-03-10 08:10:00',
+            ],
+            [
+                'tenant_id' => 10,
+                'supplier_id' => $dailySupplierId,
+                'purchase_receipt_id' => $dailyReceiptUpcoming,
+                'total_amount' => 19.00,
+                'paid_amount' => 0.00,
+                'outstanding_amount' => 19.00,
+                'status' => 'pending',
+                'due_at' => '2026-03-15 00:00:00',
+                'created_at' => '2026-03-11 16:10:00',
+                'updated_at' => '2026-03-11 16:10:00',
+            ],
+        ]);
+
         $this->actingAs($admin)
             ->withHeader('X-Tenant-Id', '10')
             ->getJson('/reports/daily?date=2026-03-11')
@@ -392,6 +569,18 @@ class DailyReportFlowTest extends TestCase
             ->assertJsonPath('data.collections.total_amount', 9)
             ->assertJsonPath('data.collections.by_payment_method.cash.count', 1)
             ->assertJsonPath('data.collections.by_payment_method.cash.total', 9)
+            ->assertJsonPath('data.due_reminders.receivables.overdue_count', 1)
+            ->assertJsonPath('data.due_reminders.receivables.overdue_amount', 13)
+            ->assertJsonPath('data.due_reminders.receivables.due_today_count', 1)
+            ->assertJsonPath('data.due_reminders.receivables.due_today_amount', 11)
+            ->assertJsonPath('data.due_reminders.receivables.upcoming_count', 1)
+            ->assertJsonPath('data.due_reminders.receivables.upcoming_amount', 7)
+            ->assertJsonPath('data.due_reminders.payables.overdue_count', 1)
+            ->assertJsonPath('data.due_reminders.payables.overdue_amount', 22)
+            ->assertJsonPath('data.due_reminders.payables.due_today_count', 1)
+            ->assertJsonPath('data.due_reminders.payables.due_today_amount', 16)
+            ->assertJsonPath('data.due_reminders.payables.upcoming_count', 1)
+            ->assertJsonPath('data.due_reminders.payables.upcoming_amount', 19)
             ->assertJsonPath('data.cash.opened_count', 2)
             ->assertJsonPath('data.cash.closed_count', 1)
             ->assertJsonPath('data.cash.discrepancy_total', 0.5)

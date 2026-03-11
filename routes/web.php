@@ -16,6 +16,7 @@ use App\Services\Purchasing\PurchaseReceiptService;
 use App\Services\Purchasing\PurchaseReturnService;
 use App\Services\Purchasing\SupplierService;
 use App\Services\Reports\DailyReportService;
+use App\Services\Reports\DueReminderReportService;
 use App\Services\Reports\ReceivableRiskReportService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
@@ -351,6 +352,23 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 
         return response()->json(['data' => $result]);
     })->middleware('perm:reports.daily.read');
+
+    Route::get('/reports/due-reminders', function (DueReminderReportService $service) {
+        $payload = request()->validate([
+            'days_ahead' => ['nullable', 'integer', 'min:1'],
+            'limit' => ['nullable', 'integer', 'min:1'],
+            'date' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+
+        $result = $service->summary(
+            (int) request()->attributes->get('tenant_id'),
+            (int) ($payload['days_ahead'] ?? 7),
+            (int) ($payload['limit'] ?? 5),
+            $payload['date'] ?? null,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.due-reminders.read');
 
     Route::get('/reports/inventory-alerts', function (\App\Services\Reports\InventoryAlertReportService $service) {
         $payload = request()->validate([
