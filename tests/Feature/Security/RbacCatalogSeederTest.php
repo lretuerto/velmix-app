@@ -19,6 +19,7 @@ class RbacCatalogSeederTest extends TestCase
         $this->assertDatabaseHas('roles', ['code' => 'ALMACENERO']);
 
         $this->assertDatabaseHas('permissions', ['code' => 'pos.sale.execute']);
+        $this->assertDatabaseHas('permissions', ['code' => 'pos.sale.approve']);
         $this->assertDatabaseHas('permissions', ['code' => 'stock.move.create']);
         $this->assertDatabaseHas('permissions', ['code' => 'rbac.role.assign']);
 

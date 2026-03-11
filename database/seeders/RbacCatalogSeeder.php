@@ -11,6 +11,7 @@ class RbacCatalogSeeder extends Seeder
     {
         $permissions = [
             ['code' => 'pos.sale.execute', 'name' => 'Ejecutar venta POS'],
+            ['code' => 'pos.sale.approve', 'name' => 'Aprobar venta POS'],
             ['code' => 'stock.move.create', 'name' => 'Crear movimiento de stock'],
             ['code' => 'rbac.role.assign', 'name' => 'Asignar roles'],
             ['code' => 'rbac.permission.manage', 'name' => 'Gestionar permisos'],
@@ -40,7 +41,7 @@ class RbacCatalogSeeder extends Seeder
         $permIds = DB::table('permissions')->pluck('id', 'code');
 
         $matrix = [
-            'ADMIN' => ['pos.sale.execute', 'stock.move.create', 'rbac.role.assign', 'rbac.permission.manage'],
+            'ADMIN' => ['pos.sale.execute', 'pos.sale.approve', 'stock.move.create', 'rbac.role.assign', 'rbac.permission.manage'],
             'CAJERO' => ['pos.sale.execute'],
             'ALMACENERO' => ['stock.move.create'],
         ];
