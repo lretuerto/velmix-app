@@ -13,11 +13,10 @@ class SaleReadService
             throw new HttpException(403, 'Tenant context is required.');
         }
 
-        return DB::table('sales')
+        $sales = DB::table('sales')
             ->leftJoin('customers', 'customers.id', '=', 'sales.customer_id')
             ->leftJoin('electronic_vouchers', 'electronic_vouchers.sale_id', '=', 'sales.id')
             ->leftJoin('sale_receivables', 'sale_receivables.sale_id', '=', 'sales.id')
-            ->leftJoin('sale_credit_notes', 'sale_credit_notes.sale_id', '=', 'sales.id')
             ->where('sales.tenant_id', $tenantId)
             ->orderByDesc('sales.id')
             ->get([
@@ -41,10 +40,14 @@ class SaleReadService
                 'sale_receivables.outstanding_amount as receivable_outstanding_amount',
                 'electronic_vouchers.id as voucher_id',
                 'electronic_vouchers.status as voucher_status',
-                'sale_credit_notes.id as credit_note_id',
-                'sale_credit_notes.status as credit_note_status',
-            ])
-            ->map(fn (object $sale) => [
+            ]);
+
+        $creditSummaries = $this->creditNoteSummaries($sales->pluck('id')->all());
+
+        return $sales->map(function (object $sale) use ($creditSummaries) {
+            $creditSummary = $creditSummaries[$sale->id] ?? null;
+
+            return [
                 'id' => $sale->id,
                 'reference' => $sale->reference,
                 'status' => $sale->status,
@@ -69,11 +72,13 @@ class SaleReadService
                 ] : null,
                 'voucher_id' => $sale->voucher_id,
                 'voucher_status' => $sale->voucher_status,
-                'credit_note' => $sale->credit_note_id !== null ? [
-                    'id' => $sale->credit_note_id,
-                    'status' => $sale->credit_note_status,
+                'credit_note' => $creditSummary !== null ? [
+                    'id' => $creditSummary['latest_id'],
+                    'status' => $creditSummary['latest_status'],
                 ] : null,
-            ])
+                'credit_summary' => $creditSummary,
+            ];
+        })
             ->all();
     }
 
@@ -87,7 +92,6 @@ class SaleReadService
             ->leftJoin('customers', 'customers.id', '=', 'sales.customer_id')
             ->leftJoin('electronic_vouchers', 'electronic_vouchers.sale_id', '=', 'sales.id')
             ->leftJoin('sale_receivables', 'sale_receivables.sale_id', '=', 'sales.id')
-            ->leftJoin('sale_credit_notes', 'sale_credit_notes.sale_id', '=', 'sales.id')
             ->where('sales.tenant_id', $tenantId)
             ->where('sales.id', $saleId)
             ->first([
@@ -114,10 +118,6 @@ class SaleReadService
                 'electronic_vouchers.status as voucher_status',
                 'electronic_vouchers.series as voucher_series',
                 'electronic_vouchers.number as voucher_number',
-                'sale_credit_notes.id as credit_note_id',
-                'sale_credit_notes.status as credit_note_status',
-                'sale_credit_notes.series as credit_note_series',
-                'sale_credit_notes.number as credit_note_number',
             ]);
 
         if ($sale === null) {
@@ -127,6 +127,15 @@ class SaleReadService
         $items = DB::table('sale_items')
             ->join('products', 'products.id', '=', 'sale_items.product_id')
             ->join('lots', 'lots.id', '=', 'sale_items.lot_id')
+            ->leftJoinSub(
+                DB::table('sale_credit_note_items')
+                    ->selectRaw('sale_item_id, COALESCE(SUM(quantity), 0) as credited_quantity')
+                    ->groupBy('sale_item_id'),
+                'credited_items',
+                'credited_items.sale_item_id',
+                '=',
+                'sale_items.id'
+            )
             ->where('sale_items.sale_id', $saleId)
             ->orderBy('sale_items.id')
             ->get([
@@ -141,10 +150,13 @@ class SaleReadService
                 'sale_items.approval_code',
                 'products.sku as product_sku',
                 'lots.code as lot_code',
+                DB::raw('COALESCE(credited_items.credited_quantity, 0) as credited_quantity'),
             ])
             ->map(fn (object $item) => [
                 'id' => $item->id,
                 'quantity' => (int) $item->quantity,
+                'credited_quantity' => (int) $item->credited_quantity,
+                'remaining_quantity' => max((int) $item->quantity - (int) $item->credited_quantity, 0),
                 'unit_price' => (float) $item->unit_price,
                 'unit_cost_snapshot' => (float) $item->unit_cost_snapshot,
                 'line_total' => (float) $item->line_total,
@@ -156,6 +168,35 @@ class SaleReadService
                 'lot_code' => $item->lot_code,
             ])
             ->all();
+
+        $creditNotes = DB::table('sale_credit_notes')
+            ->where('sale_id', $saleId)
+            ->orderByDesc('id')
+            ->get([
+                'id',
+                'series',
+                'number',
+                'status',
+                'reason',
+                'total_amount',
+                'refunded_amount',
+                'refund_payment_method',
+                'created_at',
+            ])
+            ->map(fn (object $creditNote) => [
+                'id' => $creditNote->id,
+                'series' => $creditNote->series,
+                'number' => $creditNote->number,
+                'status' => $creditNote->status,
+                'reason' => $creditNote->reason,
+                'total_amount' => (float) $creditNote->total_amount,
+                'refunded_amount' => (float) $creditNote->refunded_amount,
+                'refund_payment_method' => $creditNote->refund_payment_method,
+                'created_at' => $creditNote->created_at,
+            ])
+            ->all();
+
+        $creditSummary = $this->creditNoteSummaries([$saleId])[$saleId] ?? null;
 
         $movementCount = DB::table('stock_movements')
             ->where('tenant_id', $tenantId)
@@ -192,14 +233,51 @@ class SaleReadService
                 'series' => $sale->voucher_series,
                 'number' => $sale->voucher_number,
             ] : null,
-            'credit_note' => $sale->credit_note_id !== null ? [
-                'id' => $sale->credit_note_id,
-                'status' => $sale->credit_note_status,
-                'series' => $sale->credit_note_series,
-                'number' => $sale->credit_note_number,
+            'credit_note' => $creditSummary !== null ? [
+                'id' => $creditSummary['latest_id'],
+                'status' => $creditSummary['latest_status'],
+                'series' => $creditSummary['latest_series'],
+                'number' => $creditSummary['latest_number'],
             ] : null,
+            'credit_summary' => $creditSummary,
+            'credit_notes' => $creditNotes,
             'movement_count' => $movementCount,
             'items' => $items,
         ];
+    }
+
+    private function creditNoteSummaries(array $saleIds): array
+    {
+        if ($saleIds === []) {
+            return [];
+        }
+
+        $summaries = DB::table('sale_credit_notes')
+            ->whereIn('sale_id', $saleIds)
+            ->orderBy('id')
+            ->get([
+                'id',
+                'sale_id',
+                'series',
+                'number',
+                'status',
+                'total_amount',
+                'refunded_amount',
+            ])
+            ->groupBy('sale_id');
+
+        return $summaries->mapWithKeys(function ($notes, $saleId) {
+            $latest = $notes->last();
+
+            return [(int) $saleId => [
+                'count' => $notes->count(),
+                'credited_total' => round($notes->sum(fn (object $note) => (float) $note->total_amount), 2),
+                'refunded_total' => round($notes->sum(fn (object $note) => (float) $note->refunded_amount), 2),
+                'latest_id' => $latest->id,
+                'latest_status' => $latest->status,
+                'latest_series' => $latest->series,
+                'latest_number' => $latest->number,
+            ]];
+        })->all();
     }
 }

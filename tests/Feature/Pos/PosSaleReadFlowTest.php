@@ -195,6 +195,72 @@ class PosSaleReadFlowTest extends TestCase
             ->assertJsonPath('data.credit_note.series', 'NC01');
     }
 
+    public function test_lists_sale_once_even_with_multiple_credit_notes(): void
+    {
+        [$saleId] = $this->createCompletedSaleForTenant(10, 'SALE-MULTI-CN-10');
+        $admin = $this->seedUserWithRole(10, 'ADMIN');
+
+        DB::table('electronic_vouchers')->insert([
+            'tenant_id' => 10,
+            'sale_id' => $saleId,
+            'type' => 'boleta',
+            'series' => 'B001',
+            'number' => 11,
+            'status' => 'accepted',
+            'sunat_ticket' => 'SUNAT-CR-011',
+            'rejection_reason' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $voucherId = DB::table('electronic_vouchers')->where('sale_id', $saleId)->value('id');
+
+        DB::table('sale_credit_notes')->insert([
+            [
+                'tenant_id' => 10,
+                'sale_id' => $saleId,
+                'electronic_voucher_id' => $voucherId,
+                'series' => 'NC01',
+                'number' => 1,
+                'status' => 'accepted',
+                'reason' => 'Primera parcial',
+                'total_amount' => 7,
+                'refunded_amount' => 7,
+                'refund_payment_method' => 'cash',
+                'sunat_ticket' => 'SUNAT-NC-011',
+                'rejection_reason' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'tenant_id' => 10,
+                'sale_id' => $saleId,
+                'electronic_voucher_id' => $voucherId,
+                'series' => 'NC01',
+                'number' => 2,
+                'status' => 'pending',
+                'reason' => 'Segunda parcial',
+                'total_amount' => 10.5,
+                'refunded_amount' => 10.5,
+                'refund_payment_method' => 'cash',
+                'sunat_ticket' => null,
+                'rejection_reason' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/pos/sales')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $saleId)
+            ->assertJsonPath('data.0.credit_summary.count', 2)
+            ->assertJsonPath('data.0.credit_summary.credited_total', 17.5)
+            ->assertJsonPath('data.0.credit_note.status', 'pending');
+    }
+
     private function createCompletedSaleForTenant(int $tenantId, string $reference): array
     {
         $this->seed([

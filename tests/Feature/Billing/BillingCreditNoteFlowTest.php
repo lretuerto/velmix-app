@@ -77,6 +77,111 @@ class BillingCreditNoteFlowTest extends TestCase
             ->assertJsonPath('data.voucher.series', 'B001');
     }
 
+    public function test_can_create_partial_credit_note_and_keep_sale_completed_until_fully_credited(): void
+    {
+        [$admin, $saleId, $lotId] = $this->seedCashSaleWithVoucher();
+        $saleItemId = DB::table('sale_items')->where('sale_id', $saleId)->value('id');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/cash/sessions/open', [
+                'opening_amount' => 100,
+            ])
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/credit-notes', [
+                'sale_id' => $saleId,
+                'reason' => 'Devolucion parcial',
+                'items' => [[
+                    'sale_item_id' => $saleItemId,
+                    'quantity' => 2,
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.total_amount', 7)
+            ->assertJsonPath('data.refunded_amount', 7)
+            ->assertJsonPath('data.items.0.quantity', 2);
+
+        $creditNoteId = DB::table('sale_credit_notes')->where('sale_id', $saleId)->max('id');
+
+        $this->assertDatabaseHas('sales', [
+            'id' => $saleId,
+            'status' => 'completed',
+        ]);
+
+        $this->assertDatabaseHas('lots', [
+            'id' => $lotId,
+            'stock_quantity' => 56,
+        ]);
+
+        $this->assertDatabaseHas('sale_credit_note_items', [
+            'sale_credit_note_id' => $creditNoteId,
+            'sale_item_id' => $saleItemId,
+            'quantity' => 2,
+            'line_total' => 7.00,
+        ]);
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/pos/sales/{$saleId}")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.credit_summary.count', 1)
+            ->assertJsonPath('data.credit_summary.credited_total', 7)
+            ->assertJsonPath('data.items.0.credited_quantity', 2)
+            ->assertJsonPath('data.items.0.remaining_quantity', 4);
+    }
+
+    public function test_can_apply_second_credit_note_for_remaining_quantity(): void
+    {
+        [$admin, $saleId] = $this->seedCashSaleWithVoucher();
+        $saleItemId = DB::table('sale_items')->where('sale_id', $saleId)->value('id');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/cash/sessions/open', [
+                'opening_amount' => 100,
+            ])
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/credit-notes', [
+                'sale_id' => $saleId,
+                'reason' => 'Primera devolucion',
+                'items' => [[
+                    'sale_item_id' => $saleItemId,
+                    'quantity' => 2,
+                ]],
+            ])
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/credit-notes', [
+                'sale_id' => $saleId,
+                'reason' => 'Saldo de devolucion',
+                'items' => [[
+                    'sale_item_id' => $saleItemId,
+                    'quantity' => 4,
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.number', 2)
+            ->assertJsonPath('data.total_amount', 14)
+            ->assertJsonPath('data.refunded_amount', 14);
+
+        $this->assertDatabaseHas('sales', [
+            'id' => $saleId,
+            'status' => 'credited',
+        ]);
+
+        $this->assertSame(2, DB::table('sale_credit_notes')->where('sale_id', $saleId)->count());
+        $this->assertSame(21.0, (float) DB::table('sale_refunds')->where('sale_id', $saleId)->sum('amount'));
+    }
+
     public function test_creates_credit_note_for_unpaid_credit_sale_without_refund(): void
     {
         [$admin, $saleId, $receivableId] = $this->seedCreditSaleWithVoucher(false);
@@ -95,6 +200,39 @@ class BillingCreditNoteFlowTest extends TestCase
             'id' => $receivableId,
             'status' => 'credited',
             'outstanding_amount' => 0,
+        ]);
+    }
+
+    public function test_partial_credit_note_reduces_unpaid_receivable_balance(): void
+    {
+        [$admin, $saleId, $receivableId] = $this->seedCreditSaleWithVoucher(false);
+        $saleItemId = DB::table('sale_items')->where('sale_id', $saleId)->value('id');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/credit-notes', [
+                'sale_id' => $saleId,
+                'reason' => 'Devolucion parcial credito',
+                'items' => [[
+                    'sale_item_id' => $saleItemId,
+                    'quantity' => 2,
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.total_amount', 7)
+            ->assertJsonPath('data.refunded_amount', 0);
+
+        $this->assertDatabaseHas('sale_receivables', [
+            'id' => $receivableId,
+            'total_amount' => 7.00,
+            'paid_amount' => 0.00,
+            'outstanding_amount' => 7.00,
+            'status' => 'pending',
+        ]);
+
+        $this->assertDatabaseHas('sales', [
+            'id' => $saleId,
+            'status' => 'completed',
         ]);
     }
 

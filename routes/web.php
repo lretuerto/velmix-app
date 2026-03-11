@@ -758,6 +758,9 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
         $payload = request()->validate([
             'sale_id' => ['required', 'integer'],
             'reason' => ['required', 'string'],
+            'items' => ['nullable', 'array', 'min:1'],
+            'items.*.sale_item_id' => ['required_with:items', 'integer'],
+            'items.*.quantity' => ['required_with:items', 'integer', 'min:1'],
         ]);
 
         $result = $service->createFromSale(
@@ -765,6 +768,10 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
             (int) optional(request()->user())->id,
             (int) $payload['sale_id'],
             (string) $payload['reason'],
+            array_map(fn (array $item) => [
+                'sale_item_id' => (int) $item['sale_item_id'],
+                'quantity' => (int) $item['quantity'],
+            ], $payload['items'] ?? []),
         );
 
         return response()->json(['data' => $result]);
