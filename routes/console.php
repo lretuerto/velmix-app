@@ -9,10 +9,11 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Artisan::command('billing:dispatch-outbox {--tenant=} {--limit=20} {--simulate-result=accepted}', function (OutboxDispatchService $service) {
+Artisan::command('billing:dispatch-outbox {--tenant=} {--limit=20} {--simulate-result=}', function (OutboxDispatchService $service) {
     $tenantOption = $this->option('tenant');
     $limit = max(1, (int) $this->option('limit'));
-    $outcome = (string) $this->option('simulate-result');
+    $outcome = $this->option('simulate-result');
+    $outcome = $outcome !== null && $outcome !== '' ? (string) $outcome : null;
 
     try {
         $tenantIds = $tenantOption !== null

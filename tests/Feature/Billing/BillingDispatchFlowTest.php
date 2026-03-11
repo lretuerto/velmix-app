@@ -20,7 +20,8 @@ class BillingDispatchFlowTest extends TestCase
             ->postJson('/billing/outbox/dispatch')
             ->assertOk()
             ->assertJsonPath('data.document_id', $voucherId)
-            ->assertJsonPath('data.status', 'processed');
+            ->assertJsonPath('data.status', 'processed')
+            ->assertJsonPath('data.provider_code', 'fake_sunat');
 
         $this->assertDatabaseHas('electronic_vouchers', [
             'id' => $voucherId,
@@ -36,6 +37,7 @@ class BillingDispatchFlowTest extends TestCase
         $this->assertDatabaseHas('outbox_attempts', [
             'outbox_event_id' => $eventId,
             'status' => 'accepted',
+            'provider_code' => 'fake_sunat',
         ]);
     }
 
@@ -50,7 +52,8 @@ class BillingDispatchFlowTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('data.document_id', $voucherId)
-            ->assertJsonPath('data.status', 'rejected');
+            ->assertJsonPath('data.status', 'rejected')
+            ->assertJsonPath('data.provider_code', 'fake_sunat');
 
         $this->assertDatabaseHas('electronic_vouchers', [
             'id' => $voucherId,
@@ -65,6 +68,7 @@ class BillingDispatchFlowTest extends TestCase
         $this->assertDatabaseHas('outbox_attempts', [
             'outbox_event_id' => $eventId,
             'status' => 'rejected',
+            'provider_code' => 'fake_sunat',
         ]);
     }
 
@@ -77,7 +81,8 @@ class BillingDispatchFlowTest extends TestCase
             ->postJson('/billing/outbox/dispatch', [
                 'simulate_result' => 'transient_fail',
             ])
-            ->assertStatus(503);
+            ->assertStatus(503)
+            ->assertJsonPath('data.provider_code', 'fake_sunat');
 
         $this->assertDatabaseHas('electronic_vouchers', [
             'id' => $voucherId,
@@ -93,6 +98,7 @@ class BillingDispatchFlowTest extends TestCase
         $this->assertDatabaseHas('outbox_attempts', [
             'outbox_event_id' => $eventId,
             'status' => 'failed',
+            'provider_code' => 'fake_sunat',
         ]);
 
         $this->actingAs($user)
@@ -130,7 +136,8 @@ class BillingDispatchFlowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.document_id', $creditNoteId)
             ->assertJsonPath('data.event_type', 'credit_note.created')
-            ->assertJsonPath('data.status', 'processed');
+            ->assertJsonPath('data.status', 'processed')
+            ->assertJsonPath('data.provider_code', 'fake_sunat');
 
         $this->assertDatabaseHas('sale_credit_notes', [
             'id' => $creditNoteId,

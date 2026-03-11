@@ -18,7 +18,9 @@ class BillingReadFlowTest extends TestCase
         DB::table('outbox_attempts')->insert([
             'outbox_event_id' => $eventId,
             'status' => 'accepted',
+            'provider_code' => 'fake_sunat',
             'sunat_ticket' => 'SUNAT-000123',
+            'provider_reference' => 'SUNAT-000123',
             'error_message' => null,
             'created_at' => now(),
             'updated_at' => now(),
@@ -52,7 +54,9 @@ class BillingReadFlowTest extends TestCase
             [
                 'outbox_event_id' => $eventId,
                 'status' => 'failed',
+                'provider_code' => 'fake_sunat',
                 'sunat_ticket' => null,
+                'provider_reference' => null,
                 'error_message' => 'Temporary transport failure.',
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -60,7 +64,9 @@ class BillingReadFlowTest extends TestCase
             [
                 'outbox_event_id' => $eventId,
                 'status' => 'accepted',
+                'provider_code' => 'fake_sunat',
                 'sunat_ticket' => 'SUNAT-000123',
+                'provider_reference' => 'SUNAT-000123',
                 'error_message' => null,
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -73,7 +79,9 @@ class BillingReadFlowTest extends TestCase
             ->assertOk()
             ->assertJsonCount(2, 'data')
             ->assertJsonPath('data.0.status', 'failed')
-            ->assertJsonPath('data.1.status', 'accepted');
+            ->assertJsonPath('data.0.provider_code', 'fake_sunat')
+            ->assertJsonPath('data.1.status', 'accepted')
+            ->assertJsonPath('data.1.provider_reference', 'SUNAT-000123');
     }
 
     public function test_reads_outbox_queue_summary_for_current_tenant(): void
@@ -119,7 +127,9 @@ class BillingReadFlowTest extends TestCase
         DB::table('outbox_attempts')->insert([
             'outbox_event_id' => $processedEventId,
             'status' => 'accepted',
+            'provider_code' => 'fake_sunat',
             'sunat_ticket' => 'SUNAT-READY',
+            'provider_reference' => 'SUNAT-READY',
             'error_message' => null,
             'created_at' => now(),
             'updated_at' => now(),
@@ -169,9 +179,12 @@ class BillingReadFlowTest extends TestCase
             ->assertJsonPath('data.pending_count', 1)
             ->assertJsonPath('data.failed_count', 1)
             ->assertJsonPath('data.processed_count', 1)
+            ->assertJsonPath('data.provider_profile.provider_code', 'fake_sunat')
             ->assertJsonPath('data.oldest_pending.event_id', $eventId)
             ->assertJsonPath('data.latest_attempt.event_id', $processedEventId)
             ->assertJsonPath('data.latest_attempt.status', 'accepted')
+            ->assertJsonPath('data.latest_attempt.provider_code', 'fake_sunat')
+            ->assertJsonPath('data.latest_attempt.provider_reference', 'SUNAT-READY')
             ->assertJsonPath('data.oldest_pending.aggregate_id', $voucherId);
     }
 

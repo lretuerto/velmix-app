@@ -85,6 +85,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /billing/vouchers/{voucher}`
 - `POST /billing/credit-notes`
 - `GET /billing/credit-notes/{creditNote}`
+- `GET /billing/provider-profile`
+- `PUT /billing/provider-profile`
 - `POST /billing/outbox/dispatch`
 - `GET /billing/outbox/summary`
 - `POST /billing/outbox/{event}/retry`
@@ -154,6 +156,17 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - Comando manual: `php artisan billing:dispatch-outbox --limit=20`
 - Si no se pasa `--tenant`, procesa tenants con eventos pendientes
 - Para pruebas controladas: `--simulate-result=accepted|rejected|transient_fail`
+
+## Provider profile de billing
+
+- `GET /billing/provider-profile` devuelve el perfil activo del tenant
+- `PUT /billing/provider-profile` permite ajustar:
+  - `provider_code`
+  - `environment`
+  - `default_outcome`
+  - `credentials`
+- El provider actual es `fake_sunat`
+- Si no se manda `simulate_result` en el outbox, se usa `default_outcome` del perfil
 
 ## Donde mirar el contrato completo
 

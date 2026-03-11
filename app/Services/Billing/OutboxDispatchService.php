@@ -3,6 +3,7 @@
 namespace App\Services\Billing;
 
 use App\Services\Audit\TenantActivityLogService;
+use App\Services\Billing\Providers\BillingDispatchProviderRegistry;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -10,13 +11,13 @@ class OutboxDispatchService
 {
     private const VALID_OUTCOMES = ['accepted', 'rejected', 'transient_fail'];
 
-    public function dispatchNext(int $tenantId, string $outcome = 'accepted'): array
+    public function dispatchNext(int $tenantId, ?string $outcome = null): array
     {
         if ($tenantId <= 0) {
             throw new HttpException(403, 'Tenant context is required.');
         }
 
-        if (! in_array($outcome, self::VALID_OUTCOMES, true)) {
+        if ($outcome !== null && ! in_array($outcome, self::VALID_OUTCOMES, true)) {
             throw new HttpException(422, 'Dispatch outcome is invalid.');
         }
 
@@ -36,7 +37,7 @@ class OutboxDispatchService
         });
     }
 
-    public function dispatchBatch(int $tenantId, int $limit = 10, string $outcome = 'accepted'): array
+    public function dispatchBatch(int $tenantId, int $limit = 10, ?string $outcome = null): array
     {
         if ($tenantId <= 0) {
             throw new HttpException(403, 'Tenant context is required.');
@@ -46,7 +47,7 @@ class OutboxDispatchService
             throw new HttpException(422, 'Dispatch limit is invalid.');
         }
 
-        if (! in_array($outcome, self::VALID_OUTCOMES, true)) {
+        if ($outcome !== null && ! in_array($outcome, self::VALID_OUTCOMES, true)) {
             throw new HttpException(422, 'Dispatch outcome is invalid.');
         }
 
@@ -120,10 +121,13 @@ class OutboxDispatchService
             ->first([
                 'outbox_attempts.outbox_event_id',
                 'outbox_attempts.status',
+                'outbox_attempts.provider_code',
+                'outbox_attempts.provider_reference',
                 'outbox_attempts.sunat_ticket',
                 'outbox_attempts.error_message',
                 'outbox_attempts.created_at',
             ]);
+        $profile = app(BillingProviderProfileService::class)->current($tenantId);
 
         return [
             'tenant_id' => $tenantId,
@@ -131,6 +135,7 @@ class OutboxDispatchService
             'pending_count' => (int) ($counts->pending_count ?? 0),
             'failed_count' => (int) ($counts->failed_count ?? 0),
             'processed_count' => (int) ($counts->processed_count ?? 0),
+            'provider_profile' => $profile,
             'oldest_pending' => $oldestPending !== null ? [
                 'event_id' => (int) $oldestPending->id,
                 'aggregate_type' => (string) $oldestPending->aggregate_type,
@@ -141,6 +146,8 @@ class OutboxDispatchService
             'latest_attempt' => $latestAttempt !== null ? [
                 'event_id' => (int) $latestAttempt->outbox_event_id,
                 'status' => (string) $latestAttempt->status,
+                'provider_code' => $latestAttempt->provider_code,
+                'provider_reference' => $latestAttempt->provider_reference,
                 'sunat_ticket' => $latestAttempt->sunat_ticket,
                 'error_message' => $latestAttempt->error_message,
                 'created_at' => (string) $latestAttempt->created_at,
@@ -150,6 +157,10 @@ class OutboxDispatchService
 
     public function pendingTenantIds(): array
     {
+        if (! DB::getSchemaBuilder()->hasTable('outbox_events')) {
+            return [];
+        }
+
         return DB::table('outbox_events')
             ->where('status', 'pending')
             ->orderBy('tenant_id')
@@ -159,19 +170,27 @@ class OutboxDispatchService
             ->all();
     }
 
-    private function dispatchLockedEvent(int $tenantId, object $event, string $outcome): array
+    private function dispatchLockedEvent(int $tenantId, object $event, ?string $outcome): array
     {
         $documentTable = $event->aggregate_type === 'sale_credit_note'
             ? 'sale_credit_notes'
             : 'electronic_vouchers';
+        $profile = app(BillingProviderProfileService::class)->current($tenantId);
+        $provider = app(BillingDispatchProviderRegistry::class)->forCode((string) $profile['provider_code']);
+        $dispatch = $provider->dispatch(
+            $event,
+            json_decode((string) DB::table('outbox_events')->where('id', $event->id)->value('payload'), true, 512, JSON_THROW_ON_ERROR),
+            $profile,
+            ['simulate_result' => $outcome],
+        );
 
-        if ($outcome === 'transient_fail') {
-            $message = 'Temporary transport failure.';
+        if ($dispatch['status'] === 'failed') {
+            $message = (string) $dispatch['message'];
 
             DB::table($documentTable)
                 ->where('id', $event->aggregate_id)
                 ->update([
-                    'status' => 'failed',
+                    'status' => (string) $dispatch['document_status'],
                     'updated_at' => now(),
                 ]);
 
@@ -187,7 +206,9 @@ class OutboxDispatchService
             DB::table('outbox_attempts')->insert([
                 'outbox_event_id' => $event->id,
                 'status' => 'failed',
+                'provider_code' => $dispatch['provider_code'],
                 'sunat_ticket' => null,
+                'provider_reference' => $dispatch['provider_reference'],
                 'error_message' => $message,
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -206,19 +227,21 @@ class OutboxDispatchService
                 'document_id' => $event->aggregate_id,
                 'event_type' => $event->event_type,
                 'status' => 'failed',
+                'provider_code' => $dispatch['provider_code'],
+                'provider_reference' => $dispatch['provider_reference'],
                 'sunat_ticket' => null,
                 'http_status' => 503,
                 'message' => $message,
             ];
         }
 
-        if ($outcome === 'rejected') {
-            $message = 'Rejected by SUNAT validation.';
+        if ($dispatch['status'] === 'rejected') {
+            $message = (string) $dispatch['message'];
 
             DB::table($documentTable)
                 ->where('id', $event->aggregate_id)
                 ->update([
-                    'status' => 'rejected',
+                    'status' => (string) $dispatch['document_status'],
                     'rejection_reason' => $message,
                     'updated_at' => now(),
                 ]);
@@ -234,7 +257,9 @@ class OutboxDispatchService
             DB::table('outbox_attempts')->insert([
                 'outbox_event_id' => $event->id,
                 'status' => 'rejected',
+                'provider_code' => $dispatch['provider_code'],
                 'sunat_ticket' => null,
+                'provider_reference' => $dispatch['provider_reference'],
                 'error_message' => $message,
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -253,16 +278,18 @@ class OutboxDispatchService
                 'document_id' => $event->aggregate_id,
                 'event_type' => $event->event_type,
                 'status' => 'rejected',
+                'provider_code' => $dispatch['provider_code'],
+                'provider_reference' => $dispatch['provider_reference'],
                 'sunat_ticket' => null,
             ];
         }
 
-        $ticket = 'SUNAT-'.str_pad((string) random_int(1, 999999), 6, '0', STR_PAD_LEFT);
+        $ticket = (string) $dispatch['ticket'];
 
         DB::table($documentTable)
             ->where('id', $event->aggregate_id)
             ->update([
-                'status' => 'accepted',
+                'status' => (string) $dispatch['document_status'],
                 'sunat_ticket' => $ticket,
                 'rejection_reason' => null,
                 'updated_at' => now(),
@@ -279,7 +306,9 @@ class OutboxDispatchService
         DB::table('outbox_attempts')->insert([
             'outbox_event_id' => $event->id,
             'status' => 'accepted',
+            'provider_code' => $dispatch['provider_code'],
             'sunat_ticket' => $ticket,
+            'provider_reference' => $dispatch['provider_reference'],
             'error_message' => null,
             'created_at' => now(),
             'updated_at' => now(),
@@ -299,6 +328,8 @@ class OutboxDispatchService
             'event_type' => $event->event_type,
             'status' => 'processed',
             'sunat_ticket' => $ticket,
+            'provider_code' => $dispatch['provider_code'],
+            'provider_reference' => $dispatch['provider_reference'],
         ];
     }
 

@@ -23,6 +23,7 @@ class OpenApiDocsTest extends TestCase
         $response->assertOk();
         $this->assertStringContainsString('/pos/sales', $response->getContent());
         $this->assertStringContainsString('/billing/vouchers', $response->getContent());
+        $this->assertStringContainsString('/billing/provider-profile', $response->getContent());
         $this->assertStringContainsString('/billing/outbox/summary', $response->getContent());
         $this->assertStringContainsString('/audit/timeline', $response->getContent());
         $this->assertStringContainsString('/auth/tokens', $response->getContent());
@@ -35,7 +36,8 @@ class OpenApiDocsTest extends TestCase
         $this->get('/docs/api-guide')
             ->assertOk()
             ->assertSee('X-Tenant-Id', false)
-            ->assertSee('POST /pos/sales', false);
+            ->assertSee('POST /pos/sales', false)
+            ->assertSee('GET /billing/provider-profile', false);
 
         $this->get('/docs/release-readiness')
             ->assertOk()

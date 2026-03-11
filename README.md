@@ -11,6 +11,7 @@ Backend SaaS multi-tenant para operaciones farmacéuticas, construido sobre Lara
 - Compras con órdenes, recepciones, devoluciones, créditos y cuentas por pagar
 - Caja con aperturas, cierres, arqueo por denominaciones y movimientos manuales
 - Reportes operativos, riesgo, vencimientos, promesas y auditoría transversal
+- Billing desacoplado por perfil/provider tenant con outbox operable por lotes
 
 ## Requisitos
 
@@ -52,6 +53,9 @@ php artisan test
 - Guía operativa API: `GET /docs/api-guide`
 - Checklist de release: `GET /docs/release-readiness`
 - Worker manual outbox: `php artisan billing:dispatch-outbox --limit=20`
+- Perfil/provider billing por tenant:
+  - `GET /billing/provider-profile`
+  - `PUT /billing/provider-profile`
 
 Archivos fuente:
 
@@ -81,6 +85,7 @@ composer run velmix:routes
 - Inventario: productos, lotes, stock, inmovilización y trazabilidad
 - POS y ventas: ventas FIFO, crédito, cancelaciones y rentabilidad
 - Billing: vouchers, outbox y notas de crédito parciales/totales
+- Billing providers: perfil por tenant para sandbox/live y outcome por defecto
 - Compras: proveedores, órdenes, recepciones, devoluciones y créditos
 - Caja: aperturas, cierres, cobranzas y movimientos no comerciales
 - Reportes: diario, vencimientos, promesas, rentabilidad y riesgo

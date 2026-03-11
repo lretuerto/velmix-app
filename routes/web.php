@@ -4,6 +4,7 @@ use App\Services\Audit\TenantActivityLogService;
 use App\Services\Billing\OutboxDispatchService;
 use App\Services\Billing\VoucherService;
 use App\Services\Billing\CreditNoteService;
+use App\Services\Billing\BillingProviderProfileService;
 use App\Services\Cash\CashMovementService;
 use App\Services\Cash\CashSessionService;
 use App\Services\Inventory\InventorySetupService;
@@ -39,7 +40,7 @@ Route::get('/docs', function () {
     return response()->json([
         'data' => [
             'project' => 'VELMiX ERP',
-            'version' => 'sprint1-day90',
+            'version' => 'sprint1-day99',
             'documents' => [
                 ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
                 ['name' => 'API Guide', 'path' => '/docs/api-guide'],
@@ -1066,12 +1067,12 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
 
     Route::post('/billing/outbox/dispatch', function (OutboxDispatchService $service) {
         $payload = request()->validate([
-            'simulate_result' => ['nullable', 'string'],
+            'simulate_result' => ['nullable', 'in:accepted,rejected,transient_fail'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
         $tenantId = (int) request()->attributes->get('tenant_id');
-        $outcome = (string) ($payload['simulate_result'] ?? 'accepted');
+        $outcome = isset($payload['simulate_result']) ? (string) $payload['simulate_result'] : null;
         $limit = (int) ($payload['limit'] ?? 1);
 
         if ($limit > 1) {
@@ -1093,6 +1094,29 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
 
         return response()->json(['data' => $result]);
     })->middleware('perm:billing.outbox.read');
+
+    Route::get('/billing/provider-profile', function (BillingProviderProfileService $service) {
+        $result = $service->current((int) request()->attributes->get('tenant_id'));
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:billing.provider.manage');
+
+    Route::put('/billing/provider-profile', function (BillingProviderProfileService $service) {
+        $payload = request()->validate([
+            'provider_code' => ['sometimes', 'in:fake_sunat'],
+            'environment' => ['sometimes', 'in:sandbox,live'],
+            'default_outcome' => ['sometimes', 'in:accepted,rejected,transient_fail'],
+            'credentials' => ['sometimes', 'nullable', 'array'],
+        ]);
+
+        $result = $service->update(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            $payload,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:billing.provider.manage');
 
     Route::post('/billing/outbox/{event}/retry', function (int $event, OutboxDispatchService $service) {
         $result = $service->retryFailed(
@@ -1118,7 +1142,16 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         $attempts = DB::table('outbox_attempts')
             ->where('outbox_event_id', $event)
             ->orderBy('id')
-            ->get(['id', 'outbox_event_id', 'status', 'sunat_ticket', 'error_message', 'created_at']);
+            ->get([
+                'id',
+                'outbox_event_id',
+                'status',
+                'provider_code',
+                'provider_reference',
+                'sunat_ticket',
+                'error_message',
+                'created_at',
+            ]);
 
         return response()->json(['data' => $attempts]);
     })->middleware('perm:billing.outbox.read');

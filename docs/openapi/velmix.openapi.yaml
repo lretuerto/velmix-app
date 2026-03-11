@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VELMiX ERP API
-  version: sprint1-day90
+  version: sprint1-day99
   description: |
     Contrato OpenAPI de endpoints prioritarios de VELMiX ERP.
     Cubre la convencion multi-tenant y los flujos criticos ya implementados.
@@ -772,7 +772,7 @@ paths:
   /billing/outbox/dispatch:
     post:
       tags: [Billing]
-      summary: Despacha eventos outbox
+      summary: Despacha eventos outbox usando el provider configurado del tenant
       requestBody:
         required: false
         content:
@@ -782,7 +782,7 @@ paths:
               properties:
                 simulate_result:
                   type: string
-                  enum: [accepted, failed, rejected]
+                  enum: [accepted, rejected, transient_fail]
                 limit:
                   type: integer
                   minimum: 1
@@ -790,6 +790,33 @@ paths:
       responses:
         '200':
           description: Evento procesado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/provider-profile:
+    get:
+      tags: [Billing]
+      summary: Lee el provider profile de billing del tenant
+      responses:
+        '200':
+          description: Perfil de provider
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+    put:
+      tags: [Billing]
+      summary: Actualiza el provider profile de billing del tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillingProviderProfileUpdateRequest'
+      responses:
+        '200':
+          description: Perfil actualizado
           content:
             application/json:
               schema:
@@ -1384,6 +1411,21 @@ components:
               quantity:
                 type: integer
                 minimum: 1
+    BillingProviderProfileUpdateRequest:
+      type: object
+      properties:
+        provider_code:
+          type: string
+          enum: [fake_sunat]
+        environment:
+          type: string
+          enum: [sandbox, live]
+        default_outcome:
+          type: string
+          enum: [accepted, rejected, transient_fail]
+        credentials:
+          type: object
+          additionalProperties: true
     ApiTokenCreateRequest:
       type: object
       required: [name]
