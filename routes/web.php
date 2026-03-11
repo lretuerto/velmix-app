@@ -177,9 +177,80 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
         return response()->json(['data' => $result]);
     })->middleware('perm:billing.voucher.issue');
 
+    Route::get('/billing/vouchers/{voucher}', function (int $voucher) {
+        $tenantId = (int) request()->attributes->get('tenant_id');
+
+        $voucherData = DB::table('electronic_vouchers')
+            ->join('sales', 'sales.id', '=', 'electronic_vouchers.sale_id')
+            ->leftJoin('outbox_events', function ($join) {
+                $join->on('outbox_events.aggregate_id', '=', 'electronic_vouchers.id')
+                    ->where('outbox_events.aggregate_type', '=', 'electronic_voucher');
+            })
+            ->where('electronic_vouchers.id', $voucher)
+            ->where('electronic_vouchers.tenant_id', $tenantId)
+            ->first([
+                'electronic_vouchers.id',
+                'electronic_vouchers.tenant_id',
+                'electronic_vouchers.sale_id',
+                'electronic_vouchers.type',
+                'electronic_vouchers.series',
+                'electronic_vouchers.number',
+                'electronic_vouchers.status',
+                'electronic_vouchers.sunat_ticket',
+                'electronic_vouchers.rejection_reason',
+                'sales.reference as sale_reference',
+                'outbox_events.id as outbox_event_id',
+            ]);
+
+        if ($voucherData === null) {
+            abort(404, 'Voucher not found.');
+        }
+
+        return response()->json(['data' => $voucherData]);
+    })->middleware('perm:billing.voucher.read');
+
     Route::post('/billing/outbox/dispatch', function (OutboxDispatchService $service) {
-        $result = $service->dispatchNext((int) request()->attributes->get('tenant_id'));
+        $payload = request()->validate([
+            'simulate_result' => ['nullable', 'string'],
+        ]);
+
+        $result = $service->dispatchNext(
+            (int) request()->attributes->get('tenant_id'),
+            (string) ($payload['simulate_result'] ?? 'accepted'),
+        );
+
+        $status = (int) ($result['http_status'] ?? 200);
+        unset($result['http_status']);
+
+        return response()->json(['data' => $result], $status);
+    })->middleware('perm:billing.outbox.dispatch');
+
+    Route::post('/billing/outbox/{event}/retry', function (int $event, OutboxDispatchService $service) {
+        $result = $service->retryFailed(
+            (int) request()->attributes->get('tenant_id'),
+            $event,
+        );
 
         return response()->json(['data' => $result]);
     })->middleware('perm:billing.outbox.dispatch');
+
+    Route::get('/billing/outbox/{event}/attempts', function (int $event) {
+        $tenantId = (int) request()->attributes->get('tenant_id');
+
+        $eventExists = DB::table('outbox_events')
+            ->where('id', $event)
+            ->where('tenant_id', $tenantId)
+            ->exists();
+
+        if (! $eventExists) {
+            abort(404, 'Outbox event not found.');
+        }
+
+        $attempts = DB::table('outbox_attempts')
+            ->where('outbox_event_id', $event)
+            ->orderBy('id')
+            ->get(['id', 'outbox_event_id', 'status', 'sunat_ticket', 'error_message', 'created_at']);
+
+        return response()->json(['data' => $attempts]);
+    })->middleware('perm:billing.outbox.read');
 });

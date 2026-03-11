@@ -17,7 +17,9 @@ class RbacCatalogSeeder extends Seeder
             ['code' => 'inventory.lot.create', 'name' => 'Crear lotes de inventario'],
             ['code' => 'inventory.lot.read', 'name' => 'Ver lotes de inventario'],
             ['code' => 'billing.voucher.issue', 'name' => 'Emitir comprobantes electronicos'],
+            ['code' => 'billing.voucher.read', 'name' => 'Consultar comprobantes electronicos'],
             ['code' => 'billing.outbox.dispatch', 'name' => 'Despachar eventos de facturacion'],
+            ['code' => 'billing.outbox.read', 'name' => 'Consultar eventos outbox de facturacion'],
             ['code' => 'stock.move.create', 'name' => 'Crear movimiento de stock'],
             ['code' => 'rbac.role.assign', 'name' => 'Asignar roles'],
             ['code' => 'rbac.permission.manage', 'name' => 'Gestionar permisos'],
@@ -47,8 +49,8 @@ class RbacCatalogSeeder extends Seeder
         $permIds = DB::table('permissions')->pluck('id', 'code');
 
         $matrix = [
-            'ADMIN' => ['pos.sale.execute', 'pos.sale.approve', 'inventory.product.create', 'inventory.product.read', 'inventory.lot.create', 'inventory.lot.read', 'billing.voucher.issue', 'billing.outbox.dispatch', 'stock.move.create', 'rbac.role.assign', 'rbac.permission.manage'],
-            'CAJERO' => ['pos.sale.execute', 'billing.voucher.issue'],
+            'ADMIN' => ['pos.sale.execute', 'pos.sale.approve', 'inventory.product.create', 'inventory.product.read', 'inventory.lot.create', 'inventory.lot.read', 'billing.voucher.issue', 'billing.voucher.read', 'billing.outbox.dispatch', 'billing.outbox.read', 'stock.move.create', 'rbac.role.assign', 'rbac.permission.manage'],
+            'CAJERO' => ['pos.sale.execute', 'billing.voucher.issue', 'billing.voucher.read'],
             'ALMACENERO' => ['inventory.product.create', 'inventory.product.read', 'inventory.lot.create', 'inventory.lot.read', 'stock.move.create'],
         ];
 

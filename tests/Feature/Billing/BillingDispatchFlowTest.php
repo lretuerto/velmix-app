@@ -13,6 +13,115 @@ class BillingDispatchFlowTest extends TestCase
 
     public function test_dispatches_pending_voucher_and_marks_it_accepted(): void
     {
+        [$user, $voucherId, $eventId] = $this->seedPendingVoucherScenario();
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/outbox/dispatch')
+            ->assertOk()
+            ->assertJsonPath('data.voucher_id', $voucherId)
+            ->assertJsonPath('data.status', 'processed');
+
+        $this->assertDatabaseHas('electronic_vouchers', [
+            'id' => $voucherId,
+            'status' => 'accepted',
+        ]);
+
+        $this->assertDatabaseHas('outbox_events', [
+            'tenant_id' => 10,
+            'aggregate_id' => $voucherId,
+            'status' => 'processed',
+        ]);
+
+        $this->assertDatabaseHas('outbox_attempts', [
+            'outbox_event_id' => $eventId,
+            'status' => 'accepted',
+        ]);
+    }
+
+    public function test_marks_voucher_rejected_when_dispatch_is_rejected(): void
+    {
+        [$user, $voucherId, $eventId] = $this->seedPendingVoucherScenario();
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/outbox/dispatch', [
+                'simulate_result' => 'rejected',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.voucher_id', $voucherId)
+            ->assertJsonPath('data.status', 'rejected');
+
+        $this->assertDatabaseHas('electronic_vouchers', [
+            'id' => $voucherId,
+            'status' => 'rejected',
+        ]);
+
+        $this->assertDatabaseHas('outbox_events', [
+            'id' => $eventId,
+            'status' => 'processed',
+        ]);
+
+        $this->assertDatabaseHas('outbox_attempts', [
+            'outbox_event_id' => $eventId,
+            'status' => 'rejected',
+        ]);
+    }
+
+    public function test_can_retry_failed_outbox_and_dispatch_successfully(): void
+    {
+        [$user, $voucherId, $eventId] = $this->seedPendingVoucherScenario();
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/outbox/dispatch', [
+                'simulate_result' => 'transient_fail',
+            ])
+            ->assertStatus(503);
+
+        $this->assertDatabaseHas('electronic_vouchers', [
+            'id' => $voucherId,
+            'status' => 'failed',
+        ]);
+
+        $this->assertDatabaseHas('outbox_events', [
+            'id' => $eventId,
+            'status' => 'failed',
+            'retry_count' => 1,
+        ]);
+
+        $this->assertDatabaseHas('outbox_attempts', [
+            'outbox_event_id' => $eventId,
+            'status' => 'failed',
+        ]);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson("/billing/outbox/{$eventId}/retry")
+            ->assertOk()
+            ->assertJsonPath('data.event_id', $eventId)
+            ->assertJsonPath('data.status', 'pending');
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/outbox/dispatch')
+            ->assertOk()
+            ->assertJsonPath('data.voucher_id', $voucherId)
+            ->assertJsonPath('data.status', 'processed');
+
+        $this->assertDatabaseHas('electronic_vouchers', [
+            'id' => $voucherId,
+            'status' => 'accepted',
+        ]);
+
+        $this->assertDatabaseHas('outbox_attempts', [
+            'outbox_event_id' => $eventId,
+            'status' => 'accepted',
+        ]);
+    }
+
+    private function seedPendingVoucherScenario(): array
+    {
         $this->seed([
             \Database\Seeders\TenantSeeder::class,
             \Database\Seeders\RbacCatalogSeeder::class,
@@ -55,37 +164,24 @@ class BillingDispatchFlowTest extends TestCase
             'number' => 1,
             'status' => 'pending',
             'sunat_ticket' => null,
+            'rejection_reason' => null,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        DB::table('outbox_events')->insert([
+        $eventId = DB::table('outbox_events')->insertGetId([
             'tenant_id' => 10,
             'aggregate_type' => 'electronic_voucher',
             'aggregate_id' => $voucherId,
             'event_type' => 'voucher.created',
             'payload' => json_encode(['voucher_id' => $voucherId], JSON_THROW_ON_ERROR),
             'status' => 'pending',
+            'retry_count' => 0,
+            'last_error' => null,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        $this->actingAs($user)
-            ->withHeader('X-Tenant-Id', '10')
-            ->postJson('/billing/outbox/dispatch')
-            ->assertOk()
-            ->assertJsonPath('data.voucher_id', $voucherId)
-            ->assertJsonPath('data.status', 'processed');
-
-        $this->assertDatabaseHas('electronic_vouchers', [
-            'id' => $voucherId,
-            'status' => 'accepted',
-        ]);
-
-        $this->assertDatabaseHas('outbox_events', [
-            'tenant_id' => 10,
-            'aggregate_id' => $voucherId,
-            'status' => 'processed',
-        ]);
+        return [$user, $voucherId, $eventId];
     }
 }
