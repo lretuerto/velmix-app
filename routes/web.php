@@ -14,6 +14,7 @@ use App\Services\Purchasing\PurchaseReplenishmentService;
 use App\Services\Purchasing\PurchaseReceiptService;
 use App\Services\Purchasing\SupplierService;
 use App\Services\Reports\DailyReportService;
+use App\Services\Reports\ReceivableRiskReportService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
 use App\Services\Reports\SalesProfitabilityReportService;
@@ -111,6 +112,9 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
             'name' => ['required', 'string'],
             'phone' => ['nullable', 'string'],
             'email' => ['nullable', 'email'],
+            'credit_limit' => ['nullable', 'numeric', 'min:0'],
+            'credit_days' => ['nullable', 'integer', 'min:0'],
+            'block_on_overdue' => ['nullable', 'boolean'],
         ]);
 
         $result = $service->create(
@@ -120,10 +124,35 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
             (string) $payload['name'],
             $payload['phone'] ?? null,
             $payload['email'] ?? null,
+            isset($payload['credit_limit']) ? (float) $payload['credit_limit'] : null,
+            isset($payload['credit_days']) ? (int) $payload['credit_days'] : null,
+            (bool) ($payload['block_on_overdue'] ?? true),
         );
 
         return response()->json(['data' => $result]);
     })->middleware('perm:sales.customer.create');
+
+    Route::patch('/sales/customers/{customer}', function (int $customer, CustomerService $service) {
+        $payload = request()->validate([
+            'document_type' => ['sometimes', 'string'],
+            'document_number' => ['sometimes', 'string'],
+            'name' => ['sometimes', 'string'],
+            'phone' => ['sometimes', 'nullable', 'string'],
+            'email' => ['sometimes', 'nullable', 'email'],
+            'credit_limit' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'credit_days' => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'block_on_overdue' => ['sometimes', 'boolean'],
+            'status' => ['sometimes', 'in:active,inactive'],
+        ]);
+
+        $result = $service->update(
+            (int) request()->attributes->get('tenant_id'),
+            $customer,
+            $payload,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:sales.customer.update');
 
     Route::get('/sales/customers/{customer}/statement', function (int $customer, CustomerService $service) {
         $result = $service->statement(
@@ -335,6 +364,12 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 
         return response()->json(['data' => $result]);
     })->middleware('perm:reports.inventory.read');
+
+    Route::get('/reports/receivable-risk', function (ReceivableRiskReportService $service) {
+        $result = $service->summary((int) request()->attributes->get('tenant_id'));
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.receivable-risk.read');
 
     Route::get('/reports/sales-profitability', function (SalesProfitabilityReportService $service) {
         $payload = request()->validate([

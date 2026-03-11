@@ -24,9 +24,13 @@ class CustomerFlowTest extends TestCase
                 'name' => 'Cliente Mostrador',
                 'phone' => '999111222',
                 'email' => 'cliente@example.com',
+                'credit_limit' => 150,
+                'credit_days' => 15,
             ])
             ->assertOk()
-            ->assertJsonPath('data.document_number', '12345678');
+            ->assertJsonPath('data.document_number', '12345678')
+            ->assertJsonPath('data.credit_limit', 150)
+            ->assertJsonPath('data.credit_days', 15);
 
         DB::table('customers')->insert([
             'tenant_id' => 20,
@@ -45,6 +49,8 @@ class CustomerFlowTest extends TestCase
             ->assertJsonFragment([
                 'document_number' => '12345678',
                 'name' => 'Cliente Mostrador',
+                'credit_limit' => 150,
+                'outstanding_total' => 0,
             ])
             ->assertJsonMissing([
                 'document_number' => '87654321',
@@ -73,6 +79,42 @@ class CustomerFlowTest extends TestCase
                 'name' => 'Cliente Duplicado',
             ])
             ->assertStatus(422);
+    }
+
+    public function test_cashier_can_update_customer_credit_policy(): void
+    {
+        $cashier = $this->seedUserWithRole(10, 'CAJERO');
+        $customerId = DB::table('customers')->insertGetId([
+            'tenant_id' => 10,
+            'document_type' => 'dni',
+            'document_number' => '23456789',
+            'name' => 'Cliente Credito',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->patchJson("/sales/customers/{$customerId}", [
+                'credit_limit' => 220,
+                'credit_days' => 21,
+                'block_on_overdue' => false,
+                'status' => 'inactive',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.credit_limit', 220)
+            ->assertJsonPath('data.credit_days', 21)
+            ->assertJsonPath('data.block_on_overdue', false)
+            ->assertJsonPath('data.status', 'inactive');
+
+        $this->assertDatabaseHas('customers', [
+            'id' => $customerId,
+            'credit_limit' => 220.00,
+            'credit_days' => 21,
+            'block_on_overdue' => 0,
+            'status' => 'inactive',
+        ]);
     }
 
     private function seedUserWithRole(int $tenantId, string $roleCode): User

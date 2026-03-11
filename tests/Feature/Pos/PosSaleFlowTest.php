@@ -382,6 +382,168 @@ class PosSaleFlowTest extends TestCase
         ]);
     }
 
+    public function test_credit_sale_uses_customer_credit_days_when_due_at_is_missing(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+            \Database\Seeders\InventoryCatalogSeeder::class,
+        ]);
+
+        $cashier = $this->seedCashierUser();
+        $lotId = DB::table('lots')->where('tenant_id', 10)->value('id');
+        $customerId = DB::table('customers')->insertGetId([
+            'tenant_id' => 10,
+            'document_type' => 'dni',
+            'document_number' => '77889900',
+            'name' => 'Cliente Plazo',
+            'credit_days' => 12,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/pos/sales', [
+                'lot_id' => $lotId,
+                'quantity' => 2,
+                'unit_price' => 3.50,
+                'payment_method' => 'credit',
+                'customer_id' => $customerId,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.receivable.status', 'pending');
+
+        $this->assertDatabaseHas('sale_receivables', [
+            'tenant_id' => 10,
+            'customer_id' => $customerId,
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_rejects_credit_sale_when_customer_credit_limit_is_exceeded(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+            \Database\Seeders\InventoryCatalogSeeder::class,
+        ]);
+
+        $cashier = $this->seedCashierUser();
+        $lotId = DB::table('lots')->where('tenant_id', 10)->value('id');
+        $customerId = DB::table('customers')->insertGetId([
+            'tenant_id' => 10,
+            'document_type' => 'dni',
+            'document_number' => '55667788',
+            'name' => 'Cliente Tope',
+            'credit_limit' => 10,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $saleId = DB::table('sales')->insertGetId([
+            'tenant_id' => 10,
+            'user_id' => $cashier->id,
+            'customer_id' => $customerId,
+            'reference' => 'SALE-LIMIT-BASE',
+            'status' => 'completed',
+            'payment_method' => 'credit',
+            'total_amount' => 8,
+            'gross_cost' => 3,
+            'gross_margin' => 5,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('sale_receivables')->insert([
+            'tenant_id' => 10,
+            'customer_id' => $customerId,
+            'sale_id' => $saleId,
+            'total_amount' => 8,
+            'paid_amount' => 0,
+            'outstanding_amount' => 8,
+            'status' => 'pending',
+            'due_at' => now()->addDays(5),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/pos/sales', [
+                'lot_id' => $lotId,
+                'quantity' => 1,
+                'unit_price' => 3.50,
+                'payment_method' => 'credit',
+                'customer_id' => $customerId,
+                'due_at' => now()->addDays(10)->toDateString(),
+            ])
+            ->assertStatus(422);
+    }
+
+    public function test_rejects_credit_sale_when_customer_has_overdue_receivable(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+            \Database\Seeders\InventoryCatalogSeeder::class,
+        ]);
+
+        $cashier = $this->seedCashierUser();
+        $lotId = DB::table('lots')->where('tenant_id', 10)->value('id');
+        $customerId = DB::table('customers')->insertGetId([
+            'tenant_id' => 10,
+            'document_type' => 'dni',
+            'document_number' => '66778899',
+            'name' => 'Cliente Vencido',
+            'block_on_overdue' => true,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $saleId = DB::table('sales')->insertGetId([
+            'tenant_id' => 10,
+            'user_id' => $cashier->id,
+            'customer_id' => $customerId,
+            'reference' => 'SALE-OVERDUE-BASE',
+            'status' => 'completed',
+            'payment_method' => 'credit',
+            'total_amount' => 5,
+            'gross_cost' => 2,
+            'gross_margin' => 3,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('sale_receivables')->insert([
+            'tenant_id' => 10,
+            'customer_id' => $customerId,
+            'sale_id' => $saleId,
+            'total_amount' => 5,
+            'paid_amount' => 0,
+            'outstanding_amount' => 5,
+            'status' => 'pending',
+            'due_at' => now()->subDays(2),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/pos/sales', [
+                'lot_id' => $lotId,
+                'quantity' => 1,
+                'unit_price' => 3.50,
+                'payment_method' => 'credit',
+                'customer_id' => $customerId,
+                'due_at' => now()->addDays(10)->toDateString(),
+            ])
+            ->assertStatus(422);
+    }
+
     public function test_rejects_controlled_product_sale_without_prescription_or_approval(): void
     {
         $controlledProductId = $this->seedControlledProduct();

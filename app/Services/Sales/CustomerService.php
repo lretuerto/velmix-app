@@ -13,6 +13,8 @@ class CustomerService
             throw new HttpException(403, 'Tenant context is required.');
         }
 
+        $receivableSummary = $this->customerReceivableSummary($tenantId);
+
         return DB::table('customers')
             ->where('tenant_id', $tenantId)
             ->orderBy('name')
@@ -23,6 +25,9 @@ class CustomerService
                 'name',
                 'phone',
                 'email',
+                'credit_limit',
+                'credit_days',
+                'block_on_overdue',
                 'status',
             ])
             ->map(fn (object $customer) => [
@@ -32,6 +37,17 @@ class CustomerService
                 'name' => $customer->name,
                 'phone' => $customer->phone,
                 'email' => $customer->email,
+                'credit_limit' => $customer->credit_limit !== null ? (float) $customer->credit_limit : null,
+                'credit_days' => $customer->credit_days !== null ? (int) $customer->credit_days : null,
+                'block_on_overdue' => (bool) $customer->block_on_overdue,
+                'outstanding_total' => $receivableSummary[$customer->id]['outstanding_total'] ?? 0.0,
+                'overdue_total' => $receivableSummary[$customer->id]['overdue_total'] ?? 0.0,
+                'available_credit' => $customer->credit_limit !== null
+                    ? round((float) $customer->credit_limit - ($receivableSummary[$customer->id]['outstanding_total'] ?? 0), 2)
+                    : null,
+                'credit_utilization_pct' => $customer->credit_limit !== null && (float) $customer->credit_limit > 0
+                    ? round((($receivableSummary[$customer->id]['outstanding_total'] ?? 0) / (float) $customer->credit_limit) * 100, 2)
+                    : null,
                 'status' => $customer->status,
             ])
             ->all();
@@ -43,7 +59,10 @@ class CustomerService
         string $documentNumber,
         string $name,
         ?string $phone = null,
-        ?string $email = null
+        ?string $email = null,
+        ?float $creditLimit = null,
+        ?int $creditDays = null,
+        bool $blockOnOverdue = true
     ): array {
         if ($tenantId <= 0) {
             throw new HttpException(403, 'Tenant context is required.');
@@ -51,6 +70,14 @@ class CustomerService
 
         if (trim($documentType) === '' || trim($documentNumber) === '' || trim($name) === '') {
             throw new HttpException(422, 'Customer data is required.');
+        }
+
+        if ($creditLimit !== null && $creditLimit < 0) {
+            throw new HttpException(422, 'Customer credit_limit must be valid.');
+        }
+
+        if ($creditDays !== null && $creditDays < 0) {
+            throw new HttpException(422, 'Customer credit_days must be valid.');
         }
 
         $exists = DB::table('customers')
@@ -70,6 +97,9 @@ class CustomerService
             'name' => $name,
             'phone' => $phone,
             'email' => $email,
+            'credit_limit' => $creditLimit,
+            'credit_days' => $creditDays,
+            'block_on_overdue' => $blockOnOverdue,
             'status' => 'active',
             'created_at' => now(),
             'updated_at' => now(),
@@ -82,7 +112,135 @@ class CustomerService
             'name' => $name,
             'phone' => $phone,
             'email' => $email,
+            'credit_limit' => $creditLimit,
+            'credit_days' => $creditDays,
+            'block_on_overdue' => $blockOnOverdue,
             'status' => 'active',
+        ];
+    }
+
+    public function update(int $tenantId, int $customerId, array $attributes): array
+    {
+        if ($tenantId <= 0) {
+            throw new HttpException(403, 'Tenant context is required.');
+        }
+
+        $customer = DB::table('customers')
+            ->where('tenant_id', $tenantId)
+            ->where('id', $customerId)
+            ->first([
+                'id',
+                'document_type',
+                'document_number',
+                'name',
+                'phone',
+                'email',
+                'credit_limit',
+                'credit_days',
+                'block_on_overdue',
+                'status',
+            ]);
+
+        if ($customer === null) {
+            throw new HttpException(404, 'Customer not found.');
+        }
+
+        if ($attributes === []) {
+            throw new HttpException(422, 'At least one customer attribute is required.');
+        }
+
+        $payload = [];
+
+        if (array_key_exists('document_type', $attributes)) {
+            $payload['document_type'] = $attributes['document_type'];
+        }
+
+        if (array_key_exists('document_number', $attributes)) {
+            $payload['document_number'] = $attributes['document_number'];
+        }
+
+        if (
+            array_key_exists('document_type', $payload)
+            || array_key_exists('document_number', $payload)
+        ) {
+            $documentType = $payload['document_type'] ?? $customer->document_type;
+            $documentNumber = $payload['document_number'] ?? $customer->document_number;
+
+            $exists = DB::table('customers')
+                ->where('tenant_id', $tenantId)
+                ->where('document_type', $documentType)
+                ->where('document_number', $documentNumber)
+                ->where('id', '!=', $customerId)
+                ->exists();
+
+            if ($exists) {
+                throw new HttpException(422, 'Customer document already exists in tenant.');
+            }
+        }
+
+        foreach (['name', 'phone', 'email', 'status'] as $field) {
+            if (array_key_exists($field, $attributes)) {
+                $payload[$field] = $attributes[$field];
+            }
+        }
+
+        if (array_key_exists('credit_limit', $attributes)) {
+            $creditLimit = $attributes['credit_limit'];
+
+            if ($creditLimit !== null && $creditLimit < 0) {
+                throw new HttpException(422, 'Customer credit_limit must be valid.');
+            }
+
+            $payload['credit_limit'] = $creditLimit;
+        }
+
+        if (array_key_exists('credit_days', $attributes)) {
+            $creditDays = $attributes['credit_days'];
+
+            if ($creditDays !== null && $creditDays < 0) {
+                throw new HttpException(422, 'Customer credit_days must be valid.');
+            }
+
+            $payload['credit_days'] = $creditDays;
+        }
+
+        if (array_key_exists('block_on_overdue', $attributes)) {
+            $payload['block_on_overdue'] = (bool) $attributes['block_on_overdue'];
+        }
+
+        $payload['updated_at'] = now();
+
+        DB::table('customers')
+            ->where('id', $customerId)
+            ->update($payload);
+
+        $updated = DB::table('customers')
+            ->where('tenant_id', $tenantId)
+            ->where('id', $customerId)
+            ->first([
+                'id',
+                'document_type',
+                'document_number',
+                'name',
+                'phone',
+                'email',
+                'credit_limit',
+                'credit_days',
+                'block_on_overdue',
+                'status',
+            ]);
+
+        return [
+            'id' => $updated->id,
+            'document_type' => $updated->document_type,
+            'document_number' => $updated->document_number,
+            'name' => $updated->name,
+            'phone' => $updated->phone,
+            'email' => $updated->email,
+            'credit_limit' => $updated->credit_limit !== null ? (float) $updated->credit_limit : null,
+            'credit_days' => $updated->credit_days !== null ? (int) $updated->credit_days : null,
+            'block_on_overdue' => (bool) $updated->block_on_overdue,
+            'status' => $updated->status,
         ];
     }
 
@@ -95,7 +253,18 @@ class CustomerService
         $customer = DB::table('customers')
             ->where('tenant_id', $tenantId)
             ->where('id', $customerId)
-            ->first(['id', 'document_type', 'document_number', 'name', 'phone', 'email', 'status']);
+            ->first([
+                'id',
+                'document_type',
+                'document_number',
+                'name',
+                'phone',
+                'email',
+                'credit_limit',
+                'credit_days',
+                'block_on_overdue',
+                'status',
+            ]);
 
         if ($customer === null) {
             throw new HttpException(404, 'Customer not found.');
@@ -173,6 +342,9 @@ class CustomerService
                 'name' => $customer->name,
                 'phone' => $customer->phone,
                 'email' => $customer->email,
+                'credit_limit' => $customer->credit_limit !== null ? (float) $customer->credit_limit : null,
+                'credit_days' => $customer->credit_days !== null ? (int) $customer->credit_days : null,
+                'block_on_overdue' => (bool) $customer->block_on_overdue,
                 'status' => $customer->status,
             ],
             'summary' => [
@@ -180,10 +352,42 @@ class CustomerService
                 'receivables_total' => round(collect($receivables)->sum('total_amount'), 2),
                 'payments_total' => round(collect($payments)->sum('amount'), 2),
                 'outstanding_total' => round(collect($receivables)->sum('outstanding_amount'), 2),
+                'available_credit' => $customer->credit_limit !== null
+                    ? round((float) $customer->credit_limit - collect($receivables)->sum('outstanding_amount'), 2)
+                    : null,
+                'credit_utilization_pct' => $customer->credit_limit !== null && (float) $customer->credit_limit > 0
+                    ? round((collect($receivables)->sum('outstanding_amount') / (float) $customer->credit_limit) * 100, 2)
+                    : null,
+                'overdue_receivable_count' => collect($receivables)->filter(function (array $receivable) {
+                    return (float) $receivable['outstanding_amount'] > 0
+                        && $receivable['due_at'] !== null
+                        && $receivable['due_at'] < now();
+                })->count(),
             ],
             'sales' => $sales,
             'receivables' => $receivables,
             'payments' => $payments,
         ];
+    }
+
+    private function customerReceivableSummary(int $tenantId): array
+    {
+        return DB::table('sale_receivables')
+            ->where('tenant_id', $tenantId)
+            ->where('outstanding_amount', '>', 0)
+            ->selectRaw("
+                customer_id,
+                COALESCE(SUM(outstanding_amount), 0) as outstanding_total,
+                COALESCE(SUM(CASE WHEN due_at IS NOT NULL AND due_at < ? THEN outstanding_amount ELSE 0 END), 0) as overdue_total
+            ", [now()])
+            ->groupBy('customer_id')
+            ->get()
+            ->mapWithKeys(fn (object $row) => [
+                $row->customer_id => [
+                    'outstanding_total' => round((float) $row->outstanding_total, 2),
+                    'overdue_total' => round((float) $row->overdue_total, 2),
+                ],
+            ])
+            ->all();
     }
 }

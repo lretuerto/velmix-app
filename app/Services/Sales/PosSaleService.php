@@ -35,10 +35,6 @@ class PosSaleService
                 throw new HttpException(422, 'Credit sale requires customer_id.');
             }
 
-            if ($paymentMethod === 'credit' && $dueAt === null) {
-                throw new HttpException(422, 'Credit sale requires due_at.');
-            }
-
             $reference = 'SALE-'.str_pad((string) random_int(1, 999999), 6, '0', STR_PAD_LEFT);
             $resolvedItems = collect($items)
                 ->map(fn (array $item) => $this->resolveItem($tenantId, $item));
@@ -46,6 +42,42 @@ class PosSaleService
             $totalAmount = round($resolvedItems->sum('line_total'), 2);
             $grossCost = round($resolvedItems->sum('cost_amount'), 2);
             $grossMargin = round($totalAmount - $grossCost, 2);
+
+            if ($paymentMethod === 'credit') {
+                if ($customer->status !== 'active') {
+                    throw new HttpException(422, 'Customer is not active for credit sales.');
+                }
+
+                $creditSummary = DB::table('sale_receivables')
+                    ->where('tenant_id', $tenantId)
+                    ->where('customer_id', $customer->id)
+                    ->where('outstanding_amount', '>', 0)
+                    ->lockForUpdate()
+                    ->selectRaw("
+                        COALESCE(SUM(outstanding_amount), 0) as outstanding_total,
+                        SUM(CASE WHEN due_at IS NOT NULL AND due_at < ? THEN 1 ELSE 0 END) as overdue_count
+                    ", [now()])
+                    ->first();
+
+                $outstandingTotal = round((float) ($creditSummary->outstanding_total ?? 0), 2);
+                $overdueCount = (int) ($creditSummary->overdue_count ?? 0);
+
+                if ((bool) $customer->block_on_overdue && $overdueCount > 0) {
+                    throw new HttpException(422, 'Customer has overdue receivables.');
+                }
+
+                if ($customer->credit_limit !== null && ($outstandingTotal + $totalAmount) > (float) $customer->credit_limit) {
+                    throw new HttpException(422, 'Customer credit limit exceeded.');
+                }
+
+                if ($dueAt === null) {
+                    if ($customer->credit_days === null) {
+                        throw new HttpException(422, 'Credit sale requires due_at or customer credit_days.');
+                    }
+
+                    $dueAt = now()->addDays((int) $customer->credit_days)->toDateString();
+                }
+            }
 
             $saleId = DB::table('sales')->insertGetId([
                 'tenant_id' => $tenantId,
@@ -182,7 +214,16 @@ class PosSaleService
         $customer = DB::table('customers')
             ->where('tenant_id', $tenantId)
             ->where('id', $customerId)
-            ->first(['id', 'document_type', 'document_number', 'name']);
+            ->first([
+                'id',
+                'document_type',
+                'document_number',
+                'name',
+                'status',
+                'credit_limit',
+                'credit_days',
+                'block_on_overdue',
+            ]);
 
         if ($customer === null) {
             throw new HttpException(404, 'Customer not found.');

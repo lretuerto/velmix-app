@@ -23,6 +23,7 @@ class RbacCatalogSeederTest extends TestCase
         $this->assertDatabaseHas('permissions', ['code' => 'pos.sale.approve']);
         $this->assertDatabaseHas('permissions', ['code' => 'sales.customer.create']);
         $this->assertDatabaseHas('permissions', ['code' => 'sales.customer.read']);
+        $this->assertDatabaseHas('permissions', ['code' => 'sales.customer.update']);
         $this->assertDatabaseHas('permissions', ['code' => 'sales.receivable.read']);
         $this->assertDatabaseHas('permissions', ['code' => 'sales.receivable.pay']);
         $this->assertDatabaseHas('permissions', ['code' => 'inventory.product.create']);
@@ -40,6 +41,7 @@ class RbacCatalogSeederTest extends TestCase
         $this->assertDatabaseHas('permissions', ['code' => 'cash.movement.read']);
         $this->assertDatabaseHas('permissions', ['code' => 'reports.daily.read']);
         $this->assertDatabaseHas('permissions', ['code' => 'reports.inventory.read']);
+        $this->assertDatabaseHas('permissions', ['code' => 'reports.receivable-risk.read']);
         $this->assertDatabaseHas('permissions', ['code' => 'reports.sales-profitability.read']);
         $this->assertDatabaseHas('permissions', ['code' => 'purchase.supplier.create']);
         $this->assertDatabaseHas('permissions', ['code' => 'purchase.supplier.read']);
