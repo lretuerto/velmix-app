@@ -11,6 +11,7 @@ class RbacCatalogSeeder extends Seeder
     {
         $permissions = [
             ['code' => 'pos.sale.execute', 'name' => 'Ejecutar venta POS'],
+            ['code' => 'pos.sale.read', 'name' => 'Consultar ventas POS'],
             ['code' => 'pos.sale.approve', 'name' => 'Aprobar venta POS'],
             ['code' => 'inventory.product.create', 'name' => 'Crear productos de inventario'],
             ['code' => 'inventory.product.read', 'name' => 'Ver productos de inventario'],
@@ -52,8 +53,8 @@ class RbacCatalogSeeder extends Seeder
         $permIds = DB::table('permissions')->pluck('id', 'code');
 
         $matrix = [
-            'ADMIN' => ['pos.sale.execute', 'pos.sale.approve', 'inventory.product.create', 'inventory.product.read', 'inventory.lot.create', 'inventory.lot.read', 'billing.voucher.issue', 'billing.voucher.read', 'billing.outbox.dispatch', 'billing.outbox.read', 'cash.session.open', 'cash.session.close', 'cash.session.read', 'stock.move.create', 'rbac.role.assign', 'rbac.permission.manage'],
-            'CAJERO' => ['pos.sale.execute', 'billing.voucher.issue', 'billing.voucher.read', 'cash.session.open', 'cash.session.close', 'cash.session.read'],
+            'ADMIN' => ['pos.sale.execute', 'pos.sale.read', 'pos.sale.approve', 'inventory.product.create', 'inventory.product.read', 'inventory.lot.create', 'inventory.lot.read', 'billing.voucher.issue', 'billing.voucher.read', 'billing.outbox.dispatch', 'billing.outbox.read', 'cash.session.open', 'cash.session.close', 'cash.session.read', 'stock.move.create', 'rbac.role.assign', 'rbac.permission.manage'],
+            'CAJERO' => ['pos.sale.execute', 'pos.sale.read', 'billing.voucher.issue', 'billing.voucher.read', 'cash.session.open', 'cash.session.close', 'cash.session.read'],
             'ALMACENERO' => ['inventory.product.create', 'inventory.product.read', 'inventory.lot.create', 'inventory.lot.read', 'stock.move.create'],
         ];
 

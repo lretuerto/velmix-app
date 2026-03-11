@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
 use App\Services\Sales\PosSaleService;
 use App\Services\Sales\SaleCancellationService;
+use App\Services\Sales\SaleReadService;
 use App\Services\Sales\SaleApprovalService;
 
 Route::get('/', function () {
@@ -73,6 +74,21 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 
         return response()->json(['data' => $result]);
     })->middleware('perm:pos.sale.execute');
+
+    Route::get('/pos/sales', function (SaleReadService $service) {
+        $result = $service->list((int) request()->attributes->get('tenant_id'));
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:pos.sale.read');
+
+    Route::get('/pos/sales/{sale}', function (int $sale, SaleReadService $service) {
+        $result = $service->detail(
+            (int) request()->attributes->get('tenant_id'),
+            $sale,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:pos.sale.read');
 
     Route::get('/pos/approve', fn () => response()->json(['ok' => true, 'flow' => 'approve']))
         ->middleware('perm:pos.sale.approve');
