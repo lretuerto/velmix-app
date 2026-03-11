@@ -36,6 +36,8 @@ class InventoryCatalogSeeder extends Seeder
                     'name' => $product['name'],
                     'status' => $product['status'],
                     'is_controlled' => $product['is_controlled'],
+                    'last_cost' => 0,
+                    'average_cost' => 0,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]

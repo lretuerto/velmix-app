@@ -452,7 +452,7 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
         $products = DB::table('products')
             ->where('tenant_id', $tenantId)
             ->orderBy('sku')
-            ->get(['id', 'tenant_id', 'sku', 'name', 'status', 'is_controlled']);
+            ->get(['id', 'tenant_id', 'sku', 'name', 'status', 'is_controlled', 'last_cost', 'average_cost']);
 
         return response()->json(['data' => $products]);
     })->middleware('perm:inventory.product.read');

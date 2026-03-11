@@ -65,6 +65,14 @@ class PurchaseReceiptFlowTest extends TestCase
             'outstanding_amount' => 21.00,
             'status' => 'pending',
         ]);
+
+        $productId = DB::table('lots')->where('id', $lotId)->value('product_id');
+
+        $this->assertDatabaseHas('products', [
+            'id' => $productId,
+            'last_cost' => 1.75,
+            'average_cost' => 1.75,
+        ]);
     }
 
     public function test_can_receive_purchase_creating_new_lot_inline(): void
@@ -96,6 +104,73 @@ class PurchaseReceiptFlowTest extends TestCase
             'product_id' => $productId,
             'code' => 'L-PARA-NEW-001',
             'stock_quantity' => 30,
+        ]);
+    }
+
+    public function test_can_receive_purchase_order_across_multiple_lots_and_update_cost_metrics(): void
+    {
+        $this->seedBaseCatalog();
+        $admin = $this->seedUserWithRole(10, 'ADMIN');
+        $warehouseUser = $this->seedUserWithRole(10, 'ALMACENERO');
+        $supplierId = $this->seedSupplier(10, '20188888881', 'Proveedor Multi Lote');
+        $productId = DB::table('products')->where('tenant_id', 10)->where('sku', 'PARA-500')->value('id');
+        $existingLotId = DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
+
+        $orderResponse = $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/purchases/orders', [
+                'supplier_id' => $supplierId,
+                'items' => [[
+                    'product_id' => $productId,
+                    'ordered_quantity' => 10,
+                    'unit_cost' => 2.00,
+                ]],
+            ])
+            ->assertOk();
+
+        $orderId = $orderResponse->json('data.id');
+
+        $this->actingAs($warehouseUser)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/purchases/receipts', [
+                'supplier_id' => $supplierId,
+                'purchase_order_id' => $orderId,
+                'items' => [
+                    [
+                        'lot_id' => $existingLotId,
+                        'quantity' => 4,
+                        'unit_cost' => 2.00,
+                    ],
+                    [
+                        'product_id' => $productId,
+                        'lot_code' => 'L-PARA-SPLIT-001',
+                        'expires_at' => '2029-01-31',
+                        'quantity' => 6,
+                        'unit_cost' => 3.00,
+                    ],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.items.0.resulting_stock', 64)
+            ->assertJsonPath('data.items.1.created_new_lot', true)
+            ->assertJsonPath('data.items.1.lot_code', 'L-PARA-SPLIT-001')
+            ->assertJsonPath('data.items.1.resulting_stock', 6);
+
+        $this->assertDatabaseHas('purchase_order_items', [
+            'purchase_order_id' => $orderId,
+            'product_id' => $productId,
+            'received_quantity' => 10,
+        ]);
+
+        $this->assertDatabaseHas('purchase_orders', [
+            'id' => $orderId,
+            'status' => 'received',
+        ]);
+
+        $this->assertDatabaseHas('products', [
+            'id' => $productId,
+            'last_cost' => 3.00,
+            'average_cost' => 2.60,
         ]);
     }
 

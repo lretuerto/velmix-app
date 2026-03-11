@@ -28,6 +28,8 @@ class InventorySetupService
             'name' => $name,
             'status' => 'active',
             'is_controlled' => $isControlled,
+            'last_cost' => 0,
+            'average_cost' => 0,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -39,6 +41,8 @@ class InventorySetupService
             'name' => $name,
             'status' => 'active',
             'is_controlled' => $isControlled,
+            'last_cost' => 0,
+            'average_cost' => 0,
         ];
     }
 

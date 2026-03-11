@@ -46,6 +46,8 @@ class InventoryCatalogTest extends TestCase
             ->assertJsonFragment([
                 'tenant_id' => 10,
                 'sku' => 'PARA-500',
+                'last_cost' => 0,
+                'average_cost' => 0,
             ])
             ->assertJsonMissing([
                 'tenant_id' => 20,

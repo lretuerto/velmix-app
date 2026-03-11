@@ -65,6 +65,7 @@ class PurchaseReceiptService
             $reference = 'PUR-'.str_pad((string) $receiptId, 6, '0', STR_PAD_LEFT);
             $totalAmount = 0.0;
             $lineItems = [];
+            $receivedProductIds = [];
 
             foreach ($items as $item) {
                 $lot = $this->resolveLot($tenantId, $item);
@@ -129,6 +130,8 @@ class PurchaseReceiptService
                     'updated_at' => now(),
                 ]);
 
+                $receivedProductIds[$lot->product_id] = true;
+
                 $lineItems[] = [
                     'lot_id' => $lot->id,
                     'lot_code' => $lot->code,
@@ -146,8 +149,34 @@ class PurchaseReceiptService
                 ->update([
                     'reference' => $reference,
                     'total_amount' => round($totalAmount, 2),
-                    'updated_at' => now(),
-                ]);
+                'updated_at' => now(),
+            ]);
+
+            foreach (array_keys($receivedProductIds) as $productId) {
+                $costs = DB::table('purchase_receipt_items')
+                    ->where('product_id', $productId)
+                    ->selectRaw('SUM(quantity) as total_quantity, SUM(line_total) as total_cost')
+                    ->first();
+
+                $lastCost = (float) DB::table('purchase_receipt_items')
+                    ->where('product_id', $productId)
+                    ->orderByDesc('id')
+                    ->value('unit_cost');
+
+                $totalQuantity = (int) ($costs->total_quantity ?? 0);
+                $averageCost = $totalQuantity > 0
+                    ? round(((float) ($costs->total_cost ?? 0)) / $totalQuantity, 2)
+                    : 0.0;
+
+                DB::table('products')
+                    ->where('tenant_id', $tenantId)
+                    ->where('id', $productId)
+                    ->update([
+                        'last_cost' => round($lastCost, 2),
+                        'average_cost' => $averageCost,
+                        'updated_at' => now(),
+                    ]);
+            }
 
             DB::table('purchase_payables')->insert([
                 'tenant_id' => $tenantId,
