@@ -169,6 +169,27 @@ class PurchaseReceiptService
                 'updated_at' => now(),
             ]);
 
+            $payableId = (int) DB::table('purchase_payables')
+                ->where('purchase_receipt_id', $receiptId)
+                ->value('id');
+            $creditApplication = null;
+
+            $hasAvailableCredits = DB::table('supplier_credits')
+                ->where('tenant_id', $tenantId)
+                ->where('supplier_id', $supplierId)
+                ->where('remaining_amount', '>', 0)
+                ->exists();
+
+            if ($hasAvailableCredits) {
+                $creditApplication = app(SupplierCreditService::class)->applyAvailableCredits(
+                    $tenantId,
+                    $userId,
+                    $payableId,
+                    null,
+                    'auto'
+                );
+            }
+
             if ($purchaseOrder !== null) {
                 $totals = DB::table('purchase_order_items')
                     ->where('purchase_order_id', $purchaseOrderId)
@@ -199,6 +220,8 @@ class PurchaseReceiptService
                 'supplier_name' => $supplier->name,
                 'status' => 'received',
                 'total_amount' => round($totalAmount, 2),
+                'purchase_payable_id' => $payableId,
+                'supplier_credit_applied_amount' => (float) ($creditApplication['applied_amount'] ?? 0),
                 'items' => $lineItems,
             ];
         });

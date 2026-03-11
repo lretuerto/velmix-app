@@ -158,6 +158,33 @@ class SupplierService
             ])
             ->all();
 
+        $creditApplications = DB::table('supplier_credit_applications')
+            ->join('purchase_payables', 'purchase_payables.id', '=', 'supplier_credit_applications.purchase_payable_id')
+            ->join('supplier_credits', 'supplier_credits.id', '=', 'supplier_credit_applications.supplier_credit_id')
+            ->join('purchase_receipts', 'purchase_receipts.id', '=', 'purchase_payables.purchase_receipt_id')
+            ->where('supplier_credit_applications.tenant_id', $tenantId)
+            ->where('purchase_payables.supplier_id', $supplierId)
+            ->orderByDesc('supplier_credit_applications.id')
+            ->get([
+                'supplier_credit_applications.id',
+                'supplier_credit_applications.purchase_payable_id',
+                'supplier_credit_applications.amount',
+                'supplier_credit_applications.application_type',
+                'supplier_credit_applications.applied_at',
+                'supplier_credits.reference as supplier_credit_reference',
+                'purchase_receipts.reference as receipt_reference',
+            ])
+            ->map(fn (object $application) => [
+                'id' => $application->id,
+                'purchase_payable_id' => $application->purchase_payable_id,
+                'amount' => (float) $application->amount,
+                'application_type' => $application->application_type,
+                'applied_at' => $application->applied_at,
+                'supplier_credit_reference' => $application->supplier_credit_reference,
+                'receipt_reference' => $application->receipt_reference,
+            ])
+            ->all();
+
         return [
             'supplier' => [
                 'id' => $supplier->id,
@@ -171,6 +198,7 @@ class SupplierService
                 'payments_total' => round(array_sum(array_column($payments, 'amount')), 2),
                 'returns_total' => round(array_sum(array_column($returns, 'total_amount')), 2),
                 'supplier_credits_total' => round(array_sum(array_column($supplierCredits, 'remaining_amount')), 2),
+                'supplier_credits_applied_total' => round(array_sum(array_column($creditApplications, 'amount')), 2),
                 'outstanding_total' => round(array_sum(array_column($payables, 'outstanding_amount')), 2),
             ],
             'receipts' => $receipts,
@@ -178,6 +206,7 @@ class SupplierService
             'payments' => $payments,
             'returns' => $returns,
             'supplier_credits' => $supplierCredits,
+            'supplier_credit_applications' => $creditApplications,
         ];
     }
 }

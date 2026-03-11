@@ -108,6 +108,18 @@ class PurchasePayableReadFlowTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        DB::table('supplier_credit_applications')->insert([
+            'tenant_id' => 10,
+            'supplier_credit_id' => DB::table('supplier_credits')->where('reference', 'PRT-STMT-01-CREDIT')->value('id'),
+            'purchase_payable_id' => $payableId,
+            'user_id' => $warehouseUser->id,
+            'amount' => 1.50,
+            'application_type' => 'manual',
+            'applied_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         $foreignUser = $this->seedUserWithRole(20, 'ALMACENERO');
 
         $this->actingAs($warehouseUser)
@@ -120,11 +132,20 @@ class PurchasePayableReadFlowTest extends TestCase
             ->assertJsonPath('data.summary.payments_total', 10)
             ->assertJsonPath('data.summary.returns_total', 5)
             ->assertJsonPath('data.summary.supplier_credits_total', 2)
+            ->assertJsonPath('data.summary.supplier_credits_applied_total', 1.5)
             ->assertJsonPath('data.summary.outstanding_total', 10)
             ->assertJsonPath('data.receipts.0.reference', 'PUR-STMT-10')
             ->assertJsonPath('data.payments.0.reference', 'PAY-STMT-01')
             ->assertJsonPath('data.returns.0.reference', 'PRT-STMT-01')
-            ->assertJsonPath('data.supplier_credits.0.reference', 'PRT-STMT-01-CREDIT');
+            ->assertJsonPath('data.supplier_credits.0.reference', 'PRT-STMT-01-CREDIT')
+            ->assertJsonPath('data.supplier_credit_applications.0.supplier_credit_reference', 'PRT-STMT-01-CREDIT');
+
+        $this->actingAs($warehouseUser)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/purchases/payables/{$payableId}")
+            ->assertOk()
+            ->assertJsonPath('data.supplier_credit_applied_amount', 1.5)
+            ->assertJsonPath('data.supplier_credit_applications.0.supplier_credit_reference', 'PRT-STMT-01-CREDIT');
 
         $this->actingAs($foreignUser)
             ->withHeader('X-Tenant-Id', '20')

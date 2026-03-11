@@ -590,6 +590,21 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
         return response()->json(['data' => $result]);
     })->middleware('perm:purchase.payable.pay');
 
+    Route::post('/purchases/payables/{payable}/apply-credits', function (int $payable, PurchasePayableService $service) {
+        $payload = request()->validate([
+            'amount' => ['nullable', 'numeric', 'min:0.01'],
+        ]);
+
+        $result = $service->applyCredits(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            $payable,
+            isset($payload['amount']) ? (float) $payload['amount'] : null,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:purchase.payable.pay');
+
     Route::post('/purchases/receipts', function (PurchaseReceiptService $service) {
         $payload = request()->validate([
             'supplier_id' => ['required', 'integer'],

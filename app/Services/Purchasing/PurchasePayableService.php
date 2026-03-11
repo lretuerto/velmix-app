@@ -8,6 +8,21 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class PurchasePayableService
 {
+    public function applyCredits(int $tenantId, int $userId, int $payableId, ?float $amount = null): array
+    {
+        return DB::transaction(function () use ($tenantId, $userId, $payableId, $amount) {
+            $result = app(SupplierCreditService::class)->applyAvailableCredits(
+                $tenantId,
+                $userId,
+                $payableId,
+                $amount,
+                'manual'
+            );
+
+            return $result;
+        });
+    }
+
     public function list(int $tenantId): array
     {
         if ($tenantId <= 0) {
@@ -30,7 +45,13 @@ class PurchasePayableService
                 'suppliers.name as supplier_name',
                 'purchase_receipts.reference as receipt_reference',
             ])
-            ->map(fn (object $payable) => $this->formatPayableSummary($payable))
+            ->map(function (object $payable) {
+                $payable->supplier_credit_applied_amount = (float) DB::table('supplier_credit_applications')
+                    ->where('purchase_payable_id', $payable->id)
+                    ->sum('amount');
+
+                return $this->formatPayableSummary($payable);
+            })
             ->all();
     }
 
@@ -75,11 +96,32 @@ class PurchasePayableService
             ])
             ->all();
 
+        $creditApplications = DB::table('supplier_credit_applications')
+            ->join('supplier_credits', 'supplier_credits.id', '=', 'supplier_credit_applications.supplier_credit_id')
+            ->where('supplier_credit_applications.purchase_payable_id', $payableId)
+            ->orderBy('supplier_credit_applications.id')
+            ->get([
+                'supplier_credit_applications.id',
+                'supplier_credit_applications.amount',
+                'supplier_credit_applications.application_type',
+                'supplier_credit_applications.applied_at',
+                'supplier_credits.reference as supplier_credit_reference',
+            ])
+            ->map(fn (object $application) => [
+                'id' => $application->id,
+                'amount' => (float) $application->amount,
+                'application_type' => $application->application_type,
+                'applied_at' => $application->applied_at,
+                'supplier_credit_reference' => $application->supplier_credit_reference,
+            ])
+            ->all();
+
         return [
             'id' => $payable->id,
             'total_amount' => (float) $payable->total_amount,
             'paid_amount' => (float) $payable->paid_amount,
             'outstanding_amount' => (float) $payable->outstanding_amount,
+            'supplier_credit_applied_amount' => round(array_sum(array_column($creditApplications, 'amount')), 2),
             'status' => $payable->status,
             'effective_status' => $this->effectiveStatus($payable),
             'aging_bucket' => $this->agingBucket($payable),
@@ -93,6 +135,7 @@ class PurchasePayableService
                 'reference' => $payable->receipt_reference,
             ],
             'payments' => $payments,
+            'supplier_credit_applications' => $creditApplications,
         ];
     }
 
@@ -213,6 +256,7 @@ class PurchasePayableService
             'total_amount' => (float) $payable->total_amount,
             'paid_amount' => (float) $payable->paid_amount,
             'outstanding_amount' => (float) $payable->outstanding_amount,
+            'supplier_credit_applied_amount' => (float) ($payable->supplier_credit_applied_amount ?? 0),
             'status' => $payable->status,
             'effective_status' => $this->effectiveStatus($payable),
             'aging_bucket' => $this->agingBucket($payable),

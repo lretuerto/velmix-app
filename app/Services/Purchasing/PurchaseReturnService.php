@@ -506,12 +506,16 @@ class PurchaseReturnService
         $returnedTotal = round((float) DB::table('purchase_returns')
             ->where('purchase_receipt_id', $receiptId)
             ->sum('total_amount'), 2);
-        $actualPaid = round((float) DB::table('purchase_payments')
+        $cashPaid = round((float) DB::table('purchase_payments')
+            ->where('purchase_payable_id', $payableId)
+            ->sum('amount'), 2);
+        $appliedCredits = round((float) DB::table('supplier_credit_applications')
             ->where('purchase_payable_id', $payableId)
             ->sum('amount'), 2);
         $existingCreditTotal = round((float) DB::table('supplier_credits')
             ->where('purchase_payable_id', $payableId)
             ->sum('amount'), 2);
+        $actualPaid = round($cashPaid + $appliedCredits, 2);
 
         $newTotalAmount = max(round($receiptTotal - $returnedTotal, 2), 0.0);
         $newPaidAmount = min($actualPaid, $newTotalAmount);
