@@ -140,6 +140,61 @@ class PosSaleReadFlowTest extends TestCase
             ->assertJsonPath('data.cancel_reason', 'Anulacion operativa');
     }
 
+    public function test_reads_credited_sale_detail_with_credit_note_summary(): void
+    {
+        [$saleId] = $this->createCompletedSaleForTenant(10, 'SALE-CREDITED-10');
+        $admin = $this->seedUserWithRole(10, 'ADMIN');
+
+        DB::table('electronic_vouchers')->insert([
+            'tenant_id' => 10,
+            'sale_id' => $saleId,
+            'type' => 'boleta',
+            'series' => 'B001',
+            'number' => 10,
+            'status' => 'accepted',
+            'sunat_ticket' => 'SUNAT-CR-001',
+            'rejection_reason' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $voucherId = DB::table('electronic_vouchers')->where('sale_id', $saleId)->value('id');
+
+        DB::table('sales')->where('id', $saleId)->update([
+            'status' => 'credited',
+            'credited_by_user_id' => $admin->id,
+            'credit_reason' => 'Devolucion total',
+            'credited_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('sale_credit_notes')->insert([
+            'tenant_id' => 10,
+            'sale_id' => $saleId,
+            'electronic_voucher_id' => $voucherId,
+            'series' => 'NC01',
+            'number' => 1,
+            'status' => 'accepted',
+            'reason' => 'Devolucion total',
+            'total_amount' => 17.50,
+            'refunded_amount' => 17.50,
+            'refund_payment_method' => 'cash',
+            'sunat_ticket' => 'SUNAT-NC-001',
+            'rejection_reason' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/pos/sales/{$saleId}")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'credited')
+            ->assertJsonPath('data.credit_reason', 'Devolucion total')
+            ->assertJsonPath('data.credit_note.status', 'accepted')
+            ->assertJsonPath('data.credit_note.series', 'NC01');
+    }
+
     private function createCompletedSaleForTenant(int $tenantId, string $reference): array
     {
         $this->seed([

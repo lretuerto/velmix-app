@@ -83,7 +83,8 @@ class DailyReportService
                 COUNT(*) as movement_count,
                 COALESCE(SUM(CASE WHEN type = 'manual_in' THEN amount ELSE 0 END), 0) as manual_in_total,
                 COALESCE(SUM(CASE WHEN type = 'manual_out' THEN amount ELSE 0 END), 0) as manual_out_total,
-                COALESCE(SUM(CASE WHEN type = 'receivable_in' THEN amount ELSE 0 END), 0) as receivable_in_total
+                COALESCE(SUM(CASE WHEN type = 'receivable_in' THEN amount ELSE 0 END), 0) as receivable_in_total,
+                COALESCE(SUM(CASE WHEN type = 'credit_note_refund' THEN amount ELSE 0 END), 0) as refund_out_total
             ")
             ->first();
 
@@ -207,6 +208,7 @@ class DailyReportService
                 'manual_in_total' => round((float) ($cashMovements->manual_in_total ?? 0), 2),
                 'manual_out_total' => round((float) ($cashMovements->manual_out_total ?? 0), 2),
                 'receivable_in_total' => round((float) ($cashMovements->receivable_in_total ?? 0), 2),
+                'refund_out_total' => round((float) ($cashMovements->refund_out_total ?? 0), 2),
             ],
         ];
     }

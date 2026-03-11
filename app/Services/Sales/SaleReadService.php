@@ -17,6 +17,7 @@ class SaleReadService
             ->leftJoin('customers', 'customers.id', '=', 'sales.customer_id')
             ->leftJoin('electronic_vouchers', 'electronic_vouchers.sale_id', '=', 'sales.id')
             ->leftJoin('sale_receivables', 'sale_receivables.sale_id', '=', 'sales.id')
+            ->leftJoin('sale_credit_notes', 'sale_credit_notes.sale_id', '=', 'sales.id')
             ->where('sales.tenant_id', $tenantId)
             ->orderByDesc('sales.id')
             ->get([
@@ -29,6 +30,8 @@ class SaleReadService
                 'sales.gross_margin',
                 'sales.cancel_reason',
                 'sales.cancelled_at',
+                'sales.credit_reason',
+                'sales.credited_at',
                 'customers.id as customer_id',
                 'customers.document_type as customer_document_type',
                 'customers.document_number as customer_document_number',
@@ -38,6 +41,8 @@ class SaleReadService
                 'sale_receivables.outstanding_amount as receivable_outstanding_amount',
                 'electronic_vouchers.id as voucher_id',
                 'electronic_vouchers.status as voucher_status',
+                'sale_credit_notes.id as credit_note_id',
+                'sale_credit_notes.status as credit_note_status',
             ])
             ->map(fn (object $sale) => [
                 'id' => $sale->id,
@@ -49,6 +54,8 @@ class SaleReadService
                 'gross_margin' => (float) $sale->gross_margin,
                 'cancel_reason' => $sale->cancel_reason,
                 'cancelled_at' => $sale->cancelled_at,
+                'credit_reason' => $sale->credit_reason,
+                'credited_at' => $sale->credited_at,
                 'customer' => $sale->customer_id !== null ? [
                     'id' => $sale->customer_id,
                     'document_type' => $sale->customer_document_type,
@@ -62,6 +69,10 @@ class SaleReadService
                 ] : null,
                 'voucher_id' => $sale->voucher_id,
                 'voucher_status' => $sale->voucher_status,
+                'credit_note' => $sale->credit_note_id !== null ? [
+                    'id' => $sale->credit_note_id,
+                    'status' => $sale->credit_note_status,
+                ] : null,
             ])
             ->all();
     }
@@ -76,6 +87,7 @@ class SaleReadService
             ->leftJoin('customers', 'customers.id', '=', 'sales.customer_id')
             ->leftJoin('electronic_vouchers', 'electronic_vouchers.sale_id', '=', 'sales.id')
             ->leftJoin('sale_receivables', 'sale_receivables.sale_id', '=', 'sales.id')
+            ->leftJoin('sale_credit_notes', 'sale_credit_notes.sale_id', '=', 'sales.id')
             ->where('sales.tenant_id', $tenantId)
             ->where('sales.id', $saleId)
             ->first([
@@ -88,6 +100,8 @@ class SaleReadService
                 'sales.gross_margin',
                 'sales.cancel_reason',
                 'sales.cancelled_at',
+                'sales.credit_reason',
+                'sales.credited_at',
                 'customers.id as customer_id',
                 'customers.document_type as customer_document_type',
                 'customers.document_number as customer_document_number',
@@ -100,6 +114,10 @@ class SaleReadService
                 'electronic_vouchers.status as voucher_status',
                 'electronic_vouchers.series as voucher_series',
                 'electronic_vouchers.number as voucher_number',
+                'sale_credit_notes.id as credit_note_id',
+                'sale_credit_notes.status as credit_note_status',
+                'sale_credit_notes.series as credit_note_series',
+                'sale_credit_notes.number as credit_note_number',
             ]);
 
         if ($sale === null) {
@@ -154,6 +172,8 @@ class SaleReadService
             'gross_margin' => (float) $sale->gross_margin,
             'cancel_reason' => $sale->cancel_reason,
             'cancelled_at' => $sale->cancelled_at,
+            'credit_reason' => $sale->credit_reason,
+            'credited_at' => $sale->credited_at,
             'customer' => $sale->customer_id !== null ? [
                 'id' => $sale->customer_id,
                 'document_type' => $sale->customer_document_type,
@@ -171,6 +191,12 @@ class SaleReadService
                 'status' => $sale->voucher_status,
                 'series' => $sale->voucher_series,
                 'number' => $sale->voucher_number,
+            ] : null,
+            'credit_note' => $sale->credit_note_id !== null ? [
+                'id' => $sale->credit_note_id,
+                'status' => $sale->credit_note_status,
+                'series' => $sale->credit_note_series,
+                'number' => $sale->credit_note_number,
             ] : null,
             'movement_count' => $movementCount,
             'items' => $items,

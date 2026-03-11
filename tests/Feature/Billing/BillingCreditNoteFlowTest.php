@@ -1,0 +1,304 @@
+<?php
+
+namespace Tests\Feature\Billing;
+
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
+
+class BillingCreditNoteFlowTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_creates_credit_note_for_cash_sale_and_refunds_cash(): void
+    {
+        [$admin, $saleId, $lotId] = $this->seedCashSaleWithVoucher();
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/cash/sessions/open', [
+                'opening_amount' => 100,
+            ])
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/credit-notes', [
+                'sale_id' => $saleId,
+                'reason' => 'Devolucion total mostrador',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'pending')
+            ->assertJsonPath('data.refunded_amount', 21)
+            ->assertJsonPath('data.refund_payment_method', 'cash');
+
+        $creditNoteId = DB::table('sale_credit_notes')->where('sale_id', $saleId)->value('id');
+
+        $this->assertDatabaseHas('sales', [
+            'id' => $saleId,
+            'status' => 'credited',
+        ]);
+
+        $this->assertDatabaseHas('lots', [
+            'id' => $lotId,
+            'stock_quantity' => 60,
+        ]);
+
+        $this->assertDatabaseHas('stock_movements', [
+            'sale_id' => $saleId,
+            'type' => 'credit_note_reversal',
+            'quantity' => 6,
+        ]);
+
+        $this->assertDatabaseHas('sale_refunds', [
+            'sale_credit_note_id' => $creditNoteId,
+            'payment_method' => 'cash',
+            'amount' => 21.00,
+        ]);
+
+        $this->assertDatabaseHas('cash_movements', [
+            'type' => 'credit_note_refund',
+            'amount' => 21.00,
+        ]);
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/cash/sessions/current')
+            ->assertOk()
+            ->assertJsonPath('data.refund_out_total', 21)
+            ->assertJsonPath('data.expected_amount', 79);
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/billing/credit-notes/{$creditNoteId}")
+            ->assertOk()
+            ->assertJsonPath('data.refund.amount', 21)
+            ->assertJsonPath('data.voucher.series', 'B001');
+    }
+
+    public function test_creates_credit_note_for_unpaid_credit_sale_without_refund(): void
+    {
+        [$admin, $saleId, $receivableId] = $this->seedCreditSaleWithVoucher(false);
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/credit-notes', [
+                'sale_id' => $saleId,
+                'reason' => 'Venta a credito sin cobranza',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.refunded_amount', 0)
+            ->assertJsonPath('data.refund_payment_method', null);
+
+        $this->assertDatabaseHas('sale_receivables', [
+            'id' => $receivableId,
+            'status' => 'credited',
+            'outstanding_amount' => 0,
+        ]);
+    }
+
+    public function test_rejects_credit_note_when_sale_has_mixed_receivable_payments(): void
+    {
+        [$admin, $saleId] = $this->seedCreditSaleWithVoucher(true);
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/credit-notes', [
+                'sale_id' => $saleId,
+                'reason' => 'Intento invalido',
+            ])
+            ->assertStatus(422);
+    }
+
+    private function seedCashSaleWithVoucher(): array
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+            \Database\Seeders\InventoryCatalogSeeder::class,
+        ]);
+
+        $admin = $this->seedUserWithRole(10, 'ADMIN');
+        $lotId = DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
+        $productId = DB::table('lots')->where('id', $lotId)->value('product_id');
+
+        $saleId = DB::table('sales')->insertGetId([
+            'tenant_id' => 10,
+            'user_id' => $admin->id,
+            'reference' => 'SALE-CN-CASH',
+            'status' => 'completed',
+            'payment_method' => 'cash',
+            'total_amount' => 21.00,
+            'gross_cost' => 8.40,
+            'gross_margin' => 12.60,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('sale_items')->insert([
+            'sale_id' => $saleId,
+            'lot_id' => $lotId,
+            'product_id' => $productId,
+            'quantity' => 6,
+            'unit_price' => 3.50,
+            'unit_cost_snapshot' => 1.40,
+            'line_total' => 21.00,
+            'cost_amount' => 8.40,
+            'gross_margin' => 12.60,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('lots')->where('id', $lotId)->update([
+            'stock_quantity' => 54,
+            'updated_at' => now(),
+        ]);
+
+        DB::table('electronic_vouchers')->insert([
+            'tenant_id' => 10,
+            'sale_id' => $saleId,
+            'type' => 'boleta',
+            'series' => 'B001',
+            'number' => 1,
+            'status' => 'accepted',
+            'sunat_ticket' => 'SUNAT-CN-001',
+            'rejection_reason' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return [$admin, $saleId, $lotId];
+    }
+
+    private function seedCreditSaleWithVoucher(bool $mixedPayments): array
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+            \Database\Seeders\InventoryCatalogSeeder::class,
+        ]);
+
+        $admin = $this->seedUserWithRole(10, 'ADMIN');
+        $customerId = DB::table('customers')->insertGetId([
+            'tenant_id' => 10,
+            'document_type' => 'dni',
+            'document_number' => '99887766',
+            'name' => 'Cliente Nota Credito',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $lotId = DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
+        $productId = DB::table('lots')->where('id', $lotId)->value('product_id');
+
+        $saleId = DB::table('sales')->insertGetId([
+            'tenant_id' => 10,
+            'user_id' => $admin->id,
+            'customer_id' => $customerId,
+            'reference' => 'SALE-CN-CREDIT-'.($mixedPayments ? 'MIX' : 'OPEN'),
+            'status' => 'completed',
+            'payment_method' => 'credit',
+            'total_amount' => 14.00,
+            'gross_cost' => 5.60,
+            'gross_margin' => 8.40,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('sale_items')->insert([
+            'sale_id' => $saleId,
+            'lot_id' => $lotId,
+            'product_id' => $productId,
+            'quantity' => 4,
+            'unit_price' => 3.50,
+            'unit_cost_snapshot' => 1.40,
+            'line_total' => 14.00,
+            'cost_amount' => 5.60,
+            'gross_margin' => 8.40,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('lots')->where('id', $lotId)->update([
+            'stock_quantity' => 56,
+            'updated_at' => now(),
+        ]);
+
+        $receivableId = DB::table('sale_receivables')->insertGetId([
+            'tenant_id' => 10,
+            'customer_id' => $customerId,
+            'sale_id' => $saleId,
+            'total_amount' => 14.00,
+            'paid_amount' => $mixedPayments ? 6.00 : 0,
+            'outstanding_amount' => $mixedPayments ? 8.00 : 14.00,
+            'status' => $mixedPayments ? 'partial_paid' : 'pending',
+            'due_at' => now()->addDays(10),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        if ($mixedPayments) {
+            DB::table('sale_receivable_payments')->insert([
+                [
+                    'sale_receivable_id' => $receivableId,
+                    'user_id' => $admin->id,
+                    'amount' => 3.00,
+                    'payment_method' => 'cash',
+                    'reference' => 'PAY-CN-001',
+                    'paid_at' => now()->subDay(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ],
+                [
+                    'sale_receivable_id' => $receivableId,
+                    'user_id' => $admin->id,
+                    'amount' => 3.00,
+                    'payment_method' => 'transfer',
+                    'reference' => 'PAY-CN-002',
+                    'paid_at' => now(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ],
+            ]);
+        }
+
+        DB::table('electronic_vouchers')->insert([
+            'tenant_id' => 10,
+            'sale_id' => $saleId,
+            'type' => 'boleta',
+            'series' => 'B001',
+            'number' => $mixedPayments ? 2 : 3,
+            'status' => 'accepted',
+            'sunat_ticket' => 'SUNAT-CN-CREDIT',
+            'rejection_reason' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return [$admin, $saleId, $receivableId];
+    }
+
+    private function seedUserWithRole(int $tenantId, string $roleCode): User
+    {
+        $user = User::factory()->create();
+        $roleId = DB::table('roles')->where('code', $roleCode)->value('id');
+
+        DB::table('tenant_user')->insert([
+            'tenant_id' => $tenantId,
+            'user_id' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('tenant_user_role')->insert([
+            'tenant_id' => $tenantId,
+            'user_id' => $user->id,
+            'role_id' => $roleId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $user;
+    }
+}

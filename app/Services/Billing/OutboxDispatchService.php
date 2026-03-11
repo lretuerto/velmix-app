@@ -23,16 +23,20 @@ class OutboxDispatchService
                 ->where('status', 'pending')
                 ->orderBy('id')
                 ->lockForUpdate()
-                ->first(['id', 'aggregate_id', 'event_type']);
+                ->first(['id', 'aggregate_type', 'aggregate_id', 'event_type']);
 
             if ($event === null) {
                 throw new HttpException(404, 'No pending outbox events.');
             }
 
+            $documentTable = $event->aggregate_type === 'sale_credit_note'
+                ? 'sale_credit_notes'
+                : 'electronic_vouchers';
+
             if ($outcome === 'transient_fail') {
                 $message = 'Temporary transport failure.';
 
-                DB::table('electronic_vouchers')
+                DB::table($documentTable)
                     ->where('id', $event->aggregate_id)
                     ->update([
                         'status' => 'failed',
@@ -59,7 +63,7 @@ class OutboxDispatchService
 
                 return [
                     'event_id' => $event->id,
-                    'voucher_id' => $event->aggregate_id,
+                    'document_id' => $event->aggregate_id,
                     'event_type' => $event->event_type,
                     'status' => 'failed',
                     'sunat_ticket' => null,
@@ -71,7 +75,7 @@ class OutboxDispatchService
             if ($outcome === 'rejected') {
                 $message = 'Rejected by SUNAT validation.';
 
-                DB::table('electronic_vouchers')
+                DB::table($documentTable)
                     ->where('id', $event->aggregate_id)
                     ->update([
                         'status' => 'rejected',
@@ -98,7 +102,7 @@ class OutboxDispatchService
 
                 return [
                     'event_id' => $event->id,
-                    'voucher_id' => $event->aggregate_id,
+                    'document_id' => $event->aggregate_id,
                     'event_type' => $event->event_type,
                     'status' => 'rejected',
                     'sunat_ticket' => null,
@@ -107,7 +111,7 @@ class OutboxDispatchService
 
             $ticket = 'SUNAT-'.str_pad((string) random_int(1, 999999), 6, '0', STR_PAD_LEFT);
 
-            DB::table('electronic_vouchers')
+            DB::table($documentTable)
                 ->where('id', $event->aggregate_id)
                 ->update([
                     'status' => 'accepted',
@@ -135,7 +139,7 @@ class OutboxDispatchService
 
             return [
                 'event_id' => $event->id,
-                'voucher_id' => $event->aggregate_id,
+                'document_id' => $event->aggregate_id,
                 'event_type' => $event->event_type,
                 'status' => 'processed',
                 'sunat_ticket' => $ticket,
@@ -154,7 +158,7 @@ class OutboxDispatchService
                 ->where('id', $eventId)
                 ->where('tenant_id', $tenantId)
                 ->lockForUpdate()
-                ->first(['id', 'aggregate_id', 'status', 'retry_count']);
+                ->first(['id', 'aggregate_type', 'aggregate_id', 'status', 'retry_count']);
 
             if ($event === null) {
                 throw new HttpException(404, 'Outbox event not found.');
@@ -172,7 +176,7 @@ class OutboxDispatchService
                     'updated_at' => now(),
                 ]);
 
-            DB::table('electronic_vouchers')
+            DB::table($event->aggregate_type === 'sale_credit_note' ? 'sale_credit_notes' : 'electronic_vouchers')
                 ->where('id', $event->aggregate_id)
                 ->update([
                     'status' => 'pending',
@@ -181,7 +185,7 @@ class OutboxDispatchService
 
             return [
                 'event_id' => $event->id,
-                'voucher_id' => $event->aggregate_id,
+                'document_id' => $event->aggregate_id,
                 'status' => 'pending',
                 'retry_count' => $event->retry_count,
             ];

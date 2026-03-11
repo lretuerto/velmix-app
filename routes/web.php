@@ -2,6 +2,7 @@
 
 use App\Services\Billing\OutboxDispatchService;
 use App\Services\Billing\VoucherService;
+use App\Services\Billing\CreditNoteService;
 use App\Services\Cash\CashMovementService;
 use App\Services\Cash\CashSessionService;
 use App\Services\Inventory\InventorySetupService;
@@ -752,6 +753,31 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 
         return response()->json(['data' => $voucherData]);
     })->middleware('perm:billing.voucher.read');
+
+    Route::post('/billing/credit-notes', function (CreditNoteService $service) {
+        $payload = request()->validate([
+            'sale_id' => ['required', 'integer'],
+            'reason' => ['required', 'string'],
+        ]);
+
+        $result = $service->createFromSale(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            (int) $payload['sale_id'],
+            (string) $payload['reason'],
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:billing.credit-note.issue');
+
+    Route::get('/billing/credit-notes/{creditNote}', function (int $creditNote, CreditNoteService $service) {
+        $result = $service->detail(
+            (int) request()->attributes->get('tenant_id'),
+            $creditNote,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:billing.credit-note.read');
 
     Route::post('/billing/outbox/dispatch', function (OutboxDispatchService $service) {
         $payload = request()->validate([

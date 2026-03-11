@@ -19,7 +19,7 @@ class BillingDispatchFlowTest extends TestCase
             ->withHeader('X-Tenant-Id', '10')
             ->postJson('/billing/outbox/dispatch')
             ->assertOk()
-            ->assertJsonPath('data.voucher_id', $voucherId)
+            ->assertJsonPath('data.document_id', $voucherId)
             ->assertJsonPath('data.status', 'processed');
 
         $this->assertDatabaseHas('electronic_vouchers', [
@@ -49,7 +49,7 @@ class BillingDispatchFlowTest extends TestCase
                 'simulate_result' => 'rejected',
             ])
             ->assertOk()
-            ->assertJsonPath('data.voucher_id', $voucherId)
+            ->assertJsonPath('data.document_id', $voucherId)
             ->assertJsonPath('data.status', 'rejected');
 
         $this->assertDatabaseHas('electronic_vouchers', [
@@ -106,7 +106,7 @@ class BillingDispatchFlowTest extends TestCase
             ->withHeader('X-Tenant-Id', '10')
             ->postJson('/billing/outbox/dispatch')
             ->assertOk()
-            ->assertJsonPath('data.voucher_id', $voucherId)
+            ->assertJsonPath('data.document_id', $voucherId)
             ->assertJsonPath('data.status', 'processed');
 
         $this->assertDatabaseHas('electronic_vouchers', [
@@ -117,6 +117,29 @@ class BillingDispatchFlowTest extends TestCase
         $this->assertDatabaseHas('outbox_attempts', [
             'outbox_event_id' => $eventId,
             'status' => 'accepted',
+        ]);
+    }
+
+    public function test_dispatches_pending_credit_note_and_marks_it_accepted(): void
+    {
+        [$user, $creditNoteId, $eventId] = $this->seedPendingCreditNoteScenario();
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/outbox/dispatch')
+            ->assertOk()
+            ->assertJsonPath('data.document_id', $creditNoteId)
+            ->assertJsonPath('data.event_type', 'credit_note.created')
+            ->assertJsonPath('data.status', 'processed');
+
+        $this->assertDatabaseHas('sale_credit_notes', [
+            'id' => $creditNoteId,
+            'status' => 'accepted',
+        ]);
+
+        $this->assertDatabaseHas('outbox_events', [
+            'id' => $eventId,
+            'status' => 'processed',
         ]);
     }
 
@@ -183,5 +206,87 @@ class BillingDispatchFlowTest extends TestCase
         ]);
 
         return [$user, $voucherId, $eventId];
+    }
+
+    private function seedPendingCreditNoteScenario(): array
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $user = User::factory()->create();
+        $adminRoleId = DB::table('roles')->where('code', 'ADMIN')->value('id');
+        $saleUserId = User::factory()->create()->id;
+
+        DB::table('tenant_user')->insert([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('tenant_user_role')->insert([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'role_id' => $adminRoleId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $saleId = DB::table('sales')->insertGetId([
+            'tenant_id' => 10,
+            'user_id' => $saleUserId,
+            'reference' => 'SALE-DISPATCH-CN-10',
+            'status' => 'credited',
+            'total_amount' => 88.00,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $voucherId = DB::table('electronic_vouchers')->insertGetId([
+            'tenant_id' => 10,
+            'sale_id' => $saleId,
+            'type' => 'boleta',
+            'series' => 'B001',
+            'number' => 1,
+            'status' => 'accepted',
+            'sunat_ticket' => 'SUNAT-CN-OK',
+            'rejection_reason' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $creditNoteId = DB::table('sale_credit_notes')->insertGetId([
+            'tenant_id' => 10,
+            'sale_id' => $saleId,
+            'electronic_voucher_id' => $voucherId,
+            'series' => 'NC01',
+            'number' => 1,
+            'status' => 'pending',
+            'reason' => 'Devolucion',
+            'total_amount' => 88.00,
+            'refunded_amount' => 88.00,
+            'refund_payment_method' => 'cash',
+            'sunat_ticket' => null,
+            'rejection_reason' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $eventId = DB::table('outbox_events')->insertGetId([
+            'tenant_id' => 10,
+            'aggregate_type' => 'sale_credit_note',
+            'aggregate_id' => $creditNoteId,
+            'event_type' => 'credit_note.created',
+            'payload' => json_encode(['credit_note_id' => $creditNoteId], JSON_THROW_ON_ERROR),
+            'status' => 'pending',
+            'retry_count' => 0,
+            'last_error' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return [$user, $creditNoteId, $eventId];
     }
 }

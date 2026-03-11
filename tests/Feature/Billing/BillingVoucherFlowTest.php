@@ -52,6 +52,20 @@ class BillingVoucherFlowTest extends TestCase
             ->assertStatus(404);
     }
 
+    public function test_rejects_credit_note_creation_when_sale_has_no_voucher(): void
+    {
+        $saleId = $this->createSaleForTenant(10);
+        $user = $this->createBillingUserForTenant(10, 'ADMIN');
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/credit-notes', [
+                'sale_id' => $saleId,
+                'reason' => 'Intento sin comprobante',
+            ])
+            ->assertStatus(422);
+    }
+
     private function createSaleForTenant(int $tenantId): int
     {
         $this->seed([
