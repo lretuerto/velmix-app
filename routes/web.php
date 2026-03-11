@@ -34,6 +34,49 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+Route::get('/docs', function () {
+    return response()->json([
+        'data' => [
+            'project' => 'VELMiX ERP',
+            'version' => 'sprint1-day90',
+            'documents' => [
+                ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
+                ['name' => 'API Guide', 'path' => '/docs/api-guide'],
+                ['name' => 'Release Readiness', 'path' => '/docs/release-readiness'],
+            ],
+            'conventions' => [
+                'Business endpoints require Laravel auth.',
+                'Multi-tenant endpoints require X-Tenant-Id.',
+                'Most responses are wrapped in a data envelope.',
+            ],
+        ],
+    ]);
+});
+
+Route::get('/docs/openapi.yaml', function () {
+    return response(
+        file_get_contents(base_path('docs/openapi/velmix.openapi.yaml')),
+        200,
+        ['Content-Type' => 'application/yaml; charset=UTF-8'],
+    );
+});
+
+Route::get('/docs/api-guide', function () {
+    return response(
+        file_get_contents(base_path('docs/api-guide.md')),
+        200,
+        ['Content-Type' => 'text/markdown; charset=UTF-8'],
+    );
+});
+
+Route::get('/docs/release-readiness', function () {
+    return response(
+        file_get_contents(base_path('docs/sprint1/day90-release-readiness-checklist.md')),
+        200,
+        ['Content-Type' => 'text/markdown; charset=UTF-8'],
+    );
+});
+
 Route::middleware('tenant.context')->get('/tenant/ping', function () {
     return response()->json([
         'ok' => true,
