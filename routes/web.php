@@ -9,6 +9,7 @@ use App\Services\Inventory\StockMovementReadService;
 use App\Services\Inventory\StockMovementService;
 use App\Services\Purchasing\PurchaseOrderService;
 use App\Services\Purchasing\PurchasePayableService;
+use App\Services\Purchasing\PurchaseReplenishmentService;
 use App\Services\Purchasing\PurchaseReceiptService;
 use App\Services\Purchasing\SupplierService;
 use App\Services\Reports\DailyReportService;
@@ -289,6 +290,25 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 
         return response()->json(['data' => $result]);
     })->middleware('perm:purchase.order.create');
+
+    Route::get('/purchases/replenishment-suggestions', function (PurchaseReplenishmentService $service) {
+        $payload = request()->validate([
+            'lookback_days' => ['nullable', 'integer', 'min:1'],
+            'coverage_days' => ['nullable', 'integer', 'min:1'],
+            'expiring_within_days' => ['nullable', 'integer', 'min:1'],
+            'low_stock_threshold' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $result = $service->suggestions(
+            (int) request()->attributes->get('tenant_id'),
+            (int) ($payload['lookback_days'] ?? 30),
+            (int) ($payload['coverage_days'] ?? 30),
+            (int) ($payload['expiring_within_days'] ?? 30),
+            (int) ($payload['low_stock_threshold'] ?? 20),
+        );
+
+        return response()->json($result);
+    })->middleware('perm:purchase.replenishment.read');
 
     Route::get('/purchases/payables', function (PurchasePayableService $service) {
         $result = $service->list((int) request()->attributes->get('tenant_id'));
