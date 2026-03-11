@@ -120,7 +120,7 @@ class SaleReceivableService
                 ->where('tenant_id', $tenantId)
                 ->where('id', $receivableId)
                 ->lockForUpdate()
-                ->first(['id', 'total_amount', 'paid_amount', 'outstanding_amount', 'status']);
+                ->first(['id', 'sale_id', 'total_amount', 'paid_amount', 'outstanding_amount', 'status']);
 
             if ($receivable === null) {
                 throw new HttpException(404, 'Sale receivable not found.');
@@ -132,6 +132,20 @@ class SaleReceivableService
 
             if ($amount > (float) $receivable->outstanding_amount) {
                 throw new HttpException(422, 'Payment amount exceeds outstanding amount.');
+            }
+
+            $cashSessionId = null;
+
+            if ($paymentMethod === 'cash') {
+                $cashSessionId = DB::table('cash_sessions')
+                    ->where('tenant_id', $tenantId)
+                    ->where('status', 'open')
+                    ->lockForUpdate()
+                    ->value('id');
+
+                if ($cashSessionId === null) {
+                    throw new HttpException(422, 'Cash receivable payment requires an open cash session.');
+                }
             }
 
             $paymentId = DB::table('sale_receivable_payments')->insertGetId([
@@ -158,12 +172,29 @@ class SaleReceivableService
                     'updated_at' => now(),
                 ]);
 
+            $cashMovementId = null;
+
+            if ($cashSessionId !== null) {
+                $cashMovementId = DB::table('cash_movements')->insertGetId([
+                    'tenant_id' => $tenantId,
+                    'cash_session_id' => $cashSessionId,
+                    'created_by_user_id' => $userId,
+                    'type' => 'receivable_in',
+                    'amount' => $amount,
+                    'reference' => $reference,
+                    'notes' => 'Receivable payment for sale '.$receivable->sale_id,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
             return [
                 'payment_id' => $paymentId,
                 'sale_receivable_id' => $receivable->id,
                 'amount' => round($amount, 2),
                 'payment_method' => $paymentMethod,
                 'reference' => $reference,
+                'cash_movement_id' => $cashMovementId,
                 'paid_amount' => $newPaidAmount,
                 'outstanding_amount' => $newOutstandingAmount,
                 'status' => $newStatus,

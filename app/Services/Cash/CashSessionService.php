@@ -174,6 +174,7 @@ class CashSessionService
                 'card_sales_total' => $summary['card_sales_total'],
                 'transfer_sales_total' => $summary['transfer_sales_total'],
                 'credit_sales_total' => $summary['credit_sales_total'],
+                'receivable_cash_total' => $summary['receivable_cash_total'],
                 'manual_in_total' => $summary['manual_in_total'],
                 'manual_out_total' => $summary['manual_out_total'],
                 'net_movement_total' => $summary['net_movement_total'],
@@ -278,13 +279,15 @@ class CashSessionService
             ->selectRaw("
                 COUNT(*) as movement_count,
                 COALESCE(SUM(CASE WHEN type = 'manual_in' THEN amount ELSE 0 END), 0) as manual_in_total,
-                COALESCE(SUM(CASE WHEN type = 'manual_out' THEN amount ELSE 0 END), 0) as manual_out_total
+                COALESCE(SUM(CASE WHEN type = 'manual_out' THEN amount ELSE 0 END), 0) as manual_out_total,
+                COALESCE(SUM(CASE WHEN type = 'receivable_in' THEN amount ELSE 0 END), 0) as receivable_cash_total
             ")
             ->first();
         $movementCount = (int) ($movementTotals->movement_count ?? 0);
         $manualInTotal = round((float) ($movementTotals->manual_in_total ?? 0), 2);
         $manualOutTotal = round((float) ($movementTotals->manual_out_total ?? 0), 2);
-        $netMovementTotal = round($manualInTotal - $manualOutTotal, 2);
+        $receivableCashTotal = round((float) ($movementTotals->receivable_cash_total ?? 0), 2);
+        $netMovementTotal = round($manualInTotal + $receivableCashTotal - $manualOutTotal, 2);
         $openingAmount = round((float) $session->opening_amount, 2);
 
         return [
@@ -298,6 +301,7 @@ class CashSessionService
             'card_sales_total' => $cardSalesTotal,
             'transfer_sales_total' => $transferSalesTotal,
             'credit_sales_total' => $creditSalesTotal,
+            'receivable_cash_total' => $receivableCashTotal,
             'manual_in_total' => $manualInTotal,
             'manual_out_total' => $manualOutTotal,
             'net_movement_total' => $netMovementTotal,
@@ -328,6 +332,7 @@ class CashSessionService
             'card_sales_total' => $summary['card_sales_total'],
             'transfer_sales_total' => $summary['transfer_sales_total'],
             'credit_sales_total' => $summary['credit_sales_total'],
+            'receivable_cash_total' => $summary['receivable_cash_total'],
             'manual_in_total' => $summary['manual_in_total'],
             'manual_out_total' => $summary['manual_out_total'],
             'net_movement_total' => $summary['net_movement_total'],

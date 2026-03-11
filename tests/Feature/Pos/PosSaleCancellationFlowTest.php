@@ -121,6 +121,13 @@ class PosSaleCancellationFlowTest extends TestCase
 
         $this->actingAs($cashier)
             ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/cash/sessions/open', [
+                'opening_amount' => 20,
+            ])
+            ->assertOk();
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
             ->postJson("/sales/receivables/{$receivableId}/payments", [
                 'amount' => 2,
                 'payment_method' => 'cash',

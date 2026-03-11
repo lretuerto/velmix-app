@@ -287,6 +287,17 @@ class DailyReportFlowTest extends TestCase
                 'updated_at' => '2026-03-11 10:30:00',
             ],
             [
+                'tenant_id' => 10,
+                'cash_session_id' => $tenant10SessionId,
+                'created_by_user_id' => $admin->id,
+                'type' => 'receivable_in',
+                'amount' => 9.00,
+                'reference' => 'COBRO-REPORT-001',
+                'notes' => 'Cobranza cliente',
+                'created_at' => '2026-03-11 14:00:00',
+                'updated_at' => '2026-03-11 14:00:00',
+            ],
+            [
                 'tenant_id' => 20,
                 'cash_session_id' => $tenant20SessionId,
                 'created_by_user_id' => User::factory()->create()->id,
@@ -299,14 +310,65 @@ class DailyReportFlowTest extends TestCase
             ],
         ]);
 
+        $customerId = DB::table('customers')->insertGetId([
+            'tenant_id' => 10,
+            'document_type' => 'dni',
+            'document_number' => '55667788',
+            'name' => 'Cliente Daily',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $creditSaleId = DB::table('sales')->insertGetId([
+            'tenant_id' => 10,
+            'user_id' => $saleUserId,
+            'customer_id' => $customerId,
+            'cancelled_by_user_id' => null,
+            'reference' => 'SALE-REPORT-CREDIT',
+            'status' => 'completed',
+            'payment_method' => 'credit',
+            'cancel_reason' => null,
+            'cancelled_at' => null,
+            'total_amount' => 9.00,
+            'gross_cost' => 4.00,
+            'gross_margin' => 5.00,
+            'created_at' => '2026-03-11 13:50:00',
+            'updated_at' => '2026-03-11 13:50:00',
+        ]);
+
+        $receivableId = DB::table('sale_receivables')->insertGetId([
+            'tenant_id' => 10,
+            'customer_id' => $customerId,
+            'sale_id' => $creditSaleId,
+            'total_amount' => 9.00,
+            'paid_amount' => 9.00,
+            'outstanding_amount' => 0.00,
+            'status' => 'paid',
+            'due_at' => '2026-03-20 00:00:00',
+            'created_at' => '2026-03-11 13:50:00',
+            'updated_at' => '2026-03-11 14:00:00',
+        ]);
+
+        DB::table('sale_receivable_payments')->insert([
+            'sale_receivable_id' => $receivableId,
+            'user_id' => $admin->id,
+            'amount' => 9.00,
+            'payment_method' => 'cash',
+            'reference' => 'COBRO-REPORT-001',
+            'paid_at' => '2026-03-11 14:00:00',
+            'created_at' => '2026-03-11 14:00:00',
+            'updated_at' => '2026-03-11 14:00:00',
+        ]);
+
         $this->actingAs($admin)
             ->withHeader('X-Tenant-Id', '10')
             ->getJson('/reports/daily?date=2026-03-11')
             ->assertOk()
             ->assertJsonPath('data.tenant_id', 10)
             ->assertJsonPath('data.date', '2026-03-11')
-            ->assertJsonPath('data.sales.completed_count', 2)
-            ->assertJsonPath('data.sales.completed_total', 60.5)
+            ->assertJsonPath('data.sales.completed_count', 3)
+            ->assertJsonPath('data.sales.completed_total', 69.5)
             ->assertJsonPath('data.sales.cancelled_count', 1)
             ->assertJsonPath('data.sales.cancelled_total', 15)
             ->assertJsonPath('data.sales.by_payment_method.cash.count', 1)
@@ -315,21 +377,28 @@ class DailyReportFlowTest extends TestCase
             ->assertJsonPath('data.sales.by_payment_method.card.total', 20)
             ->assertJsonPath('data.sales.by_payment_method.transfer.count', 0)
             ->assertJsonPath('data.sales.by_payment_method.transfer.total', 0)
-            ->assertJsonPath('data.profitability.gross_cost_total', 29)
-            ->assertJsonPath('data.profitability.gross_margin_total', 31.5)
-            ->assertJsonPath('data.profitability.margin_pct', 52.07)
+            ->assertJsonPath('data.sales.by_payment_method.credit.count', 1)
+            ->assertJsonPath('data.sales.by_payment_method.credit.total', 9)
+            ->assertJsonPath('data.profitability.gross_cost_total', 33)
+            ->assertJsonPath('data.profitability.gross_margin_total', 36.5)
+            ->assertJsonPath('data.profitability.margin_pct', 52.52)
             ->assertJsonPath('data.profitability.top_products.0.sku', 'DASH-001')
             ->assertJsonPath('data.profitability.top_products.0.quantity_sold', 5)
             ->assertJsonPath('data.profitability.top_products.0.revenue_total', 60.5)
             ->assertJsonPath('data.vouchers.accepted_count', 1)
             ->assertJsonPath('data.vouchers.rejected_count', 1)
             ->assertJsonPath('data.vouchers.failed_count', 0)
+            ->assertJsonPath('data.collections.payment_count', 1)
+            ->assertJsonPath('data.collections.total_amount', 9)
+            ->assertJsonPath('data.collections.by_payment_method.cash.count', 1)
+            ->assertJsonPath('data.collections.by_payment_method.cash.total', 9)
             ->assertJsonPath('data.cash.opened_count', 2)
             ->assertJsonPath('data.cash.closed_count', 1)
             ->assertJsonPath('data.cash.discrepancy_total', 0.5)
-            ->assertJsonPath('data.cash.movement_count', 2)
+            ->assertJsonPath('data.cash.movement_count', 3)
             ->assertJsonPath('data.cash.manual_in_total', 12)
-            ->assertJsonPath('data.cash.manual_out_total', 4.5);
+            ->assertJsonPath('data.cash.manual_out_total', 4.5)
+            ->assertJsonPath('data.cash.receivable_in_total', 9);
     }
 
     public function test_cashier_cannot_read_daily_operational_summary_without_permission(): void

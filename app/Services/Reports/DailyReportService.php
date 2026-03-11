@@ -82,7 +82,27 @@ class DailyReportService
             ->selectRaw("
                 COUNT(*) as movement_count,
                 COALESCE(SUM(CASE WHEN type = 'manual_in' THEN amount ELSE 0 END), 0) as manual_in_total,
-                COALESCE(SUM(CASE WHEN type = 'manual_out' THEN amount ELSE 0 END), 0) as manual_out_total
+                COALESCE(SUM(CASE WHEN type = 'manual_out' THEN amount ELSE 0 END), 0) as manual_out_total,
+                COALESCE(SUM(CASE WHEN type = 'receivable_in' THEN amount ELSE 0 END), 0) as receivable_in_total
+            ")
+            ->first();
+
+        $receivableCollections = DB::table('sale_receivable_payments')
+            ->join('sale_receivables', 'sale_receivables.id', '=', 'sale_receivable_payments.sale_receivable_id')
+            ->where('sale_receivables.tenant_id', $tenantId)
+            ->where('sale_receivable_payments.paid_at', '>=', $start)
+            ->where('sale_receivable_payments.paid_at', '<', $end)
+            ->selectRaw("
+                COUNT(*) as payment_count,
+                COALESCE(SUM(amount), 0) as total_amount,
+                SUM(CASE WHEN payment_method = 'cash' THEN 1 ELSE 0 END) as cash_count,
+                COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN amount ELSE 0 END), 0) as cash_total,
+                SUM(CASE WHEN payment_method = 'card' THEN 1 ELSE 0 END) as card_count,
+                COALESCE(SUM(CASE WHEN payment_method = 'card' THEN amount ELSE 0 END), 0) as card_total,
+                SUM(CASE WHEN payment_method = 'transfer' THEN 1 ELSE 0 END) as transfer_count,
+                COALESCE(SUM(CASE WHEN payment_method = 'transfer' THEN amount ELSE 0 END), 0) as transfer_total,
+                SUM(CASE WHEN payment_method = 'bank_transfer' THEN 1 ELSE 0 END) as bank_transfer_count,
+                COALESCE(SUM(CASE WHEN payment_method = 'bank_transfer' THEN amount ELSE 0 END), 0) as bank_transfer_total
             ")
             ->first();
 
@@ -157,6 +177,28 @@ class DailyReportService
                 'rejected_count' => (int) ($voucherCounts->rejected_count ?? 0),
                 'failed_count' => (int) ($voucherCounts->failed_count ?? 0),
             ],
+            'collections' => [
+                'payment_count' => (int) ($receivableCollections->payment_count ?? 0),
+                'total_amount' => round((float) ($receivableCollections->total_amount ?? 0), 2),
+                'by_payment_method' => [
+                    'cash' => [
+                        'count' => (int) ($receivableCollections->cash_count ?? 0),
+                        'total' => round((float) ($receivableCollections->cash_total ?? 0), 2),
+                    ],
+                    'card' => [
+                        'count' => (int) ($receivableCollections->card_count ?? 0),
+                        'total' => round((float) ($receivableCollections->card_total ?? 0), 2),
+                    ],
+                    'transfer' => [
+                        'count' => (int) ($receivableCollections->transfer_count ?? 0),
+                        'total' => round((float) ($receivableCollections->transfer_total ?? 0), 2),
+                    ],
+                    'bank_transfer' => [
+                        'count' => (int) ($receivableCollections->bank_transfer_count ?? 0),
+                        'total' => round((float) ($receivableCollections->bank_transfer_total ?? 0), 2),
+                    ],
+                ],
+            ],
             'cash' => [
                 'opened_count' => (int) $cashOpened,
                 'closed_count' => (int) ($cashClosed->aggregate_count ?? 0),
@@ -164,6 +206,7 @@ class DailyReportService
                 'movement_count' => (int) ($cashMovements->movement_count ?? 0),
                 'manual_in_total' => round((float) ($cashMovements->manual_in_total ?? 0), 2),
                 'manual_out_total' => round((float) ($cashMovements->manual_out_total ?? 0), 2),
+                'receivable_in_total' => round((float) ($cashMovements->receivable_in_total ?? 0), 2),
             ],
         ];
     }

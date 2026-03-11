@@ -49,6 +49,13 @@ class SaleReceivableFlowTest extends TestCase
 
         $this->actingAs($cashier)
             ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/cash/sessions/open', [
+                'opening_amount' => 50,
+            ])
+            ->assertOk();
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
             ->getJson('/sales/receivables')
             ->assertOk()
             ->assertJsonFragment([
@@ -71,8 +78,23 @@ class SaleReceivableFlowTest extends TestCase
                 'reference' => 'COBRO-001',
             ])
             ->assertOk()
+            ->assertJsonPath('data.cash_movement_id', 1)
             ->assertJsonPath('data.status', 'partial_paid')
             ->assertJsonPath('data.outstanding_amount', 10);
+
+        $this->assertDatabaseHas('cash_movements', [
+            'tenant_id' => 10,
+            'type' => 'receivable_in',
+            'amount' => 8.00,
+            'reference' => 'COBRO-001',
+        ]);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/cash/sessions/current')
+            ->assertOk()
+            ->assertJsonPath('data.receivable_cash_total', 8)
+            ->assertJsonPath('data.expected_amount', 58);
 
         $this->actingAs($cashier)
             ->withHeader('X-Tenant-Id', '10')
@@ -91,6 +113,21 @@ class SaleReceivableFlowTest extends TestCase
             'paid_amount' => 18.00,
             'outstanding_amount' => 0.00,
         ]);
+    }
+
+    public function test_rejects_cash_receivable_payment_without_open_cash_session(): void
+    {
+        $cashier = $this->seedBaseCatalogAndCashier();
+        [$receivableId] = $this->seedReceivableScenario(10, $cashier->id);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson("/sales/receivables/{$receivableId}/payments", [
+                'amount' => 5,
+                'payment_method' => 'cash',
+                'reference' => 'COBRO-NO-CAJA',
+            ])
+            ->assertStatus(422);
     }
 
     public function test_reads_receivable_aging_and_customer_statement(): void
