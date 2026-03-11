@@ -7,6 +7,7 @@ use App\Services\Inventory\StockMovementService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
 use App\Services\Sales\PosSaleService;
+use App\Services\Sales\SaleApprovalService;
 
 Route::get('/', function () {
     return view('welcome');
@@ -40,18 +41,24 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
                 'product_id' => $item['product_id'] ?? null,
                 'quantity' => $item['quantity'],
                 'unit_price' => $item['unit_price'],
+                'prescription_code' => $item['prescription_code'] ?? null,
+                'approval_code' => $item['approval_code'] ?? null,
             ], $payload['items']);
         } else {
             $single = request()->validate([
                 'lot_id' => ['required', 'integer'],
                 'quantity' => ['required', 'integer', 'min:1'],
                 'unit_price' => ['required', 'numeric', 'min:0'],
+                'prescription_code' => ['nullable', 'string'],
+                'approval_code' => ['nullable', 'string'],
             ]);
 
             $items = [[
                 'lot_id' => (int) $single['lot_id'],
                 'quantity' => (int) $single['quantity'],
                 'unit_price' => (float) $single['unit_price'],
+                'prescription_code' => $single['prescription_code'] ?? null,
+                'approval_code' => $single['approval_code'] ?? null,
             ]];
         }
 
@@ -66,6 +73,22 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 
     Route::get('/pos/approve', fn () => response()->json(['ok' => true, 'flow' => 'approve']))
         ->middleware('perm:pos.sale.approve');
+
+    Route::post('/pos/approvals', function (SaleApprovalService $service) {
+        $payload = request()->validate([
+            'product_id' => ['required', 'integer'],
+            'reason' => ['required', 'string'],
+        ]);
+
+        $result = $service->create(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            (int) $payload['product_id'],
+            (string) $payload['reason'],
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:pos.sale.approve');
 
     Route::get('/stock/move', fn () => response()->json(['ok' => true, 'flow' => 'stock']))
         ->middleware('perm:stock.move.create');

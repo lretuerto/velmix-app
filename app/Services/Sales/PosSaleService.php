@@ -44,6 +44,8 @@ class PosSaleService
                         'quantity' => $allocation['quantity'],
                         'unit_price' => $item['unit_price'],
                         'line_total' => round($allocation['quantity'] * $item['unit_price'], 2),
+                        'prescription_code' => $item['prescription_code'],
+                        'approval_code' => $item['approval_code'],
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
@@ -67,6 +69,16 @@ class PosSaleService
                         'updated_at' => now(),
                     ]);
                 }
+
+                if ($item['approval_id'] !== null) {
+                    DB::table('sale_approvals')
+                        ->where('id', $item['approval_id'])
+                        ->update([
+                            'status' => 'consumed',
+                            'consumed_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                }
             }
 
             return [
@@ -79,6 +91,8 @@ class PosSaleService
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
                     'line_total' => $item['line_total'],
+                    'prescription_code' => $item['prescription_code'],
+                    'approval_code' => $item['approval_code'],
                     'allocations' => array_map(fn (array $allocation) => [
                         'lot_id' => $allocation['lot_id'],
                         'lot_code' => $allocation['lot_code'],
@@ -94,24 +108,32 @@ class PosSaleService
     {
         $quantity = (int) ($item['quantity'] ?? 0);
         $unitPrice = (float) ($item['unit_price'] ?? -1);
+        $prescriptionCode = $item['prescription_code'] ?? null;
+        $approvalCode = $item['approval_code'] ?? null;
 
         if ($quantity <= 0 || $unitPrice < 0) {
             throw new HttpException(422, 'Quantity and unit price must be valid.');
         }
 
         if (array_key_exists('lot_id', $item) && $item['lot_id'] !== null) {
-            return $this->resolveDirectLotItem($tenantId, (int) $item['lot_id'], $quantity, $unitPrice);
+            return $this->resolveDirectLotItem($tenantId, (int) $item['lot_id'], $quantity, $unitPrice, $prescriptionCode, $approvalCode);
         }
 
         if (array_key_exists('product_id', $item) && $item['product_id'] !== null) {
-            return $this->resolveFifoProductItem($tenantId, (int) $item['product_id'], $quantity, $unitPrice);
+            return $this->resolveFifoProductItem($tenantId, (int) $item['product_id'], $quantity, $unitPrice, $prescriptionCode, $approvalCode);
         }
 
         throw new HttpException(422, 'Each item must include lot_id or product_id.');
     }
 
-    private function resolveDirectLotItem(int $tenantId, int $lotId, int $quantity, float $unitPrice): array
-    {
+    private function resolveDirectLotItem(
+        int $tenantId,
+        int $lotId,
+        int $quantity,
+        float $unitPrice,
+        ?string $prescriptionCode,
+        ?string $approvalCode
+    ): array {
         $lot = DB::table('lots')
             ->join('products', 'products.id', '=', 'lots.product_id')
             ->where('lots.id', $lotId)
@@ -123,6 +145,7 @@ class PosSaleService
                 'lots.code',
                 'lots.stock_quantity',
                 'products.sku',
+                'products.is_controlled',
             ]);
 
         if ($lot === null) {
@@ -133,12 +156,23 @@ class PosSaleService
             throw new HttpException(422, 'Insufficient stock for lot.');
         }
 
+        $approval = $this->resolveControlledAuthorization(
+            $tenantId,
+            (int) $lot->product_id,
+            (bool) $lot->is_controlled,
+            $prescriptionCode,
+            $approvalCode,
+        );
+
         return [
             'product_id' => $lot->product_id,
             'product_sku' => $lot->sku,
             'quantity' => $quantity,
             'unit_price' => $unitPrice,
             'line_total' => round($quantity * $unitPrice, 2),
+            'prescription_code' => $prescriptionCode,
+            'approval_code' => $approval['approval_code'],
+            'approval_id' => $approval['approval_id'],
             'allocations' => [[
                 'lot_id' => $lot->id,
                 'lot_code' => $lot->code,
@@ -148,16 +182,30 @@ class PosSaleService
         ];
     }
 
-    private function resolveFifoProductItem(int $tenantId, int $productId, int $quantity, float $unitPrice): array
-    {
+    private function resolveFifoProductItem(
+        int $tenantId,
+        int $productId,
+        int $quantity,
+        float $unitPrice,
+        ?string $prescriptionCode,
+        ?string $approvalCode
+    ): array {
         $product = DB::table('products')
             ->where('id', $productId)
             ->where('tenant_id', $tenantId)
-            ->first(['id', 'sku']);
+            ->first(['id', 'sku', 'is_controlled']);
 
         if ($product === null) {
             throw new HttpException(404, 'Product not found.');
         }
+
+        $approval = $this->resolveControlledAuthorization(
+            $tenantId,
+            $productId,
+            (bool) $product->is_controlled,
+            $prescriptionCode,
+            $approvalCode,
+        );
 
         $lots = DB::table('lots')
             ->where('tenant_id', $tenantId)
@@ -174,7 +222,53 @@ class PosSaleService
             'quantity' => $quantity,
             'unit_price' => $unitPrice,
             'line_total' => round($quantity * $unitPrice, 2),
+            'prescription_code' => $prescriptionCode,
+            'approval_code' => $approval['approval_code'],
+            'approval_id' => $approval['approval_id'],
             'allocations' => $this->allocateFifoLots($lots, $quantity),
+        ];
+    }
+
+    private function resolveControlledAuthorization(
+        int $tenantId,
+        int $productId,
+        bool $isControlled,
+        ?string $prescriptionCode,
+        ?string $approvalCode
+    ): array {
+        if (! $isControlled) {
+            return [
+                'approval_id' => null,
+                'approval_code' => null,
+            ];
+        }
+
+        if ($prescriptionCode !== null && trim($prescriptionCode) !== '') {
+            return [
+                'approval_id' => null,
+                'approval_code' => null,
+            ];
+        }
+
+        if ($approvalCode === null || trim($approvalCode) === '') {
+            throw new HttpException(422, 'Controlled product requires prescription_code or approval_code.');
+        }
+
+        $approval = DB::table('sale_approvals')
+            ->where('tenant_id', $tenantId)
+            ->where('product_id', $productId)
+            ->where('code', $approvalCode)
+            ->where('status', 'approved')
+            ->lockForUpdate()
+            ->first(['id', 'code']);
+
+        if ($approval === null) {
+            throw new HttpException(422, 'Approval code is invalid or already consumed.');
+        }
+
+        return [
+            'approval_id' => $approval->id,
+            'approval_code' => $approval->code,
         ];
     }
 

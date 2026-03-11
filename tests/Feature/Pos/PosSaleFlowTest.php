@@ -285,4 +285,163 @@ class PosSaleFlowTest extends TestCase
             ->assertJsonCount(2, 'data.items')
             ->assertJsonPath('data.total_amount', 25.9);
     }
+
+    public function test_rejects_controlled_product_sale_without_prescription_or_approval(): void
+    {
+        $controlledProductId = $this->seedControlledProduct();
+        $cashier = $this->seedCashierUser();
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/pos/sales', [
+                'items' => [[
+                    'product_id' => $controlledProductId,
+                    'quantity' => 1,
+                    'unit_price' => 8.50,
+                ]],
+            ])
+            ->assertStatus(422);
+    }
+
+    public function test_allows_controlled_product_sale_with_prescription_code(): void
+    {
+        $controlledProductId = $this->seedControlledProduct();
+        $cashier = $this->seedCashierUser();
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/pos/sales', [
+                'items' => [[
+                    'product_id' => $controlledProductId,
+                    'quantity' => 1,
+                    'unit_price' => 8.50,
+                    'prescription_code' => 'RX-001',
+                ]],
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('sale_items', [
+            'product_id' => $controlledProductId,
+            'prescription_code' => 'RX-001',
+        ]);
+    }
+
+    public function test_allows_controlled_product_sale_with_admin_approval_and_consumes_it(): void
+    {
+        $controlledProductId = $this->seedControlledProduct();
+        $cashier = $this->seedCashierUser();
+        $admin = $this->seedAdminUser();
+
+        $approvalResponse = $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/pos/approvals', [
+                'product_id' => $controlledProductId,
+                'reason' => 'Urgencia validada por quimico farmaceutico',
+            ]);
+
+        $approvalResponse->assertOk();
+        $approvalCode = $approvalResponse->json('data.code');
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/pos/sales', [
+                'items' => [[
+                    'product_id' => $controlledProductId,
+                    'quantity' => 1,
+                    'unit_price' => 8.50,
+                    'approval_code' => $approvalCode,
+                ]],
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('sale_items', [
+            'product_id' => $controlledProductId,
+            'approval_code' => $approvalCode,
+        ]);
+
+        $this->assertDatabaseHas('sale_approvals', [
+            'code' => $approvalCode,
+            'status' => 'consumed',
+        ]);
+    }
+
+    private function seedControlledProduct(): int
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+            \Database\Seeders\InventoryCatalogSeeder::class,
+        ]);
+
+        DB::table('products')->insert([
+            'tenant_id' => 10,
+            'sku' => 'CLON-2',
+            'name' => 'Clonazepam 2mg',
+            'status' => 'active',
+            'is_controlled' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $productId = DB::table('products')->where('tenant_id', 10)->where('sku', 'CLON-2')->value('id');
+
+        DB::table('lots')->insert([
+            'tenant_id' => 10,
+            'product_id' => $productId,
+            'code' => 'L-CLON-001',
+            'expires_at' => '2027-09-30',
+            'stock_quantity' => 25,
+            'status' => 'available',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $productId;
+    }
+
+    private function seedCashierUser(): User
+    {
+        $user = User::factory()->create();
+        $cashierRoleId = DB::table('roles')->where('code', 'CAJERO')->value('id');
+
+        DB::table('tenant_user')->insert([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('tenant_user_role')->insert([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'role_id' => $cashierRoleId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $user;
+    }
+
+    private function seedAdminUser(): User
+    {
+        $user = User::factory()->create();
+        $adminRoleId = DB::table('roles')->where('code', 'ADMIN')->value('id');
+
+        DB::table('tenant_user')->insert([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('tenant_user_role')->insert([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'role_id' => $adminRoleId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $user;
+    }
 }
