@@ -207,17 +207,19 @@ class CreditNoteService
                 ]);
             }
 
+            $payloadSnapshot = app(BillingDocumentPayloadService::class)->createForCreditNote($tenantId, $creditNoteId, $userId);
+
             DB::table('outbox_events')->insert([
                 'tenant_id' => $tenantId,
                 'aggregate_type' => 'sale_credit_note',
                 'aggregate_id' => $creditNoteId,
                 'event_type' => 'credit_note.created',
-                'payload' => json_encode([
+                'payload' => json_encode(array_merge([
                     'credit_note_id' => $creditNoteId,
                     'sale_id' => $saleId,
                     'series' => $series,
                     'number' => $nextNumber,
-                ], JSON_THROW_ON_ERROR),
+                ], app(BillingDocumentPayloadService::class)->outboxEnvelope($payloadSnapshot)), JSON_THROW_ON_ERROR),
                 'status' => 'pending',
                 'created_at' => now(),
                 'updated_at' => now(),

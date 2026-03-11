@@ -28,6 +28,7 @@ class BillingVoucherFlowTest extends TestCase
             ->assertJsonPath('data.status', 'pending');
 
         $voucherId = DB::table('electronic_vouchers')->where('sale_id', $saleId)->value('id');
+        $outboxPayload = json_decode((string) DB::table('outbox_events')->where('aggregate_id', $voucherId)->value('payload'), true, 512, JSON_THROW_ON_ERROR);
 
         $this->assertDatabaseHas('outbox_events', [
             'tenant_id' => 10,
@@ -37,6 +38,22 @@ class BillingVoucherFlowTest extends TestCase
             'status' => 'pending',
         ]);
 
+        $this->assertDatabaseHas('billing_document_payloads', [
+            'tenant_id' => 10,
+            'aggregate_type' => 'electronic_voucher',
+            'aggregate_id' => $voucherId,
+            'provider_code' => 'fake_sunat',
+            'provider_environment' => 'sandbox',
+            'schema_version' => 'fake_sunat.v1',
+            'document_kind' => 'voucher',
+            'document_number' => 'B001-1',
+        ]);
+        $this->assertSame('fake_sunat.v1', $outboxPayload['schema_version']);
+        $this->assertSame('voucher', $outboxPayload['document_kind']);
+        $this->assertSame('B001-1', $outboxPayload['document_number']);
+        $this->assertArrayHasKey('billing_payload_id', $outboxPayload);
+        $this->assertArrayHasKey('document_payload', $outboxPayload);
+
         $this->assertDatabaseHas('tenant_activity_logs', [
             'tenant_id' => 10,
             'user_id' => $user->id,
@@ -45,6 +62,32 @@ class BillingVoucherFlowTest extends TestCase
             'aggregate_type' => 'electronic_voucher',
             'aggregate_id' => $voucherId,
         ]);
+    }
+
+    public function test_reads_voucher_payload_snapshots_for_current_tenant(): void
+    {
+        $saleId = $this->createSaleForTenant(10);
+        $user = $this->createBillingUserForTenant(10, 'ADMIN');
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/vouchers', [
+                'sale_id' => $saleId,
+                'type' => 'boleta',
+            ])
+            ->assertOk();
+
+        $voucherId = (int) DB::table('electronic_vouchers')->where('sale_id', $saleId)->value('id');
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/billing/vouchers/{$voucherId}/payloads")
+            ->assertOk()
+            ->assertJsonPath('data.0.aggregate_type', 'electronic_voucher')
+            ->assertJsonPath('data.0.provider_code', 'fake_sunat')
+            ->assertJsonPath('data.0.schema_version', 'fake_sunat.v1')
+            ->assertJsonPath('data.0.document_kind', 'voucher')
+            ->assertJsonPath('data.0.document_number', 'B001-1');
     }
 
     public function test_rejects_voucher_creation_for_sale_from_other_tenant(): void

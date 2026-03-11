@@ -83,8 +83,10 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 
 - `POST /billing/vouchers`
 - `GET /billing/vouchers/{voucher}`
+- `GET /billing/vouchers/{voucher}/payloads`
 - `POST /billing/credit-notes`
 - `GET /billing/credit-notes/{creditNote}`
+- `GET /billing/credit-notes/{creditNote}/payloads`
 - `GET /billing/provider-profile`
 - `PUT /billing/provider-profile`
 - `POST /billing/provider-profile/check`
@@ -174,6 +176,21 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - El provider actual es `fake_sunat`
 - Si no se manda `simulate_result` en el outbox, se usa `default_outcome` del perfil
 - `GET /billing/outbox/provider-trace` devuelve resumen e intentos recientes por `provider_code` y `provider_environment`
+
+## Payloads versionados de billing
+
+- Cada voucher y nota de credito genera un snapshot en `billing_document_payloads`
+- El outbox ahora referencia:
+  - `billing_payload_id`
+  - `schema_version`
+  - `document_kind`
+  - `document_number`
+  - `document_payload`
+- Lectura operativa:
+  - `GET /billing/vouchers/{voucher}/payloads`
+  - `GET /billing/credit-notes/{creditNote}/payloads`
+- Version inicial actual:
+  - `fake_sunat.v1`
 
 ## Donde mirar el contrato completo
 

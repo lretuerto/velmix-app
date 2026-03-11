@@ -54,14 +54,18 @@ class VoucherService
                 'updated_at' => now(),
             ]);
 
-            $payload = [
-                'voucher_id' => $voucherId,
-                'sale_id' => $sale->id,
-                'sale_reference' => $sale->reference,
-                'series' => $series,
-                'number' => $nextNumber,
-                'total_amount' => $sale->total_amount,
-            ];
+            $payloadSnapshot = app(BillingDocumentPayloadService::class)->createForVoucher($tenantId, $voucherId, $userId);
+            $payload = array_merge(
+                [
+                    'voucher_id' => $voucherId,
+                    'sale_id' => $sale->id,
+                    'sale_reference' => $sale->reference,
+                    'series' => $series,
+                    'number' => $nextNumber,
+                    'total_amount' => $sale->total_amount,
+                ],
+                app(BillingDocumentPayloadService::class)->outboxEnvelope($payloadSnapshot),
+            );
 
             DB::table('outbox_events')->insert([
                 'tenant_id' => $tenantId,

@@ -4,6 +4,7 @@ use App\Services\Audit\TenantActivityLogService;
 use App\Services\Billing\OutboxDispatchService;
 use App\Services\Billing\VoucherService;
 use App\Services\Billing\CreditNoteService;
+use App\Services\Billing\BillingDocumentPayloadService;
 use App\Services\Billing\BillingProviderHealthService;
 use App\Services\Billing\BillingProviderProfileService;
 use App\Services\Cash\CashMovementService;
@@ -41,7 +42,7 @@ Route::get('/docs', function () {
     return response()->json([
         'data' => [
             'project' => 'VELMiX ERP',
-            'version' => 'sprint1-day102',
+            'version' => 'sprint1-day105',
             'documents' => [
                 ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
                 ['name' => 'API Guide', 'path' => '/docs/api-guide'],
@@ -1034,6 +1035,23 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         return response()->json(['data' => $voucherData]);
     })->middleware('perm:billing.voucher.read');
 
+    Route::get('/billing/vouchers/{voucher}/payloads', function (int $voucher, BillingDocumentPayloadService $service) {
+        $tenantId = (int) request()->attributes->get('tenant_id');
+
+        $exists = DB::table('electronic_vouchers')
+            ->where('tenant_id', $tenantId)
+            ->where('id', $voucher)
+            ->exists();
+
+        if (! $exists) {
+            abort(404, 'Voucher not found.');
+        }
+
+        return response()->json([
+            'data' => $service->listForAggregate($tenantId, 'electronic_voucher', $voucher),
+        ]);
+    })->middleware('perm:billing.voucher.read');
+
     Route::post('/billing/credit-notes', function (CreditNoteService $service) {
         $payload = request()->validate([
             'sale_id' => ['required', 'integer'],
@@ -1064,6 +1082,23 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
+    })->middleware('perm:billing.credit-note.read');
+
+    Route::get('/billing/credit-notes/{creditNote}/payloads', function (int $creditNote, BillingDocumentPayloadService $service) {
+        $tenantId = (int) request()->attributes->get('tenant_id');
+
+        $exists = DB::table('sale_credit_notes')
+            ->where('tenant_id', $tenantId)
+            ->where('id', $creditNote)
+            ->exists();
+
+        if (! $exists) {
+            abort(404, 'Credit note not found.');
+        }
+
+        return response()->json([
+            'data' => $service->listForAggregate($tenantId, 'sale_credit_note', $creditNote),
+        ]);
     })->middleware('perm:billing.credit-note.read');
 
     Route::post('/billing/outbox/dispatch', function (OutboxDispatchService $service) {

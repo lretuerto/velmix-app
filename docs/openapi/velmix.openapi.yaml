@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VELMiX ERP API
-  version: sprint1-day102
+  version: sprint1-day105
   description: |
     Contrato OpenAPI de endpoints prioritarios de VELMiX ERP.
     Cubre la convencion multi-tenant y los flujos criticos ya implementados.
@@ -739,6 +739,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataEnvelope'
+  /billing/vouchers/{voucher}/payloads:
+    get:
+      tags: [Billing]
+      summary: Lista snapshots versionados de payload para un voucher
+      parameters:
+        - $ref: '#/components/parameters/VoucherId'
+      responses:
+        '200':
+          description: Payloads del voucher
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
   /billing/credit-notes:
     post:
       tags: [Billing]
@@ -765,6 +778,19 @@ paths:
       responses:
         '200':
           description: Nota de credito
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/credit-notes/{creditNote}/payloads:
+    get:
+      tags: [Billing]
+      summary: Lista snapshots versionados de payload para una nota de credito
+      parameters:
+        - $ref: '#/components/parameters/CreditNoteId'
+      responses:
+        '200':
+          description: Payloads de la nota de credito
           content:
             application/json:
               schema:

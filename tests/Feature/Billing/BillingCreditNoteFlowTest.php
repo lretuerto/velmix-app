@@ -34,6 +34,7 @@ class BillingCreditNoteFlowTest extends TestCase
             ->assertJsonPath('data.refund_payment_method', 'cash');
 
         $creditNoteId = DB::table('sale_credit_notes')->where('sale_id', $saleId)->value('id');
+        $outboxPayload = json_decode((string) DB::table('outbox_events')->where('aggregate_type', 'sale_credit_note')->where('aggregate_id', $creditNoteId)->value('payload'), true, 512, JSON_THROW_ON_ERROR);
 
         $this->assertDatabaseHas('sales', [
             'id' => $saleId,
@@ -57,6 +58,21 @@ class BillingCreditNoteFlowTest extends TestCase
             'amount' => 21.00,
         ]);
 
+        $this->assertDatabaseHas('billing_document_payloads', [
+            'tenant_id' => 10,
+            'aggregate_type' => 'sale_credit_note',
+            'aggregate_id' => $creditNoteId,
+            'provider_code' => 'fake_sunat',
+            'provider_environment' => 'sandbox',
+            'schema_version' => 'fake_sunat.v1',
+            'document_kind' => 'credit_note',
+            'document_number' => 'NC01-1',
+        ]);
+        $this->assertSame('fake_sunat.v1', $outboxPayload['schema_version']);
+        $this->assertSame('credit_note', $outboxPayload['document_kind']);
+        $this->assertArrayHasKey('billing_payload_id', $outboxPayload);
+        $this->assertArrayHasKey('document_payload', $outboxPayload);
+
         $this->assertDatabaseHas('cash_movements', [
             'type' => 'credit_note_refund',
             'amount' => 21.00,
@@ -75,6 +91,16 @@ class BillingCreditNoteFlowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.refund.amount', 21)
             ->assertJsonPath('data.voucher.series', 'B001');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/billing/credit-notes/{$creditNoteId}/payloads")
+            ->assertOk()
+            ->assertJsonPath('data.0.aggregate_type', 'sale_credit_note')
+            ->assertJsonPath('data.0.provider_code', 'fake_sunat')
+            ->assertJsonPath('data.0.schema_version', 'fake_sunat.v1')
+            ->assertJsonPath('data.0.document_kind', 'credit_note')
+            ->assertJsonPath('data.0.document_number', 'NC01-1');
     }
 
     public function test_can_create_partial_credit_note_and_keep_sale_completed_until_fully_credited(): void
