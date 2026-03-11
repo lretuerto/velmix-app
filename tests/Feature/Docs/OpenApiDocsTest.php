@@ -23,6 +23,7 @@ class OpenApiDocsTest extends TestCase
         $response->assertOk();
         $this->assertStringContainsString('/pos/sales', $response->getContent());
         $this->assertStringContainsString('/billing/vouchers', $response->getContent());
+        $this->assertStringContainsString('/billing/outbox/summary', $response->getContent());
         $this->assertStringContainsString('/audit/timeline', $response->getContent());
         $this->assertStringContainsString('/auth/tokens', $response->getContent());
         $this->assertStringContainsString('bearerAuth', $response->getContent());

@@ -772,7 +772,7 @@ paths:
   /billing/outbox/dispatch:
     post:
       tags: [Billing]
-      summary: Despacha siguiente evento outbox
+      summary: Despacha eventos outbox
       requestBody:
         required: false
         content:
@@ -783,9 +783,24 @@ paths:
                 simulate_result:
                   type: string
                   enum: [accepted, failed, rejected]
+                limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
       responses:
         '200':
           description: Evento procesado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/outbox/summary:
+    get:
+      tags: [Billing]
+      summary: Lee backlog y ultimo intento del outbox
+      responses:
+        '200':
+          description: Summary del outbox
           content:
             application/json:
               schema:

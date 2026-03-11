@@ -143,6 +143,74 @@ class BillingDispatchFlowTest extends TestCase
         ]);
     }
 
+    public function test_dispatch_batch_processes_multiple_pending_events(): void
+    {
+        [$user, $voucherId, $eventId] = $this->seedPendingVoucherScenario();
+
+        $secondSaleId = DB::table('sales')->insertGetId([
+            'tenant_id' => 10,
+            'user_id' => User::factory()->create()->id,
+            'reference' => 'SALE-DISPATCH-10-BATCH',
+            'status' => 'completed',
+            'total_amount' => 44.00,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $secondVoucherId = DB::table('electronic_vouchers')->insertGetId([
+            'tenant_id' => 10,
+            'sale_id' => $secondSaleId,
+            'type' => 'boleta',
+            'series' => 'B001',
+            'number' => 2,
+            'status' => 'pending',
+            'sunat_ticket' => null,
+            'rejection_reason' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $secondEventId = DB::table('outbox_events')->insertGetId([
+            'tenant_id' => 10,
+            'aggregate_type' => 'electronic_voucher',
+            'aggregate_id' => $secondVoucherId,
+            'event_type' => 'voucher.created',
+            'payload' => json_encode(['voucher_id' => $secondVoucherId], JSON_THROW_ON_ERROR),
+            'status' => 'pending',
+            'retry_count' => 0,
+            'last_error' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/outbox/dispatch', [
+                'limit' => 2,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.processed_count', 2)
+            ->assertJsonPath('data.status_counts.processed', 2);
+
+        $this->assertDatabaseHas('outbox_events', [
+            'id' => $eventId,
+            'status' => 'processed',
+        ]);
+
+        $this->assertDatabaseHas('outbox_events', [
+            'id' => $secondEventId,
+            'status' => 'processed',
+        ]);
+
+        $this->assertDatabaseHas('tenant_activity_logs', [
+            'tenant_id' => 10,
+            'domain' => 'billing',
+            'event_type' => 'billing.outbox.dispatch_processed',
+            'aggregate_type' => 'outbox_event',
+            'aggregate_id' => $eventId,
+        ]);
+    }
+
     private function seedPendingVoucherScenario(): array
     {
         $this->seed([

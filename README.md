@@ -51,6 +51,7 @@ php artisan test
 - OpenAPI YAML: `GET /docs/openapi.yaml`
 - Guía operativa API: `GET /docs/api-guide`
 - Checklist de release: `GET /docs/release-readiness`
+- Worker manual outbox: `php artisan billing:dispatch-outbox --limit=20`
 
 Archivos fuente:
 
@@ -65,6 +66,7 @@ composer run test
 composer run velmix:reset
 composer run velmix:test
 composer run velmix:qa
+composer run velmix:outbox
 composer run velmix:routes
 ```
 

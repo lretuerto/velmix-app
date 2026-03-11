@@ -86,6 +86,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `POST /billing/credit-notes`
 - `GET /billing/credit-notes/{creditNote}`
 - `POST /billing/outbox/dispatch`
+- `GET /billing/outbox/summary`
 - `POST /billing/outbox/{event}/retry`
 - `GET /billing/outbox/{event}/attempts`
 
@@ -147,6 +148,12 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   ]
 }
 ```
+
+## Worker operativo
+
+- Comando manual: `php artisan billing:dispatch-outbox --limit=20`
+- Si no se pasa `--tenant`, procesa tenants con eventos pendientes
+- Para pruebas controladas: `--simulate-result=accepted|rejected|transient_fail`
 
 ## Donde mirar el contrato completo
 

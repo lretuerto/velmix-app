@@ -76,6 +76,105 @@ class BillingReadFlowTest extends TestCase
             ->assertJsonPath('data.1.status', 'accepted');
     }
 
+    public function test_reads_outbox_queue_summary_for_current_tenant(): void
+    {
+        [$user, $voucherId, $eventId] = $this->seedVoucherScenario(10, 'ADMIN');
+
+        $processedSaleId = DB::table('sales')->insertGetId([
+            'tenant_id' => 10,
+            'user_id' => User::factory()->create()->id,
+            'reference' => 'SALE-READ-PROCESSED-10',
+            'status' => 'completed',
+            'total_amount' => 55.00,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $processedVoucherId = DB::table('electronic_vouchers')->insertGetId([
+            'tenant_id' => 10,
+            'sale_id' => $processedSaleId,
+            'type' => 'boleta',
+            'series' => 'B001',
+            'number' => 2,
+            'status' => 'accepted',
+            'sunat_ticket' => 'SUNAT-READY',
+            'rejection_reason' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $processedEventId = DB::table('outbox_events')->insertGetId([
+            'tenant_id' => 10,
+            'aggregate_type' => 'electronic_voucher',
+            'aggregate_id' => $processedVoucherId,
+            'event_type' => 'voucher.created',
+            'payload' => json_encode(['voucher_id' => $processedVoucherId], JSON_THROW_ON_ERROR),
+            'status' => 'processed',
+            'retry_count' => 0,
+            'last_error' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('outbox_attempts')->insert([
+            'outbox_event_id' => $processedEventId,
+            'status' => 'accepted',
+            'sunat_ticket' => 'SUNAT-READY',
+            'error_message' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $failedSaleId = DB::table('sales')->insertGetId([
+            'tenant_id' => 10,
+            'user_id' => User::factory()->create()->id,
+            'reference' => 'SALE-READ-FAILED-10',
+            'status' => 'completed',
+            'total_amount' => 60.00,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $failedVoucherId = DB::table('electronic_vouchers')->insertGetId([
+            'tenant_id' => 10,
+            'sale_id' => $failedSaleId,
+            'type' => 'boleta',
+            'series' => 'B001',
+            'number' => 3,
+            'status' => 'failed',
+            'sunat_ticket' => null,
+            'rejection_reason' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('outbox_events')->insert([
+            'tenant_id' => 10,
+            'aggregate_type' => 'electronic_voucher',
+            'aggregate_id' => $failedVoucherId,
+            'event_type' => 'voucher.created',
+            'payload' => json_encode(['voucher_id' => $failedVoucherId], JSON_THROW_ON_ERROR),
+            'status' => 'failed',
+            'retry_count' => 1,
+            'last_error' => 'Temporary transport failure.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/billing/outbox/summary')
+            ->assertOk()
+            ->assertJsonPath('data.tenant_id', 10)
+            ->assertJsonPath('data.pending_count', 1)
+            ->assertJsonPath('data.failed_count', 1)
+            ->assertJsonPath('data.processed_count', 1)
+            ->assertJsonPath('data.oldest_pending.event_id', $eventId)
+            ->assertJsonPath('data.latest_attempt.event_id', $processedEventId)
+            ->assertJsonPath('data.latest_attempt.status', 'accepted')
+            ->assertJsonPath('data.oldest_pending.aggregate_id', $voucherId);
+    }
+
     private function seedVoucherScenario(int $tenantId, string $roleCode): array
     {
         $this->seed([

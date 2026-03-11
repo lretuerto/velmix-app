@@ -1067,18 +1067,32 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
     Route::post('/billing/outbox/dispatch', function (OutboxDispatchService $service) {
         $payload = request()->validate([
             'simulate_result' => ['nullable', 'string'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $result = $service->dispatchNext(
-            (int) request()->attributes->get('tenant_id'),
-            (string) ($payload['simulate_result'] ?? 'accepted'),
-        );
+        $tenantId = (int) request()->attributes->get('tenant_id');
+        $outcome = (string) ($payload['simulate_result'] ?? 'accepted');
+        $limit = (int) ($payload['limit'] ?? 1);
+
+        if ($limit > 1) {
+            $result = $service->dispatchBatch($tenantId, $limit, $outcome);
+
+            return response()->json(['data' => $result]);
+        }
+
+        $result = $service->dispatchNext($tenantId, $outcome);
 
         $status = (int) ($result['http_status'] ?? 200);
         unset($result['http_status']);
 
         return response()->json(['data' => $result], $status);
     })->middleware('perm:billing.outbox.dispatch');
+
+    Route::get('/billing/outbox/summary', function (OutboxDispatchService $service) {
+        $result = $service->queueSummary((int) request()->attributes->get('tenant_id'));
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:billing.outbox.read');
 
     Route::post('/billing/outbox/{event}/retry', function (int $event, OutboxDispatchService $service) {
         $result = $service->retryFailed(
