@@ -339,6 +339,49 @@ class PosSaleFlowTest extends TestCase
         ]);
     }
 
+    public function test_credit_sale_requires_customer_and_creates_receivable(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+            \Database\Seeders\InventoryCatalogSeeder::class,
+        ]);
+
+        $cashier = $this->seedCashierUser();
+        $lotId = DB::table('lots')->where('tenant_id', 10)->value('id');
+        $customerId = DB::table('customers')->insertGetId([
+            'tenant_id' => 10,
+            'document_type' => 'dni',
+            'document_number' => '44556677',
+            'name' => 'Cliente Credito POS',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/pos/sales', [
+                'lot_id' => $lotId,
+                'quantity' => 2,
+                'unit_price' => 3.50,
+                'payment_method' => 'credit',
+                'customer_id' => $customerId,
+                'due_at' => now()->addDays(10)->toDateString(),
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.payment_method', 'credit')
+            ->assertJsonPath('data.customer.id', $customerId)
+            ->assertJsonPath('data.receivable.status', 'pending');
+
+        $this->assertDatabaseHas('sale_receivables', [
+            'tenant_id' => 10,
+            'customer_id' => $customerId,
+            'status' => 'pending',
+            'outstanding_amount' => 7.00,
+        ]);
+    }
+
     public function test_rejects_controlled_product_sale_without_prescription_or_approval(): void
     {
         $controlledProductId = $this->seedControlledProduct();

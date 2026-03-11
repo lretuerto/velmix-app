@@ -13,6 +13,10 @@ class RbacCatalogSeeder extends Seeder
             ['code' => 'pos.sale.execute', 'name' => 'Ejecutar venta POS'],
             ['code' => 'pos.sale.read', 'name' => 'Consultar ventas POS'],
             ['code' => 'pos.sale.approve', 'name' => 'Aprobar venta POS'],
+            ['code' => 'sales.customer.create', 'name' => 'Crear clientes de venta'],
+            ['code' => 'sales.customer.read', 'name' => 'Consultar clientes de venta'],
+            ['code' => 'sales.receivable.read', 'name' => 'Consultar cuentas por cobrar'],
+            ['code' => 'sales.receivable.pay', 'name' => 'Registrar cobranzas'],
             ['code' => 'inventory.product.create', 'name' => 'Crear productos de inventario'],
             ['code' => 'inventory.product.read', 'name' => 'Ver productos de inventario'],
             ['code' => 'inventory.lot.create', 'name' => 'Crear lotes de inventario'],
@@ -68,8 +72,8 @@ class RbacCatalogSeeder extends Seeder
         $permIds = DB::table('permissions')->pluck('id', 'code');
 
         $matrix = [
-            'ADMIN' => ['pos.sale.execute', 'pos.sale.read', 'pos.sale.approve', 'inventory.product.create', 'inventory.product.read', 'inventory.lot.create', 'inventory.lot.read', 'billing.voucher.issue', 'billing.voucher.read', 'billing.outbox.dispatch', 'billing.outbox.read', 'cash.session.open', 'cash.session.close', 'cash.session.read', 'cash.movement.create', 'cash.movement.read', 'reports.daily.read', 'reports.inventory.read', 'reports.sales-profitability.read', 'purchase.supplier.create', 'purchase.supplier.read', 'purchase.order.create', 'purchase.order.read', 'purchase.replenishment.read', 'purchase.payable.read', 'purchase.payable.pay', 'purchase.receipt.create', 'purchase.receipt.read', 'stock.move.create', 'stock.move.read', 'rbac.role.assign', 'rbac.permission.manage'],
-            'CAJERO' => ['pos.sale.execute', 'pos.sale.read', 'billing.voucher.issue', 'billing.voucher.read', 'cash.session.open', 'cash.session.close', 'cash.session.read', 'cash.movement.create', 'cash.movement.read'],
+            'ADMIN' => ['pos.sale.execute', 'pos.sale.read', 'pos.sale.approve', 'sales.customer.create', 'sales.customer.read', 'sales.receivable.read', 'sales.receivable.pay', 'inventory.product.create', 'inventory.product.read', 'inventory.lot.create', 'inventory.lot.read', 'billing.voucher.issue', 'billing.voucher.read', 'billing.outbox.dispatch', 'billing.outbox.read', 'cash.session.open', 'cash.session.close', 'cash.session.read', 'cash.movement.create', 'cash.movement.read', 'reports.daily.read', 'reports.inventory.read', 'reports.sales-profitability.read', 'purchase.supplier.create', 'purchase.supplier.read', 'purchase.order.create', 'purchase.order.read', 'purchase.replenishment.read', 'purchase.payable.read', 'purchase.payable.pay', 'purchase.receipt.create', 'purchase.receipt.read', 'stock.move.create', 'stock.move.read', 'rbac.role.assign', 'rbac.permission.manage'],
+            'CAJERO' => ['pos.sale.execute', 'pos.sale.read', 'sales.customer.create', 'sales.customer.read', 'sales.receivable.read', 'sales.receivable.pay', 'billing.voucher.issue', 'billing.voucher.read', 'cash.session.open', 'cash.session.close', 'cash.session.read', 'cash.movement.create', 'cash.movement.read'],
             'ALMACENERO' => ['inventory.product.create', 'inventory.product.read', 'inventory.lot.create', 'inventory.lot.read', 'reports.inventory.read', 'purchase.supplier.read', 'purchase.order.read', 'purchase.replenishment.read', 'purchase.payable.read', 'purchase.receipt.create', 'purchase.receipt.read', 'stock.move.create', 'stock.move.read'],
         ];
 

@@ -63,6 +63,63 @@ class PosSaleReadFlowTest extends TestCase
             ->assertJsonPath('data.items.0.lot_code', DB::table('lots')->where('id', $lotId)->value('code'));
     }
 
+    public function test_reads_credit_sale_detail_with_customer_and_receivable(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+            \Database\Seeders\InventoryCatalogSeeder::class,
+        ]);
+
+        $cashier = $this->seedUserWithRole(10, 'CAJERO');
+        $customerId = DB::table('customers')->insertGetId([
+            'tenant_id' => 10,
+            'document_type' => 'dni',
+            'document_number' => '11223344',
+            'name' => 'Cliente Read AR',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $saleId = DB::table('sales')->insertGetId([
+            'tenant_id' => 10,
+            'user_id' => $cashier->id,
+            'customer_id' => $customerId,
+            'reference' => 'SALE-CREDIT-READ',
+            'status' => 'completed',
+            'payment_method' => 'credit',
+            'total_amount' => 20.00,
+            'gross_cost' => 8.00,
+            'gross_margin' => 12.00,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('sale_receivables')->insert([
+            'tenant_id' => 10,
+            'customer_id' => $customerId,
+            'sale_id' => $saleId,
+            'total_amount' => 20.00,
+            'paid_amount' => 0,
+            'outstanding_amount' => 20.00,
+            'status' => 'pending',
+            'due_at' => now()->addDays(20),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/pos/sales/{$saleId}")
+            ->assertOk()
+            ->assertJsonPath('data.payment_method', 'credit')
+            ->assertJsonPath('data.customer.id', $customerId)
+            ->assertJsonPath('data.customer.name', 'Cliente Read AR')
+            ->assertJsonPath('data.receivable.status', 'pending')
+            ->assertJsonPath('data.receivable.outstanding_amount', 20);
+    }
+
     public function test_reads_cancelled_sale_detail(): void
     {
         [$saleId] = $this->createCompletedSaleForTenant(10, 'SALE-CANCELLED-10');

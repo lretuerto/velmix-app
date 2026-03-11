@@ -34,7 +34,9 @@ class DailyReportService
                 SUM(CASE WHEN payment_method = 'card' THEN 1 ELSE 0 END) as card_count,
                 COALESCE(SUM(CASE WHEN payment_method = 'card' THEN total_amount ELSE 0 END), 0) as card_total,
                 SUM(CASE WHEN payment_method = 'transfer' THEN 1 ELSE 0 END) as transfer_count,
-                COALESCE(SUM(CASE WHEN payment_method = 'transfer' THEN total_amount ELSE 0 END), 0) as transfer_total
+                COALESCE(SUM(CASE WHEN payment_method = 'transfer' THEN total_amount ELSE 0 END), 0) as transfer_total,
+                SUM(CASE WHEN payment_method = 'credit' THEN 1 ELSE 0 END) as credit_count,
+                COALESCE(SUM(CASE WHEN payment_method = 'credit' THEN total_amount ELSE 0 END), 0) as credit_total
             ")
             ->first();
 
@@ -136,6 +138,10 @@ class DailyReportService
                     'transfer' => [
                         'count' => (int) ($completedSales->transfer_count ?? 0),
                         'total' => round((float) ($completedSales->transfer_total ?? 0), 2),
+                    ],
+                    'credit' => [
+                        'count' => (int) ($completedSales->credit_count ?? 0),
+                        'total' => round((float) ($completedSales->credit_total ?? 0), 2),
                     ],
                 ],
             ],

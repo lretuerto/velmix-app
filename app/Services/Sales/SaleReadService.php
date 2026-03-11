@@ -14,7 +14,9 @@ class SaleReadService
         }
 
         return DB::table('sales')
+            ->leftJoin('customers', 'customers.id', '=', 'sales.customer_id')
             ->leftJoin('electronic_vouchers', 'electronic_vouchers.sale_id', '=', 'sales.id')
+            ->leftJoin('sale_receivables', 'sale_receivables.sale_id', '=', 'sales.id')
             ->where('sales.tenant_id', $tenantId)
             ->orderByDesc('sales.id')
             ->get([
@@ -27,6 +29,13 @@ class SaleReadService
                 'sales.gross_margin',
                 'sales.cancel_reason',
                 'sales.cancelled_at',
+                'customers.id as customer_id',
+                'customers.document_type as customer_document_type',
+                'customers.document_number as customer_document_number',
+                'customers.name as customer_name',
+                'sale_receivables.id as receivable_id',
+                'sale_receivables.status as receivable_status',
+                'sale_receivables.outstanding_amount as receivable_outstanding_amount',
                 'electronic_vouchers.id as voucher_id',
                 'electronic_vouchers.status as voucher_status',
             ])
@@ -40,6 +49,17 @@ class SaleReadService
                 'gross_margin' => (float) $sale->gross_margin,
                 'cancel_reason' => $sale->cancel_reason,
                 'cancelled_at' => $sale->cancelled_at,
+                'customer' => $sale->customer_id !== null ? [
+                    'id' => $sale->customer_id,
+                    'document_type' => $sale->customer_document_type,
+                    'document_number' => $sale->customer_document_number,
+                    'name' => $sale->customer_name,
+                ] : null,
+                'receivable' => $sale->receivable_id !== null ? [
+                    'id' => $sale->receivable_id,
+                    'status' => $sale->receivable_status,
+                    'outstanding_amount' => (float) $sale->receivable_outstanding_amount,
+                ] : null,
                 'voucher_id' => $sale->voucher_id,
                 'voucher_status' => $sale->voucher_status,
             ])
@@ -53,7 +73,9 @@ class SaleReadService
         }
 
         $sale = DB::table('sales')
+            ->leftJoin('customers', 'customers.id', '=', 'sales.customer_id')
             ->leftJoin('electronic_vouchers', 'electronic_vouchers.sale_id', '=', 'sales.id')
+            ->leftJoin('sale_receivables', 'sale_receivables.sale_id', '=', 'sales.id')
             ->where('sales.tenant_id', $tenantId)
             ->where('sales.id', $saleId)
             ->first([
@@ -66,6 +88,14 @@ class SaleReadService
                 'sales.gross_margin',
                 'sales.cancel_reason',
                 'sales.cancelled_at',
+                'customers.id as customer_id',
+                'customers.document_type as customer_document_type',
+                'customers.document_number as customer_document_number',
+                'customers.name as customer_name',
+                'sale_receivables.id as receivable_id',
+                'sale_receivables.status as receivable_status',
+                'sale_receivables.due_at as receivable_due_at',
+                'sale_receivables.outstanding_amount as receivable_outstanding_amount',
                 'electronic_vouchers.id as voucher_id',
                 'electronic_vouchers.status as voucher_status',
                 'electronic_vouchers.series as voucher_series',
@@ -124,6 +154,18 @@ class SaleReadService
             'gross_margin' => (float) $sale->gross_margin,
             'cancel_reason' => $sale->cancel_reason,
             'cancelled_at' => $sale->cancelled_at,
+            'customer' => $sale->customer_id !== null ? [
+                'id' => $sale->customer_id,
+                'document_type' => $sale->customer_document_type,
+                'document_number' => $sale->customer_document_number,
+                'name' => $sale->customer_name,
+            ] : null,
+            'receivable' => $sale->receivable_id !== null ? [
+                'id' => $sale->receivable_id,
+                'status' => $sale->receivable_status,
+                'due_at' => $sale->receivable_due_at,
+                'outstanding_amount' => (float) $sale->receivable_outstanding_amount,
+            ] : null,
             'voucher' => $sale->voucher_id !== null ? [
                 'id' => $sale->voucher_id,
                 'status' => $sale->voucher_status,

@@ -17,8 +17,10 @@ use App\Services\Reports\DailyReportService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
 use App\Services\Reports\SalesProfitabilityReportService;
+use App\Services\Sales\CustomerService;
 use App\Services\Sales\PosSaleService;
 use App\Services\Sales\SaleCancellationService;
+use App\Services\Sales\SaleReceivableService;
 use App\Services\Sales\SaleReadService;
 use App\Services\Sales\SaleApprovalService;
 
@@ -39,8 +41,13 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 
     Route::post('/pos/sales', function (PosSaleService $service) {
         $paymentMethod = (string) (request()->validate([
-            'payment_method' => ['nullable', 'in:cash,card,transfer'],
+            'payment_method' => ['nullable', 'in:cash,card,transfer,credit'],
+            'customer_id' => ['nullable', 'integer'],
+            'due_at' => ['nullable', 'date'],
         ])['payment_method'] ?? 'cash');
+
+        $customerId = request()->input('customer_id');
+        $dueAt = request()->input('due_at');
 
         $payload = request()->all();
 
@@ -84,10 +91,88 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
             (int) optional(request()->user())->id,
             $items,
             $paymentMethod,
+            $customerId !== null ? (int) $customerId : null,
+            $dueAt !== null ? (string) $dueAt : null,
         );
 
         return response()->json(['data' => $result]);
     })->middleware('perm:pos.sale.execute');
+
+    Route::get('/sales/customers', function (CustomerService $service) {
+        $result = $service->list((int) request()->attributes->get('tenant_id'));
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:sales.customer.read');
+
+    Route::post('/sales/customers', function (CustomerService $service) {
+        $payload = request()->validate([
+            'document_type' => ['required', 'string'],
+            'document_number' => ['required', 'string'],
+            'name' => ['required', 'string'],
+            'phone' => ['nullable', 'string'],
+            'email' => ['nullable', 'email'],
+        ]);
+
+        $result = $service->create(
+            (int) request()->attributes->get('tenant_id'),
+            (string) $payload['document_type'],
+            (string) $payload['document_number'],
+            (string) $payload['name'],
+            $payload['phone'] ?? null,
+            $payload['email'] ?? null,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:sales.customer.create');
+
+    Route::get('/sales/customers/{customer}/statement', function (int $customer, CustomerService $service) {
+        $result = $service->statement(
+            (int) request()->attributes->get('tenant_id'),
+            $customer,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:sales.customer.read');
+
+    Route::get('/sales/receivables', function (SaleReceivableService $service) {
+        $result = $service->list((int) request()->attributes->get('tenant_id'));
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:sales.receivable.read');
+
+    Route::get('/sales/receivables/aging', function (SaleReceivableService $service) {
+        $result = $service->agingSummary((int) request()->attributes->get('tenant_id'));
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:sales.receivable.read');
+
+    Route::get('/sales/receivables/{receivable}', function (int $receivable, SaleReceivableService $service) {
+        $result = $service->detail(
+            (int) request()->attributes->get('tenant_id'),
+            $receivable,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:sales.receivable.read');
+
+    Route::post('/sales/receivables/{receivable}/payments', function (int $receivable, SaleReceivableService $service) {
+        $payload = request()->validate([
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'payment_method' => ['required', 'string'],
+            'reference' => ['required', 'string'],
+        ]);
+
+        $result = $service->pay(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            $receivable,
+            (float) $payload['amount'],
+            (string) $payload['payment_method'],
+            (string) $payload['reference'],
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:sales.receivable.pay');
 
     Route::get('/pos/sales', function (SaleReadService $service) {
         $result = $service->list((int) request()->attributes->get('tenant_id'));

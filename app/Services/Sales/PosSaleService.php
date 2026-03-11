@@ -8,8 +8,14 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class PosSaleService
 {
-    public function execute(int $tenantId, int $userId, array $items, string $paymentMethod = 'cash'): array
-    {
+    public function execute(
+        int $tenantId,
+        int $userId,
+        array $items,
+        string $paymentMethod = 'cash',
+        ?int $customerId = null,
+        ?string $dueAt = null
+    ): array {
         if ($tenantId <= 0 || $userId <= 0) {
             throw new HttpException(403, 'Tenant context or authenticated user missing.');
         }
@@ -18,11 +24,21 @@ class PosSaleService
             throw new HttpException(422, 'At least one sale item is required.');
         }
 
-        if (! in_array($paymentMethod, ['cash', 'card', 'transfer'], true)) {
+        if (! in_array($paymentMethod, ['cash', 'card', 'transfer', 'credit'], true)) {
             throw new HttpException(422, 'Payment method is invalid.');
         }
 
-        return DB::transaction(function () use ($tenantId, $userId, $items, $paymentMethod) {
+        return DB::transaction(function () use ($tenantId, $userId, $items, $paymentMethod, $customerId, $dueAt) {
+            $customer = $this->resolveCustomer($tenantId, $customerId);
+
+            if ($paymentMethod === 'credit' && $customer === null) {
+                throw new HttpException(422, 'Credit sale requires customer_id.');
+            }
+
+            if ($paymentMethod === 'credit' && $dueAt === null) {
+                throw new HttpException(422, 'Credit sale requires due_at.');
+            }
+
             $reference = 'SALE-'.str_pad((string) random_int(1, 999999), 6, '0', STR_PAD_LEFT);
             $resolvedItems = collect($items)
                 ->map(fn (array $item) => $this->resolveItem($tenantId, $item));
@@ -34,6 +50,7 @@ class PosSaleService
             $saleId = DB::table('sales')->insertGetId([
                 'tenant_id' => $tenantId,
                 'user_id' => $userId,
+                'customer_id' => $customer?->id,
                 'reference' => $reference,
                 'status' => 'completed',
                 'payment_method' => $paymentMethod,
@@ -96,10 +113,41 @@ class PosSaleService
                 }
             }
 
+            $receivable = null;
+
+            if ($paymentMethod === 'credit') {
+                $receivableId = DB::table('sale_receivables')->insertGetId([
+                    'tenant_id' => $tenantId,
+                    'customer_id' => $customer->id,
+                    'sale_id' => $saleId,
+                    'total_amount' => $totalAmount,
+                    'paid_amount' => 0,
+                    'outstanding_amount' => $totalAmount,
+                    'status' => 'pending',
+                    'due_at' => $dueAt,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                $receivable = [
+                    'id' => $receivableId,
+                    'status' => 'pending',
+                    'due_at' => $dueAt,
+                    'outstanding_amount' => $totalAmount,
+                ];
+            }
+
             return [
                 'sale_id' => $saleId,
                 'reference' => $reference,
                 'payment_method' => $paymentMethod,
+                'customer' => $customer !== null ? [
+                    'id' => $customer->id,
+                    'document_type' => $customer->document_type,
+                    'document_number' => $customer->document_number,
+                    'name' => $customer->name,
+                ] : null,
+                'receivable' => $receivable,
                 'total_amount' => $totalAmount,
                 'gross_cost' => $grossCost,
                 'gross_margin' => $grossMargin,
@@ -123,6 +171,24 @@ class PosSaleService
                 ])->values()->all(),
             ];
         });
+    }
+
+    private function resolveCustomer(int $tenantId, ?int $customerId): ?object
+    {
+        if ($customerId === null) {
+            return null;
+        }
+
+        $customer = DB::table('customers')
+            ->where('tenant_id', $tenantId)
+            ->where('id', $customerId)
+            ->first(['id', 'document_type', 'document_number', 'name']);
+
+        if ($customer === null) {
+            throw new HttpException(404, 'Customer not found.');
+        }
+
+        return $customer;
     }
 
     private function resolveItem(int $tenantId, array $item): array

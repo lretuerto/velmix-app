@@ -40,6 +40,15 @@ class SaleCancellationService
                 throw new HttpException(422, 'Sales with vouchers cannot be cancelled.');
             }
 
+            $receivable = DB::table('sale_receivables')
+                ->where('sale_id', $saleId)
+                ->lockForUpdate()
+                ->first(['id', 'paid_amount']);
+
+            if ($receivable !== null && (float) $receivable->paid_amount > 0) {
+                throw new HttpException(422, 'Sales with customer payments cannot be cancelled.');
+            }
+
             $items = DB::table('sale_items')
                 ->where('sale_id', $saleId)
                 ->get(['lot_id', 'product_id', 'quantity']);
@@ -84,6 +93,12 @@ class SaleCancellationService
                     'cancelled_at' => now(),
                     'updated_at' => now(),
                 ]);
+
+            if ($receivable !== null) {
+                DB::table('sale_receivables')
+                    ->where('id', $receivable->id)
+                    ->delete();
+            }
 
             return [
                 'sale_id' => $saleId,

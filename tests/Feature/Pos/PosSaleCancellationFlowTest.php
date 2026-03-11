@@ -83,6 +83,59 @@ class PosSaleCancellationFlowTest extends TestCase
             ->assertStatus(404);
     }
 
+    public function test_rejects_cancellation_when_credit_sale_has_customer_payment(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+            \Database\Seeders\InventoryCatalogSeeder::class,
+        ]);
+
+        $cashier = $this->seedUserWithRole(10, 'CAJERO');
+        $admin = $this->seedUserWithRole(10, 'ADMIN');
+        $customerId = DB::table('customers')->insertGetId([
+            'tenant_id' => 10,
+            'document_type' => 'dni',
+            'document_number' => '33445566',
+            'name' => 'Cliente Cancel Bloqueo',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $lotId = DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
+
+        $saleResponse = $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/pos/sales', [
+                'lot_id' => $lotId,
+                'quantity' => 2,
+                'unit_price' => 3.50,
+                'payment_method' => 'credit',
+                'customer_id' => $customerId,
+                'due_at' => now()->addDays(10)->toDateString(),
+            ]);
+
+        $saleResponse->assertOk();
+        $saleId = $saleResponse->json('data.sale_id');
+        $receivableId = $saleResponse->json('data.receivable.id');
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson("/sales/receivables/{$receivableId}/payments", [
+                'amount' => 2,
+                'payment_method' => 'cash',
+                'reference' => 'COBRO-CANCEL-01',
+            ])
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson("/pos/sales/{$saleId}/cancel", [
+                'reason' => 'Intento invalido con cobranza previa',
+            ])
+            ->assertStatus(422);
+    }
+
     private function createCompletedSaleForTenant10(): array
     {
         $this->seed([
