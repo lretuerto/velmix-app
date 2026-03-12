@@ -105,6 +105,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 ### Reportes y auditoria
 
 - `GET /reports/daily`
+- `GET /reports/billing-operations`
 - `GET /reports/due-reminders`
 - `GET /reports/promise-compliance`
 - `GET /reports/receivable-risk`
@@ -187,6 +188,15 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - backlog actual de outbox
   - tasa de aceptacion/rechazo/fallo en la ventana consultada
   - replay backlog y fallos recientes
+
+## Dashboard ejecutivo de billing
+
+- `GET /reports/billing-operations` concentra:
+  - resumen ejecutivo de salud, backlog y acceptance rate
+  - tendencia diaria de eventos/aceptacion/fallos/replays
+  - comparativo por `provider_environment`
+  - aging actual del backlog pendiente
+  - fallos recientes y alertas operativas
 
 ## Payloads versionados de billing
 

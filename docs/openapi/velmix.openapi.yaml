@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VELMiX ERP API
-  version: sprint1-day114
+  version: sprint1-day117
   description: |
     Contrato OpenAPI de endpoints prioritarios de VELMiX ERP.
     Cubre la convencion multi-tenant y los flujos criticos ya implementados.
@@ -1016,6 +1016,31 @@ paths:
       responses:
         '200':
           description: Resumen diario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/billing-operations:
+    get:
+      tags: [Reports]
+      summary: Dashboard ejecutivo de billing
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+        - in: query
+          name: failure_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+      responses:
+        '200':
+          description: Operaciones ejecutivas de billing
           content:
             application/json:
               schema:

@@ -11,6 +11,7 @@ Backend SaaS multi-tenant para operaciones farmacéuticas, construido sobre Lara
 - Compras con órdenes, recepciones, devoluciones, créditos y cuentas por pagar
 - Caja con aperturas, cierres, arqueo por denominaciones y movimientos manuales
 - Reportes operativos, riesgo, vencimientos, promesas y auditoría transversal
+- Dashboard ejecutivo de billing con backlog, SLA y comparación sandbox/live
 - Billing desacoplado por perfil/provider tenant con outbox operable por lotes
 
 ## Requisitos
@@ -98,6 +99,7 @@ composer run velmix:routes
 - Billing providers: perfil por tenant para sandbox/live y outcome por defecto
 - Billing health: snapshot de salud y trazabilidad de intentos por provider/environment
 - Billing metrics: SLA operativo, backlog, replays y fallos recientes por tenant
+- Billing operations report: tendencia diaria y comparativo por environment
 - Billing payloads: snapshots versionados por provider/esquema para voucher y nota de credito
 - Billing replay: regeneracion y reemision controlada sin recrear la venta o la nota
 - Billing lineage: trazabilidad completa payload -> outbox original -> replay -> intentos

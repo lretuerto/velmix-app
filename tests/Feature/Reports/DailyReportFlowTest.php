@@ -196,7 +196,7 @@ class DailyReportFlowTest extends TestCase
             'default_outcome' => 'accepted',
             'credentials' => null,
             'health_status' => 'healthy',
-            'health_checked_at' => '2026-03-11 08:55:00',
+            'health_checked_at' => now()->subHour(),
             'health_message' => 'Provider fake_sunat is reachable in live mode.',
             'created_at' => now(),
             'updated_at' => now(),
