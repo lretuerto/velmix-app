@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 use App\Http\Middleware\TenantContext;
 use Illuminate\Foundation\Application;
@@ -13,7 +13,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
     $middleware->alias([
+        'auth.hybrid' => \App\Http\Middleware\AuthenticateSessionOrToken::class,
         'tenant.context' => \App\Http\Middleware\TenantContext::class,
+        'tenant.access' => \App\Http\Middleware\EnsureTenantAccess::class,
         'perm' => \App\Http\Middleware\RequirePermission::class,
     ]);
 })

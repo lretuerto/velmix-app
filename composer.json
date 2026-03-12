@@ -48,6 +48,22 @@
             "@php artisan config:clear --ansi",
             "@php artisan test"
         ],
+        "velmix:reset": [
+            "@php artisan migrate:fresh --seed"
+        ],
+        "velmix:test": [
+            "@php artisan test"
+        ],
+        "velmix:qa": [
+            "@velmix:reset",
+            "@velmix:test"
+        ],
+        "velmix:outbox": [
+            "@php artisan billing:dispatch-outbox --limit=20"
+        ],
+        "velmix:routes": [
+            "@php artisan route:list --except-vendor"
+        ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"
