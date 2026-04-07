@@ -12,6 +12,7 @@ Backend SaaS multi-tenant para operaciones farmacéuticas, construido sobre Lara
 - Caja con aperturas, cierres, arqueo por denominaciones y movimientos manuales
 - Reportes operativos, riesgo, vencimientos, promesas y auditoría transversal
 - Dashboard financiero unificado para cobranza y pagos con prioridad operativa
+- Workflow operativo para prioridades financieras con acknowledge y resolve
 - Dashboard ejecutivo de billing con backlog, SLA y comparación sandbox/live
 - Escalamiento accionable de billing con prioridades y acciones recomendadas
 - Seguimiento manual de escalaciones de billing con acknowledge y resolve
@@ -67,6 +68,9 @@ php artisan test
   - `GET /billing/provider-metrics`
   - `GET /billing/outbox/{event}/lineage`
   - `GET /reports/finance-operations`
+  - `GET /reports/finance-operations/{kind}/{entity}`
+  - `POST /reports/finance-operations/{kind}/{entity}/acknowledge`
+  - `POST /reports/finance-operations/{kind}/{entity}/resolve`
   - `GET /reports/billing-escalations`
   - `GET /reports/billing-escalation-metrics`
   - `GET /reports/billing-escalations/history`
@@ -123,6 +127,7 @@ composer run velmix:routes
 - Caja: aperturas, cierres, cobranzas y movimientos no comerciales
 - Reportes: diario, vencimientos, promesas, rentabilidad y riesgo
 - Finance operations report: exposicion, promesas y salud de seguimiento para cobranzas/pagos
+- Finance operations workflow: gestion manual de prioridades financieras por entidad
 - Auditoría: timeline transversal por tenant
 
 ## Validación recomendada antes de publicar cambios

@@ -109,6 +109,9 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /reports/billing-escalations`
 - `GET /reports/billing-escalation-metrics`
 - `GET /reports/finance-operations`
+- `GET /reports/finance-operations/{kind}/{entity}`
+- `POST /reports/finance-operations/{kind}/{entity}/acknowledge`
+- `POST /reports/finance-operations/{kind}/{entity}/resolve`
 - `GET /reports/billing-escalations/history`
 - `GET /reports/billing-escalations/{code}`
 - `POST /reports/billing-escalations/{code}/acknowledge`
@@ -243,11 +246,21 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - promesas rotas, pendientes y cumplidas
   - frescura del seguimiento (`missing`, `stale`, `recent`)
   - cola priorizada combinando cobranza y pagos
+- la cola priorizada ahora devuelve tambien:
+  - `workflow_status`
+  - `state`
 - Parametros utiles:
   - `date`
   - `days_ahead`
   - `limit`
   - `stale_follow_up_days`
+- `GET /reports/finance-operations/{kind}/{entity}` devuelve:
+  - detalle operativo del receivable/payable
+  - si hoy esta priorizado o no
+  - estado persistido del workflow
+  - item priorizado actual si aplica
+- `POST /reports/finance-operations/{kind}/{entity}/acknowledge` registra toma de caso
+- `POST /reports/finance-operations/{kind}/{entity}/resolve` registra cierre manual con nota obligatoria
 - `GET /reports/daily` ahora incluye tambien un snapshot resumido en `finance_operations`
 
 ## Payloads versionados de billing

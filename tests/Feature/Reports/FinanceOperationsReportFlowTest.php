@@ -101,8 +101,12 @@ class FinanceOperationsReportFlowTest extends TestCase
             ->assertJsonPath('data.combined.broken_promise_count', 1)
             ->assertJsonPath('data.combined.stale_follow_up_count', 2)
             ->assertJsonPath('data.combined.missing_follow_up_count', 1)
+            ->assertJsonPath('data.workflow.open_count', 4)
+            ->assertJsonPath('data.workflow.acknowledged_count', 0)
+            ->assertJsonPath('data.workflow.resolved_count', 0)
             ->assertJsonPath('data.priority_queue.0.reference', 'SALE-FIN-OD')
             ->assertJsonPath('data.priority_queue.0.escalation_level', 'critical')
+            ->assertJsonPath('data.priority_queue.0.workflow_status', 'open')
             ->assertJsonPath('data.priority_queue.1.reference', 'PUR-FIN-OD')
             ->assertJsonPath('data.priority_queue.1.escalation_level', 'attention');
     }

@@ -12,6 +12,7 @@ class FinanceOperationsReportService
     public function __construct(
         private readonly PromiseInsightService $promiseInsights,
         private readonly DueReminderReportService $dueReminders,
+        private readonly FinanceOperationsStateService $stateService,
     ) {
     }
 
@@ -45,6 +46,12 @@ class FinanceOperationsReportService
         $receivables = $this->receivables($tenantId, $baseDate);
         $payables = $this->payables($tenantId, $baseDate);
         $dueReminders = $this->dueReminders->summary($tenantId, $daysAhead, $limit, $baseDate->toDateString());
+        $statesByEntity = $this->stateService->listByEntity($tenantId);
+        $prioritizedItems = $this->mergeStates(
+            $this->prioritizedItems($receivables, $payables, $baseDate, $daysAhead),
+            $statesByEntity,
+        );
+        $priorityQueue = array_slice($prioritizedItems, 0, $limit);
 
         return [
             'tenant_id' => $tenantId,
@@ -66,7 +73,66 @@ class FinanceOperationsReportService
                 $staleFollowUpDays,
             ),
             'combined' => $this->combinedSummary($tenantId, $receivables, $payables, $baseDate, $staleFollowUpDays),
-            'priority_queue' => $this->priorityQueue($dueReminders, $limit),
+            'workflow' => [
+                'open_count' => count(array_filter($prioritizedItems, fn (array $item) => $item['workflow_status'] === 'open')),
+                'acknowledged_count' => count(array_filter($prioritizedItems, fn (array $item) => $item['workflow_status'] === 'acknowledged')),
+                'resolved_count' => count(array_filter($prioritizedItems, fn (array $item) => $item['workflow_status'] === 'resolved')),
+            ],
+            'priority_queue' => $priorityQueue,
+            'due_reminder_summary' => [
+                'receivables' => $dueReminders['receivables']['summary'],
+                'payables' => $dueReminders['payables']['summary'],
+            ],
+        ];
+    }
+
+    public function detail(
+        int $tenantId,
+        string $kind,
+        int $entityId,
+        ?string $date = null,
+        int $daysAhead = 7,
+        int $staleFollowUpDays = 3,
+    ): array {
+        if ($tenantId <= 0) {
+            throw new HttpException(403, 'Tenant context is required.');
+        }
+
+        if (! in_array($kind, ['receivable', 'payable'], true)) {
+            throw new HttpException(404, 'Finance operation kind not found.');
+        }
+
+        $baseDate = $date !== null
+            ? CarbonImmutable::createFromFormat('Y-m-d', $date)->startOfDay()
+            : CarbonImmutable::now()->startOfDay();
+
+        $receivables = $this->receivables($tenantId, $baseDate);
+        $payables = $this->payables($tenantId, $baseDate);
+        $items = $kind === 'receivable' ? $receivables : $payables;
+        $item = $items->firstWhere('entity_id', $entityId);
+
+        if ($item === null) {
+            throw new HttpException(404, 'Finance operation entity not found.');
+        }
+
+        $state = $this->stateService->listByEntity($tenantId)[$this->entityKey($kind, $entityId)] ?? null;
+        $priorityItem = collect($this->mergeStates(
+            $this->prioritizedItems($receivables, $payables, $baseDate, $daysAhead),
+            $this->stateService->listByEntity($tenantId),
+        ))->firstWhere('entity_key', $this->entityKey($kind, $entityId));
+
+        return [
+            'tenant_id' => $tenantId,
+            'date' => $baseDate->toDateString(),
+            'days_ahead' => $daysAhead,
+            'stale_follow_up_days' => $staleFollowUpDays,
+            'kind' => $kind,
+            'entity_id' => $entityId,
+            'workflow_status' => $priorityItem['workflow_status'] ?? $state['status'] ?? 'open',
+            'is_currently_prioritized' => $priorityItem !== null,
+            'item' => $item,
+            'priority_item' => $priorityItem,
+            'state' => $state,
         ];
     }
 
@@ -108,14 +174,17 @@ class FinanceOperationsReportService
             return [
                 'kind' => 'receivable',
                 'id' => (int) $row->id,
+                'entity_id' => (int) $row->id,
                 'entity_name' => (string) $row->customer_name,
                 'reference' => (string) $row->sale_reference,
                 'outstanding_amount' => round((float) $row->outstanding_amount, 2),
                 'due_at' => $row->due_at !== null ? CarbonImmutable::parse((string) $row->due_at)->toDateString() : null,
                 'days_overdue' => $this->daysOverdue($row->due_at, $baseDate),
+                'days_until_due' => $this->daysUntilDue($row->due_at, $baseDate),
                 'latest_follow_up' => $followUps[(int) $row->id] ?? null,
                 'latest_promise' => $promise,
                 'promise_status' => $promise['status'] ?? null,
+                'escalation_level' => $this->promiseInsights->escalationLevel($row->due_at, $promise, $baseDate),
             ];
         });
     }
@@ -158,14 +227,17 @@ class FinanceOperationsReportService
             return [
                 'kind' => 'payable',
                 'id' => (int) $row->id,
+                'entity_id' => (int) $row->id,
                 'entity_name' => (string) $row->supplier_name,
                 'reference' => (string) $row->receipt_reference,
                 'outstanding_amount' => round((float) $row->outstanding_amount, 2),
                 'due_at' => $row->due_at !== null ? CarbonImmutable::parse((string) $row->due_at)->toDateString() : null,
                 'days_overdue' => $this->daysOverdue($row->due_at, $baseDate),
+                'days_until_due' => $this->daysUntilDue($row->due_at, $baseDate),
                 'latest_follow_up' => $followUps[(int) $row->id] ?? null,
                 'latest_promise' => $promise,
                 'promise_status' => $promise['status'] ?? null,
+                'escalation_level' => $this->promiseInsights->escalationLevel($row->due_at, $promise, $baseDate),
             ];
         });
     }
@@ -177,9 +249,10 @@ class FinanceOperationsReportService
         CarbonImmutable $baseDate,
         int $staleFollowUpDays,
     ): array {
+        $entityIds = $items->pluck('entity_id')->map(fn ($id) => (int) $id)->all();
         $promises = $kind === 'receivable'
-            ? collect($this->promiseInsights->latestReceivablePromises($tenantId, $baseDate))
-            : collect($this->promiseInsights->latestPayablePromises($tenantId, $baseDate));
+            ? collect($this->promiseInsights->latestReceivablePromises($tenantId, $baseDate, $entityIds))
+            : collect($this->promiseInsights->latestPayablePromises($tenantId, $baseDate, $entityIds));
 
         $overdue = $items->filter(fn (array $item) => $item['days_overdue'] > 0);
         $current = $items->filter(fn (array $item) => $item['days_overdue'] === 0);
@@ -243,27 +316,39 @@ class FinanceOperationsReportService
         ];
     }
 
-    private function priorityQueue(array $dueReminders, int $limit): array
+    private function prioritizedItems(
+        Collection $receivables,
+        Collection $payables,
+        CarbonImmutable $baseDate,
+        int $daysAhead,
+    ): array
     {
-        $items = collect();
-
-        foreach (['receivables', 'payables'] as $bucket) {
-            foreach (['overdue', 'due_today', 'upcoming'] as $section) {
-                foreach ($dueReminders[$bucket][$section] as $item) {
-                    $items->push([
-                        'kind' => $bucket === 'receivables' ? 'receivable' : 'payable',
-                        'reference' => $item['sale_reference'] ?? $item['receipt_reference'] ?? null,
-                        'entity_name' => $item['customer_name'] ?? $item['supplier_name'] ?? null,
-                        'outstanding_amount' => (float) $item['outstanding_amount'],
-                        'due_at' => $item['due_at'],
-                        'days_overdue' => (int) ($item['days_overdue'] ?? 0),
-                        'promise_status' => $item['promise_status'] ?? null,
-                        'escalation_level' => $item['escalation_level'] ?? 'normal',
-                        'latest_follow_up' => $item['latest_follow_up'] ?? null,
-                    ]);
+        $windowEnd = $baseDate->addDays($daysAhead);
+        $items = $receivables
+            ->concat($payables)
+            ->filter(function (array $item) use ($windowEnd) {
+                if ($item['due_at'] === null) {
+                    return false;
                 }
-            }
-        }
+
+                $dueDate = CarbonImmutable::parse($item['due_at'])->startOfDay();
+
+                return $dueDate->lte($windowEnd);
+            })
+            ->map(fn (array $item) => [
+                'kind' => $item['kind'],
+                'entity_id' => $item['entity_id'],
+                'entity_key' => $this->entityKey($item['kind'], $item['entity_id']),
+                'reference' => $item['reference'],
+                'entity_name' => $item['entity_name'],
+                'outstanding_amount' => (float) $item['outstanding_amount'],
+                'due_at' => $item['due_at'],
+                'days_overdue' => (int) $item['days_overdue'],
+                'days_until_due' => (int) $item['days_until_due'],
+                'promise_status' => $item['promise_status'],
+                'escalation_level' => $item['escalation_level'],
+                'latest_follow_up' => $item['latest_follow_up'],
+            ]);
 
         $priorityRank = [
             'critical' => 5,
@@ -293,9 +378,19 @@ class FinanceOperationsReportService
 
                 return strcmp((string) $left['reference'], (string) $right['reference']);
             })
-            ->take($limit)
             ->values()
             ->all();
+    }
+
+    private function mergeStates(array $items, array $statesByEntity): array
+    {
+        return array_map(function (array $item) use ($statesByEntity) {
+            $state = $statesByEntity[$item['entity_key']] ?? null;
+            $item['workflow_status'] = $state['status'] ?? 'open';
+            $item['state'] = $state;
+
+            return $item;
+        }, $items);
     }
 
     private function latestFollowUps(string $table, string $entityColumn, int $tenantId, array $entityIds): array
@@ -360,5 +455,19 @@ class FinanceOperationsReportService
         }
 
         return abs($baseDate->diffInDays($dueDate, false));
+    }
+
+    private function daysUntilDue(?string $dueAt, CarbonImmutable $baseDate): int
+    {
+        if ($dueAt === null) {
+            return 0;
+        }
+
+        return $baseDate->diffInDays(CarbonImmutable::parse($dueAt)->startOfDay(), false);
+    }
+
+    private function entityKey(string $kind, int $entityId): string
+    {
+        return $this->stateService->entityKey($kind, $entityId);
     }
 }

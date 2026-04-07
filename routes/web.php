@@ -30,6 +30,7 @@ use App\Services\Reports\BillingEscalationStateService;
 use App\Services\Reports\BillingEscalationReportService;
 use App\Services\Reports\DueReminderReportService;
 use App\Services\Reports\FinanceOperationsReportService;
+use App\Services\Reports\FinanceOperationsStateService;
 use App\Services\Reports\PromiseComplianceReportService;
 use App\Services\Reports\ReceivableRiskReportService;
 use App\Services\Security\ApiTokenService;
@@ -51,7 +52,7 @@ Route::get('/docs', function () {
     return response()->json([
         'data' => [
             'project' => 'VELMiX ERP',
-            'version' => 'sprint1-day132',
+            'version' => 'sprint1-day135',
             'documents' => [
                 ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
                 ['name' => 'API Guide', 'path' => '/docs/api-guide'],
@@ -724,6 +725,101 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
 
         return response()->json(['data' => $result]);
     })->middleware('perm:reports.finance-operations.read');
+
+    Route::get('/reports/finance-operations/{kind}/{entity}', function (string $kind, int $entity, FinanceOperationsReportService $service) {
+        $payload = request()->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'days_ahead' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'stale_follow_up_days' => ['nullable', 'integer', 'min:1', 'max:30'],
+        ]);
+
+        $result = $service->detail(
+            (int) request()->attributes->get('tenant_id'),
+            $kind,
+            $entity,
+            $payload['date'] ?? null,
+            (int) ($payload['days_ahead'] ?? 7),
+            (int) ($payload['stale_follow_up_days'] ?? 3),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.finance-operations.read');
+
+    Route::post('/reports/finance-operations/{kind}/{entity}/acknowledge', function (
+        string $kind,
+        int $entity,
+        FinanceOperationsStateService $states,
+        FinanceOperationsReportService $report
+    ) {
+        $payload = request()->validate([
+            'note' => ['nullable', 'string', 'max:1000'],
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'days_ahead' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'stale_follow_up_days' => ['nullable', 'integer', 'min:1', 'max:30'],
+        ]);
+
+        $state = $states->acknowledge(
+            (int) request()->attributes->get('tenant_id'),
+            (int) request()->user()->id,
+            $kind,
+            $entity,
+            $payload['note'] ?? null,
+        );
+
+        $item = $report->detail(
+            (int) request()->attributes->get('tenant_id'),
+            $kind,
+            $entity,
+            $payload['date'] ?? null,
+            (int) ($payload['days_ahead'] ?? 7),
+            (int) ($payload['stale_follow_up_days'] ?? 3),
+        );
+
+        return response()->json([
+            'data' => [
+                'state' => $state,
+                'item' => $item,
+            ],
+        ]);
+    })->middleware('perm:reports.finance-operations.manage');
+
+    Route::post('/reports/finance-operations/{kind}/{entity}/resolve', function (
+        string $kind,
+        int $entity,
+        FinanceOperationsStateService $states,
+        FinanceOperationsReportService $report
+    ) {
+        $payload = request()->validate([
+            'note' => ['required', 'string', 'max:1000'],
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'days_ahead' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'stale_follow_up_days' => ['nullable', 'integer', 'min:1', 'max:30'],
+        ]);
+
+        $state = $states->resolve(
+            (int) request()->attributes->get('tenant_id'),
+            (int) request()->user()->id,
+            $kind,
+            $entity,
+            (string) $payload['note'],
+        );
+
+        $item = $report->detail(
+            (int) request()->attributes->get('tenant_id'),
+            $kind,
+            $entity,
+            $payload['date'] ?? null,
+            (int) ($payload['days_ahead'] ?? 7),
+            (int) ($payload['stale_follow_up_days'] ?? 3),
+        );
+
+        return response()->json([
+            'data' => [
+                'state' => $state,
+                'item' => $item,
+            ],
+        ]);
+    })->middleware('perm:reports.finance-operations.manage');
 
     Route::get('/reports/inventory-alerts', function (\App\Services\Reports\InventoryAlertReportService $service) {
         $payload = request()->validate([

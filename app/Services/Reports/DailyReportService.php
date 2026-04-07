@@ -248,6 +248,7 @@ class DailyReportService
                 'receivables' => $financeOperations['receivables'],
                 'payables' => $financeOperations['payables'],
                 'combined' => $financeOperations['combined'],
+                'workflow' => $financeOperations['workflow'],
                 'priority_queue' => $financeOperations['priority_queue'],
             ],
             'activity' => [
