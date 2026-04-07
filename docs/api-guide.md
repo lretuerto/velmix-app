@@ -109,6 +109,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /reports/billing-escalations`
 - `GET /reports/billing-escalation-metrics`
 - `GET /reports/finance-operations`
+- `GET /reports/finance-escalations`
 - `GET /reports/finance-operations/history`
 - `GET /reports/finance-operations/metrics`
 - `GET /reports/finance-operations/{kind}/{entity}`
@@ -277,6 +278,11 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - aging de la cola financiera
   - SLA de resolucion entre acknowledge y resolve
   - ultimas resoluciones y top prioridades actuales
+- `GET /reports/finance-escalations` devuelve:
+  - vista accionable de la cola financiera ya priorizada
+  - severidad operativa por entidad (`critical`, `warning`, `info`)
+  - acciones recomendadas para cobranza o pago
+  - conteos por workflow, flags y tipo de entidad
 - `GET /reports/daily` ahora incluye tambien un snapshot resumido en `finance_operations`, incluyendo `workflow_metrics`
 
 ## Payloads versionados de billing

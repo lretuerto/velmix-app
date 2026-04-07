@@ -15,6 +15,7 @@ Backend SaaS multi-tenant para operaciones farmacéuticas, construido sobre Lara
 - Workflow operativo para prioridades financieras con acknowledge y resolve
 - Historial operativo de prioridades financieras con timeline por entidad
 - Metricas financieras de backlog, aging y SLA de resolución
+- Escalaciones financieras accionables con severidad y acciones recomendadas
 - Dashboard ejecutivo de billing con backlog, SLA y comparación sandbox/live
 - Escalamiento accionable de billing con prioridades y acciones recomendadas
 - Seguimiento manual de escalaciones de billing con acknowledge y resolve
@@ -70,6 +71,7 @@ php artisan test
   - `GET /billing/provider-metrics`
   - `GET /billing/outbox/{event}/lineage`
   - `GET /reports/finance-operations`
+  - `GET /reports/finance-escalations`
   - `GET /reports/finance-operations/history`
   - `GET /reports/finance-operations/metrics`
   - `GET /reports/finance-operations/{kind}/{entity}`
@@ -135,6 +137,7 @@ composer run velmix:routes
 - Finance operations workflow: gestion manual de prioridades financieras por entidad
 - Finance operations history: timeline, notas y responsables por receivable/payable
 - Finance operations metrics: backlog activo, aging y SLA de resolución de seguimiento
+- Finance escalations: severidad y acciones recomendadas sobre la cola financiera priorizada
 - Auditoría: timeline transversal por tenant
 
 ## Validación recomendada antes de publicar cambios
