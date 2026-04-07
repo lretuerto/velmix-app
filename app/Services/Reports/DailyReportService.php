@@ -159,6 +159,7 @@ class DailyReportService
         $financeWorkflowMetrics = app(FinanceOperationsMetricsService::class)->summary($tenantId, $start->toDateString(), 7, 30);
         $financeEscalations = app(FinanceEscalationReportService::class)->summary($tenantId, $start->toDateString(), 7, 5, 3);
         $financeEscalationMetrics = app(FinanceEscalationMetricsService::class)->summary($tenantId, $start->toDateString(), 7, 30, 3);
+        $operationsEscalations = app(OperationsEscalationReportService::class)->summary($tenantId, $start->toDateString(), 3, 7, 5, 3);
         $billingMetrics = app(BillingProviderMetricsService::class)->summary($tenantId, $start->toDateString(), 1, 3);
 
         return [
@@ -271,6 +272,14 @@ class DailyReportService
                     'avg_minutes_from_ack_to_resolve' => $financeEscalationMetrics['resolution_sla']['avg_minutes_from_ack_to_resolve'],
                 ],
                 'priority_queue' => $financeOperations['priority_queue'],
+            ],
+            'operations_escalations' => [
+                'open_count' => $operationsEscalations['summary']['open_count'],
+                'critical_count' => $operationsEscalations['summary']['critical_count'],
+                'warning_count' => $operationsEscalations['summary']['warning_count'],
+                'workflow' => $operationsEscalations['summary']['workflow'],
+                'by_domain' => $operationsEscalations['summary']['by_domain'],
+                'top_queue' => $operationsEscalations['queue'],
             ],
             'activity' => [
                 'count' => (int) ($activitySummary->activity_count ?? 0),

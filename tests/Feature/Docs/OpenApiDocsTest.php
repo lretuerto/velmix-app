@@ -45,6 +45,8 @@ class OpenApiDocsTest extends TestCase
         $this->assertStringContainsString('/reports/finance-escalations/{code}', $response->getContent());
         $this->assertStringContainsString('/reports/finance-escalations/{code}/acknowledge', $response->getContent());
         $this->assertStringContainsString('/reports/finance-escalations/{code}/resolve', $response->getContent());
+        $this->assertStringContainsString('/reports/operations-escalations', $response->getContent());
+        $this->assertStringContainsString('/reports/operations-escalations/{domain}/{code}', $response->getContent());
         $this->assertStringContainsString('/reports/finance-operations/history', $response->getContent());
         $this->assertStringContainsString('/reports/finance-operations/metrics', $response->getContent());
         $this->assertStringContainsString('/reports/finance-operations/{kind}/{entity}', $response->getContent());
@@ -85,6 +87,8 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('GET /reports/finance-escalations/{code}', false)
             ->assertSee('POST /reports/finance-escalations/{code}/acknowledge', false)
             ->assertSee('POST /reports/finance-escalations/{code}/resolve', false)
+            ->assertSee('GET /reports/operations-escalations', false)
+            ->assertSee('GET /reports/operations-escalations/{domain}/{code}', false)
             ->assertSee('GET /reports/finance-operations/history', false)
             ->assertSee('GET /reports/finance-operations/metrics', false)
             ->assertSee('GET /reports/finance-operations/{kind}/{entity}', false)

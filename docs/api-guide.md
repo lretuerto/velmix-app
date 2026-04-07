@@ -115,6 +115,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /reports/finance-escalations/{code}`
 - `POST /reports/finance-escalations/{code}/acknowledge`
 - `POST /reports/finance-escalations/{code}/resolve`
+- `GET /reports/operations-escalations`
+- `GET /reports/operations-escalations/{domain}/{code}`
 - `GET /reports/finance-operations/history`
 - `GET /reports/finance-operations/metrics`
 - `GET /reports/finance-operations/{kind}/{entity}`
@@ -306,6 +308,27 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `POST /reports/finance-escalations/{code}/acknowledge` reconoce una alerta agregada de finanzas
 - `POST /reports/finance-escalations/{code}/resolve` cierra manualmente una alerta agregada de finanzas con nota obligatoria
 - `GET /reports/daily` ahora incluye tambien un snapshot resumido en `finance_operations`, incluyendo `workflow_metrics`
+
+## Cola unificada de escalaciones operativas
+
+- `GET /reports/operations-escalations` concentra en una sola cola:
+  - alertas abiertas de billing y finanzas
+  - resumen por severidad, workflow y dominio
+  - acciones recomendadas deduplicadas
+  - top de la cola priorizada cross-domain
+- parametros utiles:
+  - `date`
+  - `billing_days`
+  - `finance_days_ahead`
+  - `limit`
+  - `stale_follow_up_days`
+- `GET /reports/operations-escalations/{domain}/{code}` devuelve el detalle operativo unificado y expone:
+  - `queue_key`
+  - `actions.detail_path`
+  - `actions.source_path`
+  - `actions.acknowledge_path`
+  - `actions.resolve_path`
+- `GET /reports/daily` ahora incluye tambien un snapshot resumido en `operations_escalations` para el corte diario
 
 ## Payloads versionados de billing
 

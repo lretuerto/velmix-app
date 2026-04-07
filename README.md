@@ -18,6 +18,7 @@ Backend SaaS multi-tenant para operaciones farmacéuticas, construido sobre Lara
 - Escalaciones financieras accionables con severidad y acciones recomendadas
 - Workflow manual sobre alertas financieras agregadas
 - Historial y metricas de escalaciones financieras agregadas por codigo
+- Cola unificada de escalaciones operativas cross-domain para billing y finanzas
 - Dashboard ejecutivo de billing con backlog, SLA y comparación sandbox/live
 - Escalamiento accionable de billing con prioridades y acciones recomendadas
 - Seguimiento manual de escalaciones de billing con acknowledge y resolve
@@ -85,6 +86,8 @@ php artisan test
   - `GET /reports/finance-operations/{kind}/{entity}/history`
   - `POST /reports/finance-operations/{kind}/{entity}/acknowledge`
   - `POST /reports/finance-operations/{kind}/{entity}/resolve`
+  - `GET /reports/operations-escalations`
+  - `GET /reports/operations-escalations/{domain}/{code}`
   - `GET /reports/billing-escalations`
   - `GET /reports/billing-escalation-metrics`
   - `GET /reports/billing-escalations/history`
@@ -148,6 +151,7 @@ composer run velmix:routes
 - Finance escalation workflow: acknowledge y resolve manual sobre alertas agregadas
 - Finance escalation history: timeline, notas y responsables por codigo de alerta
 - Finance escalation metrics: backlog activo, aging y SLA de resolucion por alerta
+- Operations escalations: cola cross-domain para priorizar billing y finanzas en una sola vista
 - Auditoría: timeline transversal por tenant
 
 ## Validación recomendada antes de publicar cambios
