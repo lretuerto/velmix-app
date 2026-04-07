@@ -23,25 +23,12 @@ class FinanceOperationsReportService
         int $limit = 5,
         int $staleFollowUpDays = 3,
     ): array {
-        if ($tenantId <= 0) {
-            throw new HttpException(403, 'Tenant context is required.');
-        }
+        $this->assertTenantId($tenantId);
+        $this->assertDaysAhead($daysAhead);
+        $this->assertLimit($limit);
+        $this->assertStaleFollowUpDays($staleFollowUpDays);
 
-        if ($daysAhead < 1 || $daysAhead > 30) {
-            throw new HttpException(422, 'days_ahead is invalid.');
-        }
-
-        if ($limit < 1 || $limit > 20) {
-            throw new HttpException(422, 'limit is invalid.');
-        }
-
-        if ($staleFollowUpDays < 1 || $staleFollowUpDays > 30) {
-            throw new HttpException(422, 'stale_follow_up_days is invalid.');
-        }
-
-        $baseDate = $date !== null
-            ? CarbonImmutable::createFromFormat('Y-m-d', $date)->startOfDay()
-            : CarbonImmutable::now()->startOfDay();
+        $baseDate = $this->resolveBaseDate($date);
 
         $receivables = $this->receivables($tenantId, $baseDate);
         $payables = $this->payables($tenantId, $baseDate);
@@ -86,6 +73,21 @@ class FinanceOperationsReportService
         ];
     }
 
+    public function workflowItems(int $tenantId, ?string $date = null, int $daysAhead = 7): array
+    {
+        $this->assertTenantId($tenantId);
+        $this->assertDaysAhead($daysAhead);
+
+        $baseDate = $this->resolveBaseDate($date);
+        $receivables = $this->receivables($tenantId, $baseDate);
+        $payables = $this->payables($tenantId, $baseDate);
+
+        return $this->mergeStates(
+            $this->prioritizedItems($receivables, $payables, $baseDate, $daysAhead),
+            $this->stateService->listByEntity($tenantId),
+        );
+    }
+
     public function detail(
         int $tenantId,
         string $kind,
@@ -94,17 +96,15 @@ class FinanceOperationsReportService
         int $daysAhead = 7,
         int $staleFollowUpDays = 3,
     ): array {
-        if ($tenantId <= 0) {
-            throw new HttpException(403, 'Tenant context is required.');
-        }
+        $this->assertTenantId($tenantId);
+        $this->assertDaysAhead($daysAhead);
+        $this->assertStaleFollowUpDays($staleFollowUpDays);
 
         if (! in_array($kind, ['receivable', 'payable'], true)) {
             throw new HttpException(404, 'Finance operation kind not found.');
         }
 
-        $baseDate = $date !== null
-            ? CarbonImmutable::createFromFormat('Y-m-d', $date)->startOfDay()
-            : CarbonImmutable::now()->startOfDay();
+        $baseDate = $this->resolveBaseDate($date);
 
         $receivables = $this->receivables($tenantId, $baseDate);
         $payables = $this->payables($tenantId, $baseDate);
@@ -469,5 +469,40 @@ class FinanceOperationsReportService
     private function entityKey(string $kind, int $entityId): string
     {
         return $this->stateService->entityKey($kind, $entityId);
+    }
+
+    private function resolveBaseDate(?string $date): CarbonImmutable
+    {
+        return $date !== null
+            ? CarbonImmutable::createFromFormat('Y-m-d', $date)->startOfDay()
+            : CarbonImmutable::now()->startOfDay();
+    }
+
+    private function assertTenantId(int $tenantId): void
+    {
+        if ($tenantId <= 0) {
+            throw new HttpException(403, 'Tenant context is required.');
+        }
+    }
+
+    private function assertDaysAhead(int $daysAhead): void
+    {
+        if ($daysAhead < 1 || $daysAhead > 30) {
+            throw new HttpException(422, 'days_ahead is invalid.');
+        }
+    }
+
+    private function assertLimit(int $limit): void
+    {
+        if ($limit < 1 || $limit > 20) {
+            throw new HttpException(422, 'limit is invalid.');
+        }
+    }
+
+    private function assertStaleFollowUpDays(int $staleFollowUpDays): void
+    {
+        if ($staleFollowUpDays < 1 || $staleFollowUpDays > 30) {
+            throw new HttpException(422, 'stale_follow_up_days is invalid.');
+        }
     }
 }

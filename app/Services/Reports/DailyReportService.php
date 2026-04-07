@@ -156,6 +156,7 @@ class DailyReportService
         $dueReminders = app(DueReminderReportService::class)->summary($tenantId, 7, 3, $start->toDateString());
         $promiseCompliance = app(PromiseComplianceReportService::class)->summary($tenantId, $start->toDateString(), 3);
         $financeOperations = app(FinanceOperationsReportService::class)->summary($tenantId, $start->toDateString(), 7, 3, 3);
+        $financeWorkflowMetrics = app(FinanceOperationsMetricsService::class)->summary($tenantId, $start->toDateString(), 7, 30);
         $billingMetrics = app(BillingProviderMetricsService::class)->summary($tenantId, $start->toDateString(), 1, 3);
 
         return [
@@ -249,6 +250,12 @@ class DailyReportService
                 'payables' => $financeOperations['payables'],
                 'combined' => $financeOperations['combined'],
                 'workflow' => $financeOperations['workflow'],
+                'workflow_metrics' => [
+                    'active_count' => $financeWorkflowMetrics['current_backlog']['active_count'],
+                    'acknowledged_count' => $financeWorkflowMetrics['current_backlog']['acknowledged_count'],
+                    'stale_acknowledged_count' => $financeWorkflowMetrics['current_backlog']['stale_acknowledged_count'],
+                    'avg_minutes_from_ack_to_resolve' => $financeWorkflowMetrics['resolution_sla']['avg_minutes_from_ack_to_resolve'],
+                ],
                 'priority_queue' => $financeOperations['priority_queue'],
             ],
             'activity' => [

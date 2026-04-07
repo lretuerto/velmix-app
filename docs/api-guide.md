@@ -109,7 +109,10 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /reports/billing-escalations`
 - `GET /reports/billing-escalation-metrics`
 - `GET /reports/finance-operations`
+- `GET /reports/finance-operations/history`
+- `GET /reports/finance-operations/metrics`
 - `GET /reports/finance-operations/{kind}/{entity}`
+- `GET /reports/finance-operations/{kind}/{entity}/history`
 - `POST /reports/finance-operations/{kind}/{entity}/acknowledge`
 - `POST /reports/finance-operations/{kind}/{entity}/resolve`
 - `GET /reports/billing-escalations/history`
@@ -259,9 +262,22 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - si hoy esta priorizado o no
   - estado persistido del workflow
   - item priorizado actual si aplica
+- `GET /reports/finance-operations/history` devuelve:
+  - backlog historico de prioridades financieras con estado actual
+  - ultima actividad, ultima nota y conteo de timeline por entidad
+  - union entre items actualmente priorizados y entidades con workflow previo
+- `GET /reports/finance-operations/{kind}/{entity}/history` devuelve:
+  - timeline `acknowledge/resolve`
+  - snapshot actual de la entidad
+  - ultima nota y actividad mas reciente
 - `POST /reports/finance-operations/{kind}/{entity}/acknowledge` registra toma de caso
 - `POST /reports/finance-operations/{kind}/{entity}/resolve` registra cierre manual con nota obligatoria
-- `GET /reports/daily` ahora incluye tambien un snapshot resumido en `finance_operations`
+- `GET /reports/finance-operations/metrics` devuelve:
+  - backlog activo por estado del workflow
+  - aging de la cola financiera
+  - SLA de resolucion entre acknowledge y resolve
+  - ultimas resoluciones y top prioridades actuales
+- `GET /reports/daily` ahora incluye tambien un snapshot resumido en `finance_operations`, incluyendo `workflow_metrics`
 
 ## Payloads versionados de billing
 
