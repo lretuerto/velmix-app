@@ -25,6 +25,7 @@ use App\Services\Purchasing\SupplierService;
 use App\Services\Reports\DailyReportService;
 use App\Services\Reports\BillingOperationsReportService;
 use App\Services\Reports\BillingEscalationHistoryService;
+use App\Services\Reports\BillingEscalationMetricsService;
 use App\Services\Reports\BillingEscalationStateService;
 use App\Services\Reports\BillingEscalationReportService;
 use App\Services\Reports\DueReminderReportService;
@@ -49,7 +50,7 @@ Route::get('/docs', function () {
     return response()->json([
         'data' => [
             'project' => 'VELMiX ERP',
-            'version' => 'sprint1-day126',
+            'version' => 'sprint1-day129',
             'documents' => [
                 ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
                 ['name' => 'API Guide', 'path' => '/docs/api-guide'],
@@ -589,6 +590,23 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
             (int) ($payload['days'] ?? 7),
             (int) ($payload['history_days'] ?? 30),
             (int) ($payload['limit'] ?? 10),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.billing-operations.read');
+
+    Route::get('/reports/billing-escalation-metrics', function (BillingEscalationMetricsService $service) {
+        $payload = request()->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'days' => ['nullable', 'integer', 'min:1', 'max:14'],
+            'history_days' => ['nullable', 'integer', 'min:1', 'max:90'],
+        ]);
+
+        $result = $service->summary(
+            (int) request()->attributes->get('tenant_id'),
+            $payload['date'] ?? null,
+            (int) ($payload['days'] ?? 7),
+            (int) ($payload['history_days'] ?? 30),
         );
 
         return response()->json(['data' => $result]);

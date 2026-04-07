@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VELMiX ERP API
-  version: sprint1-day126
+  version: sprint1-day129
   description: |
     Contrato OpenAPI de endpoints prioritarios de VELMiX ERP.
     Cubre la convencion multi-tenant y los flujos criticos ya implementados.
@@ -1097,6 +1097,31 @@ paths:
       responses:
         '200':
           description: Historial resumido por codigo de escalacion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/billing-escalation-metrics:
+    get:
+      tags: [Reports]
+      summary: Metricas operativas de workflow para escalaciones de billing
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+      responses:
+        '200':
+          description: Backlog, workflow y SLA de escalaciones
           content:
             application/json:
               schema:

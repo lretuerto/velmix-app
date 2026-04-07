@@ -37,6 +37,7 @@ class OpenApiDocsTest extends TestCase
         $this->assertStringContainsString('/billing/outbox/summary', $response->getContent());
         $this->assertStringContainsString('/reports/billing-operations', $response->getContent());
         $this->assertStringContainsString('/reports/billing-escalations', $response->getContent());
+        $this->assertStringContainsString('/reports/billing-escalation-metrics', $response->getContent());
         $this->assertStringContainsString('/reports/billing-escalations/history', $response->getContent());
         $this->assertStringContainsString('/reports/billing-escalations/{code}', $response->getContent());
         $this->assertStringContainsString('/reports/billing-escalations/{code}/acknowledge', $response->getContent());
@@ -63,6 +64,7 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('GET /billing/outbox/provider-trace', false)
             ->assertSee('GET /reports/billing-operations', false)
             ->assertSee('GET /reports/billing-escalations', false)
+            ->assertSee('GET /reports/billing-escalation-metrics', false)
             ->assertSee('GET /reports/billing-escalations/history', false)
             ->assertSee('GET /reports/billing-escalations/{code}', false)
             ->assertSee('POST /reports/billing-escalations/{code}/acknowledge', false)

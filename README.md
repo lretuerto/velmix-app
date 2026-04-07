@@ -15,6 +15,7 @@ Backend SaaS multi-tenant para operaciones farmacéuticas, construido sobre Lara
 - Escalamiento accionable de billing con prioridades y acciones recomendadas
 - Seguimiento manual de escalaciones de billing con acknowledge y resolve
 - Historial operativo de escalaciones con timeline, notas y responsables por codigo
+- Metricas de escalaciones con backlog activo y SLA de resolucion por workflow
 - Billing desacoplado por perfil/provider tenant con outbox operable por lotes
 
 ## Requisitos
@@ -65,6 +66,7 @@ php artisan test
   - `GET /billing/provider-metrics`
   - `GET /billing/outbox/{event}/lineage`
   - `GET /reports/billing-escalations`
+  - `GET /reports/billing-escalation-metrics`
   - `GET /reports/billing-escalations/history`
   - `GET /reports/billing-escalations/{code}`
   - `POST /reports/billing-escalations/{code}/acknowledge`
@@ -111,6 +113,7 @@ composer run velmix:routes
 - Billing escalations: alertas priorizadas con acciones recomendadas por tenant
 - Billing escalation workflow: seguimiento manual de acknowledge y resolve por codigo
 - Billing escalation history: timeline operativo, ultima nota y responsables por codigo
+- Billing escalation metrics: backlog activo, eventos de workflow y SLA de resolucion
 - Billing payloads: snapshots versionados por provider/esquema para voucher y nota de credito
 - Billing replay: regeneracion y reemision controlada sin recrear la venta o la nota
 - Billing lineage: trazabilidad completa payload -> outbox original -> replay -> intentos

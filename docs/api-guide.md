@@ -107,6 +107,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /reports/daily`
 - `GET /reports/billing-operations`
 - `GET /reports/billing-escalations`
+- `GET /reports/billing-escalation-metrics`
 - `GET /reports/billing-escalations/history`
 - `GET /reports/billing-escalations/{code}`
 - `POST /reports/billing-escalations/{code}/acknowledge`
@@ -221,6 +222,12 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - si la alerta sigue activa o no
   - ultima nota y ultimo actor
   - conteo de timeline por codigo
+- `GET /reports/billing-escalation-metrics` devuelve metricas operativas de workflow:
+  - backlog activo por severidad y estado
+  - count de acknowledge/resolve en la ventana historica
+  - SLA de minutos entre acknowledge y resolve
+  - alertas acknowledged que ya estan envejeciendo
+  - ultimas resoluciones con su duracion
 - `GET /reports/billing-escalations/{code}` devuelve el detalle operativo del codigo:
   - alerta activa en la ventana consultada
   - estado persistido `open|acknowledged|resolved`

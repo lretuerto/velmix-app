@@ -116,6 +116,10 @@ class BillingOperationsReportFlowTest extends TestCase
             ->assertJsonPath('data.escalations.summary.open_count', 6)
             ->assertJsonPath('data.escalations.summary.critical_count', 2)
             ->assertJsonPath('data.escalations.items.0.code', 'billing.failed_backlog')
+            ->assertJsonPath('data.escalation_metrics.current_backlog.active_count', 6)
+            ->assertJsonPath('data.escalation_metrics.current_backlog.open_count', 6)
+            ->assertJsonPath('data.escalation_metrics.workflow_events.acknowledged_event_count', 0)
+            ->assertJsonPath('data.escalation_metrics.resolution_sla.resolved_count', 0)
             ->assertJsonFragment([
                 'provider_environment' => 'live',
                 'attempt_count' => 2,
