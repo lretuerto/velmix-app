@@ -155,6 +155,7 @@ class DailyReportService
         $grossMarginTotal = round((float) ($completedSales->gross_margin_total ?? 0), 2);
         $dueReminders = app(DueReminderReportService::class)->summary($tenantId, 7, 3, $start->toDateString());
         $promiseCompliance = app(PromiseComplianceReportService::class)->summary($tenantId, $start->toDateString(), 3);
+        $financeOperations = app(FinanceOperationsReportService::class)->summary($tenantId, $start->toDateString(), 7, 3, 3);
         $billingMetrics = app(BillingProviderMetricsService::class)->summary($tenantId, $start->toDateString(), 1, 3);
 
         return [
@@ -243,6 +244,12 @@ class DailyReportService
                 'payables' => $dueReminders['payables']['summary'],
             ],
             'promise_compliance' => $promiseCompliance['summary'],
+            'finance_operations' => [
+                'receivables' => $financeOperations['receivables'],
+                'payables' => $financeOperations['payables'],
+                'combined' => $financeOperations['combined'],
+                'priority_queue' => $financeOperations['priority_queue'],
+            ],
             'activity' => [
                 'count' => (int) ($activitySummary->activity_count ?? 0),
                 'by_domain' => [

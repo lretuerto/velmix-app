@@ -108,6 +108,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /reports/billing-operations`
 - `GET /reports/billing-escalations`
 - `GET /reports/billing-escalation-metrics`
+- `GET /reports/finance-operations`
 - `GET /reports/billing-escalations/history`
 - `GET /reports/billing-escalations/{code}`
 - `POST /reports/billing-escalations/{code}/acknowledge`
@@ -233,6 +234,21 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - estado persistido `open|acknowledged|resolved`
   - timeline de acknowledge/resolve
   - ultima nota y ultima actividad
+
+## Operaciones financieras
+
+- `GET /reports/finance-operations` consolida en un solo tablero:
+  - exposicion vigente de cuentas por cobrar y por pagar
+  - vencidos y montos corrientes
+  - promesas rotas, pendientes y cumplidas
+  - frescura del seguimiento (`missing`, `stale`, `recent`)
+  - cola priorizada combinando cobranza y pagos
+- Parametros utiles:
+  - `date`
+  - `days_ahead`
+  - `limit`
+  - `stale_follow_up_days`
+- `GET /reports/daily` ahora incluye tambien un snapshot resumido en `finance_operations`
 
 ## Payloads versionados de billing
 

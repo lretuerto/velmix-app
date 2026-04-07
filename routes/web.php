@@ -29,6 +29,7 @@ use App\Services\Reports\BillingEscalationMetricsService;
 use App\Services\Reports\BillingEscalationStateService;
 use App\Services\Reports\BillingEscalationReportService;
 use App\Services\Reports\DueReminderReportService;
+use App\Services\Reports\FinanceOperationsReportService;
 use App\Services\Reports\PromiseComplianceReportService;
 use App\Services\Reports\ReceivableRiskReportService;
 use App\Services\Security\ApiTokenService;
@@ -50,7 +51,7 @@ Route::get('/docs', function () {
     return response()->json([
         'data' => [
             'project' => 'VELMiX ERP',
-            'version' => 'sprint1-day129',
+            'version' => 'sprint1-day132',
             'documents' => [
                 ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
                 ['name' => 'API Guide', 'path' => '/docs/api-guide'],
@@ -704,6 +705,25 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
 
         return response()->json(['data' => $result]);
     })->middleware('perm:reports.promise-compliance.read');
+
+    Route::get('/reports/finance-operations', function (FinanceOperationsReportService $service) {
+        $payload = request()->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'days_ahead' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'stale_follow_up_days' => ['nullable', 'integer', 'min:1', 'max:30'],
+        ]);
+
+        $result = $service->summary(
+            (int) request()->attributes->get('tenant_id'),
+            $payload['date'] ?? null,
+            (int) ($payload['days_ahead'] ?? 7),
+            (int) ($payload['limit'] ?? 5),
+            (int) ($payload['stale_follow_up_days'] ?? 3),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.finance-operations.read');
 
     Route::get('/reports/inventory-alerts', function (\App\Services\Reports\InventoryAlertReportService $service) {
         $payload = request()->validate([
