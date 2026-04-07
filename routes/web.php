@@ -24,6 +24,7 @@ use App\Services\Purchasing\PurchaseReturnService;
 use App\Services\Purchasing\SupplierService;
 use App\Services\Reports\DailyReportService;
 use App\Services\Reports\BillingOperationsReportService;
+use App\Services\Reports\BillingEscalationStateService;
 use App\Services\Reports\BillingEscalationReportService;
 use App\Services\Reports\DueReminderReportService;
 use App\Services\Reports\PromiseComplianceReportService;
@@ -47,7 +48,7 @@ Route::get('/docs', function () {
     return response()->json([
         'data' => [
             'project' => 'VELMiX ERP',
-            'version' => 'sprint1-day120',
+            'version' => 'sprint1-day123',
             'documents' => [
                 ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
                 ['name' => 'API Guide', 'path' => '/docs/api-guide'],
@@ -572,6 +573,64 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
 
         return response()->json(['data' => $result]);
     })->middleware('perm:reports.billing-operations.read');
+
+    Route::post('/reports/billing-escalations/{code}/acknowledge', function (string $code, BillingEscalationStateService $states, BillingEscalationReportService $report) {
+        $payload = request()->validate([
+            'note' => ['nullable', 'string', 'max:1000'],
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'days' => ['nullable', 'integer', 'min:1', 'max:14'],
+        ]);
+
+        $state = $states->acknowledge(
+            (int) request()->attributes->get('tenant_id'),
+            (int) request()->user()->id,
+            $code,
+            $payload['note'] ?? null,
+        );
+
+        $activeItem = collect($report->summary(
+            (int) request()->attributes->get('tenant_id'),
+            $payload['date'] ?? null,
+            (int) ($payload['days'] ?? 7),
+        )['items'])
+            ->firstWhere('code', $code);
+
+        return response()->json([
+            'data' => [
+                'state' => $state,
+                'active_item' => $activeItem,
+            ],
+        ]);
+    })->middleware('perm:reports.billing-operations.manage');
+
+    Route::post('/reports/billing-escalations/{code}/resolve', function (string $code, BillingEscalationStateService $states, BillingEscalationReportService $report) {
+        $payload = request()->validate([
+            'note' => ['required', 'string', 'max:1000'],
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'days' => ['nullable', 'integer', 'min:1', 'max:14'],
+        ]);
+
+        $state = $states->resolve(
+            (int) request()->attributes->get('tenant_id'),
+            (int) request()->user()->id,
+            $code,
+            (string) $payload['note'],
+        );
+
+        $activeItem = collect($report->summary(
+            (int) request()->attributes->get('tenant_id'),
+            $payload['date'] ?? null,
+            (int) ($payload['days'] ?? 7),
+        )['items'])
+            ->firstWhere('code', $code);
+
+        return response()->json([
+            'data' => [
+                'state' => $state,
+                'active_item' => $activeItem,
+            ],
+        ]);
+    })->middleware('perm:reports.billing-operations.manage');
 
     Route::get('/reports/promise-compliance', function (PromiseComplianceReportService $service) {
         $payload = request()->validate([

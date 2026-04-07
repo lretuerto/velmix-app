@@ -8,8 +8,19 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class BillingEscalationReportService
 {
+    public const KNOWN_CODES = [
+        'billing.health_stale',
+        'billing.failed_backlog',
+        'billing.pending_backlog',
+        'billing.failure_rate_high',
+        'billing.acceptance_rate_low',
+        'billing.replay_backlog',
+        'billing.mixed_environments',
+    ];
+
     public function __construct(
         private readonly BillingProviderMetricsService $providerMetrics,
+        private readonly BillingEscalationStateService $stateService,
     ) {
     }
 
@@ -28,7 +39,11 @@ class BillingEscalationReportService
         }
 
         $metrics = $this->providerMetrics->summary($tenantId, $date, $days, $limit);
-        $escalations = $this->buildEscalations($metrics);
+        $statesByCode = $this->stateService->listByCode($tenantId);
+        $escalations = array_map(
+            fn (array $item) => $this->mergeState($item, $statesByCode[$item['code']] ?? null),
+            $this->buildEscalations($metrics),
+        );
 
         return [
             'tenant_id' => $tenantId,
@@ -38,6 +53,11 @@ class BillingEscalationReportService
                 'critical_count' => count(array_filter($escalations, fn (array $item) => $item['severity'] === 'critical')),
                 'warning_count' => count(array_filter($escalations, fn (array $item) => $item['severity'] === 'warning')),
                 'info_count' => count(array_filter($escalations, fn (array $item) => $item['severity'] === 'info')),
+                'workflow' => [
+                    'open_count' => count(array_filter($escalations, fn (array $item) => $item['workflow_status'] === 'open')),
+                    'acknowledged_count' => count(array_filter($escalations, fn (array $item) => $item['workflow_status'] === 'acknowledged')),
+                    'resolved_count' => count(array_filter($escalations, fn (array $item) => $item['workflow_status'] === 'resolved')),
+                ],
             ],
             'items' => array_slice($escalations, 0, $limit),
             'recommended_actions' => array_values(array_unique(array_map(
@@ -187,6 +207,15 @@ class BillingEscalationReportService
         });
 
         return $items;
+    }
+
+    private function mergeState(array $item, ?array $state): array
+    {
+        $item['workflow_status'] = $state['status'] ?? 'open';
+        $item['state'] = $state;
+        $item['is_currently_triggered'] = true;
+
+        return $item;
     }
 
     private function makeItem(

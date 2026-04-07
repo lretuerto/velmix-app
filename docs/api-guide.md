@@ -107,6 +107,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /reports/daily`
 - `GET /reports/billing-operations`
 - `GET /reports/billing-escalations`
+- `POST /reports/billing-escalations/{code}/acknowledge`
+- `POST /reports/billing-escalations/{code}/resolve`
 - `GET /reports/due-reminders`
 - `GET /reports/promise-compliance`
 - `GET /reports/receivable-risk`
@@ -207,6 +209,12 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - mensaje accionable
   - accion recomendada
   - snapshot de la metrica que disparo la alerta
+- `POST /reports/billing-escalations/{code}/acknowledge` registra reconocimiento interno de una alerta
+- `POST /reports/billing-escalations/{code}/resolve` registra cierre manual con nota obligatoria
+- El reporte de escalaciones ahora devuelve tambien:
+  - `workflow_status`
+  - `state.acknowledged_*`
+  - `state.resolved_*`
 
 ## Payloads versionados de billing
 
