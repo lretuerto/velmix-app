@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VELMiX ERP API
-  version: sprint1-day144
+  version: sprint1-day147
   description: |
     Contrato OpenAPI de endpoints prioritarios de VELMiX ERP.
     Cubre la convencion multi-tenant y los flujos criticos ya implementados.
@@ -1301,6 +1301,74 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataEnvelope'
+  /reports/finance-escalations/history:
+    get:
+      tags: [Reports]
+      summary: Historial operativo de escalaciones financieras agregadas
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+      responses:
+        '200':
+          description: Timeline resumido por codigo de alerta financiera
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/finance-escalation-metrics:
+    get:
+      tags: [Reports]
+      summary: Metricas de workflow sobre escalaciones financieras agregadas
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+      responses:
+        '200':
+          description: Backlog activo, aging y SLA por codigo de alerta financiera
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
   /reports/finance-escalations/{code}:
     get:
       tags: [Reports]
@@ -1318,6 +1386,18 @@ paths:
             type: integer
             minimum: 1
             maximum: 30
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+        - in: query
+          name: activity_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
         - in: query
           name: stale_follow_up_days
           schema:

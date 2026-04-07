@@ -110,6 +110,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /reports/billing-escalation-metrics`
 - `GET /reports/finance-operations`
 - `GET /reports/finance-escalations`
+- `GET /reports/finance-escalations/history`
+- `GET /reports/finance-escalation-metrics`
 - `GET /reports/finance-escalations/{code}`
 - `POST /reports/finance-escalations/{code}/acknowledge`
 - `POST /reports/finance-escalations/{code}/resolve`
@@ -286,7 +288,21 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - severidad operativa por entidad (`critical`, `warning`, `info`)
   - acciones recomendadas para cobranza o pago
   - conteos por workflow, flags y tipo de entidad
-- `GET /reports/finance-escalations/{code}` devuelve el detalle operativo de una alerta agregada, con `state` persistido y muestra de entidades afectadas
+- `GET /reports/finance-escalations/history` devuelve el panel historico por codigo con:
+  - si la alerta sigue activa o no
+  - ultima nota y ultimo actor
+  - conteo de timeline por codigo
+- `GET /reports/finance-escalation-metrics` devuelve metricas operativas de workflow:
+  - backlog activo por severidad y estado
+  - count de acknowledge/resolve por alerta agregada
+  - SLA de minutos entre acknowledge y resolve
+  - alertas `acknowledged` que ya estan envejeciendo
+  - ultimas resoluciones con su duracion
+- `GET /reports/finance-escalations/{code}` devuelve el detalle operativo de una alerta agregada, con:
+  - `state` persistido
+  - timeline `acknowledge/resolve`
+  - ultima nota y actividad mas reciente
+  - muestra de entidades afectadas
 - `POST /reports/finance-escalations/{code}/acknowledge` reconoce una alerta agregada de finanzas
 - `POST /reports/finance-escalations/{code}/resolve` cierra manualmente una alerta agregada de finanzas con nota obligatoria
 - `GET /reports/daily` ahora incluye tambien un snapshot resumido en `finance_operations`, incluyendo `workflow_metrics`

@@ -29,6 +29,8 @@ use App\Services\Reports\BillingEscalationMetricsService;
 use App\Services\Reports\BillingEscalationStateService;
 use App\Services\Reports\BillingEscalationReportService;
 use App\Services\Reports\DueReminderReportService;
+use App\Services\Reports\FinanceEscalationHistoryService;
+use App\Services\Reports\FinanceEscalationMetricsService;
 use App\Services\Reports\FinanceEscalationReportService;
 use App\Services\Reports\FinanceEscalationStateService;
 use App\Services\Reports\FinanceOperationsHistoryService;
@@ -56,7 +58,7 @@ Route::get('/docs', function () {
     return response()->json([
         'data' => [
             'project' => 'VELMiX ERP',
-            'version' => 'sprint1-day144',
+            'version' => 'sprint1-day147',
             'documents' => [
                 ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
                 ['name' => 'API Guide', 'path' => '/docs/api-guide'],
@@ -749,10 +751,52 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         return response()->json(['data' => $result]);
     })->middleware('perm:reports.finance-operations.read');
 
-    Route::get('/reports/finance-escalations/{code}', function (string $code, FinanceEscalationReportService $service) {
+    Route::get('/reports/finance-escalations/history', function (FinanceEscalationHistoryService $service) {
         $payload = request()->validate([
             'date' => ['nullable', 'date_format:Y-m-d'],
             'days_ahead' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'history_days' => ['nullable', 'integer', 'min:1', 'max:90'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'stale_follow_up_days' => ['nullable', 'integer', 'min:1', 'max:30'],
+        ]);
+
+        $result = $service->index(
+            (int) request()->attributes->get('tenant_id'),
+            $payload['date'] ?? null,
+            (int) ($payload['days_ahead'] ?? 7),
+            (int) ($payload['history_days'] ?? 30),
+            (int) ($payload['limit'] ?? 10),
+            (int) ($payload['stale_follow_up_days'] ?? 3),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.finance-operations.read');
+
+    Route::get('/reports/finance-escalation-metrics', function (FinanceEscalationMetricsService $service) {
+        $payload = request()->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'days_ahead' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'history_days' => ['nullable', 'integer', 'min:1', 'max:90'],
+            'stale_follow_up_days' => ['nullable', 'integer', 'min:1', 'max:30'],
+        ]);
+
+        $result = $service->summary(
+            (int) request()->attributes->get('tenant_id'),
+            $payload['date'] ?? null,
+            (int) ($payload['days_ahead'] ?? 7),
+            (int) ($payload['history_days'] ?? 30),
+            (int) ($payload['stale_follow_up_days'] ?? 3),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.finance-operations.read');
+
+    Route::get('/reports/finance-escalations/{code}', function (string $code, FinanceEscalationHistoryService $service) {
+        $payload = request()->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'days_ahead' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'history_days' => ['nullable', 'integer', 'min:1', 'max:90'],
+            'activity_limit' => ['nullable', 'integer', 'min:1', 'max:50'],
             'stale_follow_up_days' => ['nullable', 'integer', 'min:1', 'max:30'],
         ]);
 
@@ -761,6 +805,8 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
             $code,
             $payload['date'] ?? null,
             (int) ($payload['days_ahead'] ?? 7),
+            (int) ($payload['history_days'] ?? 30),
+            (int) ($payload['activity_limit'] ?? 20),
             (int) ($payload['stale_follow_up_days'] ?? 3),
         );
 
@@ -770,12 +816,14 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
     Route::post('/reports/finance-escalations/{code}/acknowledge', function (
         string $code,
         FinanceEscalationStateService $states,
-        FinanceEscalationReportService $report
+        FinanceEscalationHistoryService $history
     ) {
         $payload = request()->validate([
             'note' => ['nullable', 'string', 'max:1000'],
             'date' => ['nullable', 'date_format:Y-m-d'],
             'days_ahead' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'history_days' => ['nullable', 'integer', 'min:1', 'max:90'],
+            'activity_limit' => ['nullable', 'integer', 'min:1', 'max:50'],
             'stale_follow_up_days' => ['nullable', 'integer', 'min:1', 'max:30'],
         ]);
 
@@ -786,11 +834,13 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
             $payload['note'] ?? null,
         );
 
-        $result = $report->detail(
+        $result = $history->detail(
             (int) request()->attributes->get('tenant_id'),
             $code,
             $payload['date'] ?? null,
             (int) ($payload['days_ahead'] ?? 7),
+            (int) ($payload['history_days'] ?? 30),
+            (int) ($payload['activity_limit'] ?? 20),
             (int) ($payload['stale_follow_up_days'] ?? 3),
         );
 
@@ -800,12 +850,14 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
     Route::post('/reports/finance-escalations/{code}/resolve', function (
         string $code,
         FinanceEscalationStateService $states,
-        FinanceEscalationReportService $report
+        FinanceEscalationHistoryService $history
     ) {
         $payload = request()->validate([
             'note' => ['required', 'string', 'max:1000'],
             'date' => ['nullable', 'date_format:Y-m-d'],
             'days_ahead' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'history_days' => ['nullable', 'integer', 'min:1', 'max:90'],
+            'activity_limit' => ['nullable', 'integer', 'min:1', 'max:50'],
             'stale_follow_up_days' => ['nullable', 'integer', 'min:1', 'max:30'],
         ]);
 
@@ -816,11 +868,13 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
             (string) $payload['note'],
         );
 
-        $result = $report->detail(
+        $result = $history->detail(
             (int) request()->attributes->get('tenant_id'),
             $code,
             $payload['date'] ?? null,
             (int) ($payload['days_ahead'] ?? 7),
+            (int) ($payload['history_days'] ?? 30),
+            (int) ($payload['activity_limit'] ?? 20),
             (int) ($payload['stale_follow_up_days'] ?? 3),
         );
 
