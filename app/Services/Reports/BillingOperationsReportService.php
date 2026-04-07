@@ -11,6 +11,7 @@ class BillingOperationsReportService
 {
     public function __construct(
         private readonly BillingProviderMetricsService $providerMetrics,
+        private readonly BillingEscalationReportService $billingEscalations,
     ) {
     }
 
@@ -30,6 +31,7 @@ class BillingOperationsReportService
 
         $metrics = $this->providerMetrics->summary($tenantId, $baseDate->toDateString(), $days, $failureLimit);
         $trend = $this->buildTrend($tenantId, $baseDate, $days);
+        $escalations = $this->billingEscalations->summary($tenantId, $baseDate->toDateString(), $days, min($failureLimit, 5));
 
         return [
             'tenant_id' => $tenantId,
@@ -49,6 +51,7 @@ class BillingOperationsReportService
             'worst_day' => $this->worstDay($trend),
             'recent_failures' => $metrics['recent_failures'],
             'alerts' => $metrics['alerts'],
+            'escalations' => $escalations,
         ];
     }
 

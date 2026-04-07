@@ -106,6 +106,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 
 - `GET /reports/daily`
 - `GET /reports/billing-operations`
+- `GET /reports/billing-escalations`
 - `GET /reports/due-reminders`
 - `GET /reports/promise-compliance`
 - `GET /reports/receivable-risk`
@@ -197,6 +198,15 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - comparativo por `provider_environment`
   - aging actual del backlog pendiente
   - fallos recientes y alertas operativas
+
+## Escalamiento de billing
+
+- `GET /reports/billing-escalations` prioriza alertas abiertas con:
+  - severidad `critical|warning|info`
+  - prioridad operativa
+  - mensaje accionable
+  - accion recomendada
+  - snapshot de la metrica que disparo la alerta
 
 ## Payloads versionados de billing
 

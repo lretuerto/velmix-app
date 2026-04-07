@@ -7,14 +7,13 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
-class BillingOperationsReportFlowTest extends TestCase
+class BillingEscalationReportFlowTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_reads_billing_operations_report_for_current_tenant(): void
+    public function test_reads_billing_escalations_for_current_tenant(): void
     {
         $admin = $this->seedUserWithRole(10, 'ADMIN');
-        $this->seedUserWithRole(20, 'ADMIN');
 
         DB::table('billing_provider_profiles')->insert([
             'tenant_id' => 10,
@@ -22,126 +21,62 @@ class BillingOperationsReportFlowTest extends TestCase
             'environment' => 'live',
             'default_outcome' => 'accepted',
             'credentials' => null,
-            'health_status' => 'healthy',
-            'health_checked_at' => now()->subHour(),
-            'health_message' => 'Provider fake_sunat is reachable in live mode.',
+            'health_status' => 'unknown',
+            'health_checked_at' => now()->subHours(80),
+            'health_message' => 'Health check is stale.',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        $acceptedDay10 = $this->seedVoucherEvent(
+        $failed = $this->seedVoucherEvent(
             tenantId: 10,
             userId: $admin->id,
-            reference: 'SALE-BILL-OPS-10',
-            voucherStatus: 'accepted',
-            eventStatus: 'processed',
-            createdAt: '2026-03-10 09:00:00',
-            attemptStatus: 'accepted',
-            attemptCreatedAt: '2026-03-10 09:05:00',
-            providerEnvironment: 'live',
-        );
-
-        $failedDay11 = $this->seedVoucherEvent(
-            tenantId: 10,
-            userId: $admin->id,
-            reference: 'SALE-BILL-OPS-11',
+            reference: 'SALE-BILL-ESC-FAIL',
             voucherStatus: 'failed',
             eventStatus: 'failed',
-            createdAt: '2026-03-11 10:00:00',
+            createdAt: '2026-03-12 08:00:00',
             attemptStatus: 'failed',
-            attemptCreatedAt: '2026-03-11 10:12:00',
+            attemptCreatedAt: '2026-03-12 08:20:00',
             providerEnvironment: 'sandbox',
         );
 
-        $acceptedDay12 = $this->seedVoucherEvent(
-            tenantId: 10,
-            userId: $admin->id,
-            reference: 'SALE-BILL-OPS-12',
-            voucherStatus: 'accepted',
-            eventStatus: 'processed',
-            createdAt: '2026-03-12 11:00:00',
-            attemptStatus: 'accepted',
-            attemptCreatedAt: '2026-03-12 11:04:00',
-            providerEnvironment: 'live',
-        );
-
         $this->seedVoucherEvent(
             tenantId: 10,
             userId: $admin->id,
-            reference: 'SALE-BILL-OPS-12-REPLAY',
+            reference: 'SALE-BILL-ESC-PENDING',
             voucherStatus: 'pending',
             eventStatus: 'pending',
-            createdAt: '2026-03-12 12:00:00',
+            createdAt: '2026-03-12 09:00:00',
             attemptStatus: null,
             attemptCreatedAt: null,
             providerEnvironment: 'live',
-            replayedFromEventId: $failedDay11['event_id'],
-        );
-
-        $this->seedVoucherEvent(
-            tenantId: 20,
-            userId: $admin->id,
-            reference: 'SALE-BILL-OPS-OTHER',
-            voucherStatus: 'accepted',
-            eventStatus: 'processed',
-            createdAt: '2026-03-12 09:00:00',
-            attemptStatus: 'accepted',
-            attemptCreatedAt: '2026-03-12 09:03:00',
-            providerEnvironment: 'live',
+            replayedFromEventId: $failed['event_id'],
         );
 
         $this->actingAs($admin)
             ->withHeader('X-Tenant-Id', '10')
-            ->getJson('/reports/billing-operations?date=2026-03-12&days=3&failure_limit=2')
+            ->getJson('/reports/billing-escalations?date=2026-03-12&days=1&limit=10')
             ->assertOk()
             ->assertJsonPath('data.tenant_id', 10)
-            ->assertJsonPath('data.executive_summary.health_status', 'healthy')
-            ->assertJsonPath('data.executive_summary.health_is_stale', false)
-            ->assertJsonPath('data.executive_summary.pending_backlog_count', 1)
-            ->assertJsonPath('data.executive_summary.failed_backlog_count', 1)
-            ->assertJsonPath('data.executive_summary.acceptance_rate', 50)
-            ->assertJsonPath('data.executive_summary.replay_backlog_count', 1)
-            ->assertJsonPath('data.backlog_aging.total_pending_count', 1)
-            ->assertJsonPath('data.backlog_aging.replay_pending_count', 1)
-            ->assertJsonCount(3, 'data.trend')
-            ->assertJsonPath('data.trend.0.date', '2026-03-10')
-            ->assertJsonPath('data.trend.0.acceptance_rate', 100)
-            ->assertJsonPath('data.trend.1.date', '2026-03-11')
-            ->assertJsonPath('data.trend.1.failed_event_count', 1)
-            ->assertJsonPath('data.trend.2.date', '2026-03-12')
-            ->assertJsonPath('data.trend.2.event_count', 2)
-            ->assertJsonPath('data.trend.2.replay_created_count', 1)
-            ->assertJsonPath('data.worst_day.date', '2026-03-11')
-            ->assertJsonPath('data.recent_failures.0.event_id', $failedDay11['event_id'])
-            ->assertJsonPath('data.escalations.summary.open_count', 6)
-            ->assertJsonPath('data.escalations.summary.critical_count', 2)
-            ->assertJsonPath('data.escalations.items.0.code', 'billing.failed_backlog')
-            ->assertJsonFragment([
-                'provider_environment' => 'live',
-                'attempt_count' => 2,
-                'accepted_count' => 2,
-                'failed_count' => 0,
-                'acceptance_rate' => 100.0,
-            ])
-            ->assertJsonFragment([
-                'provider_environment' => 'sandbox',
-                'attempt_count' => 1,
-                'accepted_count' => 0,
-                'failed_count' => 1,
-                'acceptance_rate' => 0.0,
-            ])
-            ->assertJsonFragment(['code' => 'failed_backlog'])
-            ->assertJsonFragment(['code' => 'failure_rate_high'])
-            ->assertJsonFragment(['code' => 'replay_backlog']);
+            ->assertJsonPath('data.summary.open_count', 6)
+            ->assertJsonPath('data.summary.critical_count', 4)
+            ->assertJsonPath('data.summary.warning_count', 0)
+            ->assertJsonPath('data.summary.info_count', 2)
+            ->assertJsonPath('data.items.0.code', 'billing.health_stale')
+            ->assertJsonPath('data.items.1.code', 'billing.failed_backlog')
+            ->assertJsonFragment(['code' => 'billing.pending_backlog'])
+            ->assertJsonFragment(['code' => 'billing.failure_rate_high'])
+            ->assertJsonFragment(['code' => 'billing.replay_backlog'])
+            ->assertJsonFragment(['code' => 'billing.mixed_environments']);
     }
 
-    public function test_cashier_cannot_read_billing_operations_report(): void
+    public function test_cashier_cannot_read_billing_escalations(): void
     {
         $cashier = $this->seedUserWithRole(10, 'CAJERO');
 
         $this->actingAs($cashier)
             ->withHeader('X-Tenant-Id', '10')
-            ->getJson('/reports/billing-operations')
+            ->getJson('/reports/billing-escalations')
             ->assertStatus(403);
     }
 
