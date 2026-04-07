@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VELMiX ERP API
-  version: sprint1-day123
+  version: sprint1-day126
   description: |
     Contrato OpenAPI de endpoints prioritarios de VELMiX ERP.
     Cubre la convencion multi-tenant y los flujos criticos ya implementados.
@@ -1070,6 +1070,75 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataEnvelope'
+  /reports/billing-escalations/history:
+    get:
+      tags: [Reports]
+      summary: Historial operativo de escalaciones de billing
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+      responses:
+        '200':
+          description: Historial resumido por codigo de escalacion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/billing-escalations/{code}:
+    get:
+      tags: [Reports]
+      summary: Detalle operativo de una escalacion de billing
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+        - in: query
+          name: activity_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+      responses:
+        '200':
+          description: Estado, alerta activa y timeline de la escalacion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /reports/billing-escalations/{code}/acknowledge:
     post:
       tags: [Reports]

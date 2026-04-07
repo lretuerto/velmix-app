@@ -107,6 +107,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /reports/daily`
 - `GET /reports/billing-operations`
 - `GET /reports/billing-escalations`
+- `GET /reports/billing-escalations/history`
+- `GET /reports/billing-escalations/{code}`
 - `POST /reports/billing-escalations/{code}/acknowledge`
 - `POST /reports/billing-escalations/{code}/resolve`
 - `GET /reports/due-reminders`
@@ -215,6 +217,15 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - `workflow_status`
   - `state.acknowledged_*`
   - `state.resolved_*`
+- `GET /reports/billing-escalations/history` devuelve el panel historico por codigo con:
+  - si la alerta sigue activa o no
+  - ultima nota y ultimo actor
+  - conteo de timeline por codigo
+- `GET /reports/billing-escalations/{code}` devuelve el detalle operativo del codigo:
+  - alerta activa en la ventana consultada
+  - estado persistido `open|acknowledged|resolved`
+  - timeline de acknowledge/resolve
+  - ultima nota y ultima actividad
 
 ## Payloads versionados de billing
 
