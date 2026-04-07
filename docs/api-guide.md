@@ -110,6 +110,9 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /reports/billing-escalation-metrics`
 - `GET /reports/finance-operations`
 - `GET /reports/finance-escalations`
+- `GET /reports/finance-escalations/{code}`
+- `POST /reports/finance-escalations/{code}/acknowledge`
+- `POST /reports/finance-escalations/{code}/resolve`
 - `GET /reports/finance-operations/history`
 - `GET /reports/finance-operations/metrics`
 - `GET /reports/finance-operations/{kind}/{entity}`
@@ -283,6 +286,9 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - severidad operativa por entidad (`critical`, `warning`, `info`)
   - acciones recomendadas para cobranza o pago
   - conteos por workflow, flags y tipo de entidad
+- `GET /reports/finance-escalations/{code}` devuelve el detalle operativo de una alerta agregada, con `state` persistido y muestra de entidades afectadas
+- `POST /reports/finance-escalations/{code}/acknowledge` reconoce una alerta agregada de finanzas
+- `POST /reports/finance-escalations/{code}/resolve` cierra manualmente una alerta agregada de finanzas con nota obligatoria
 - `GET /reports/daily` ahora incluye tambien un snapshot resumido en `finance_operations`, incluyendo `workflow_metrics`
 
 ## Payloads versionados de billing

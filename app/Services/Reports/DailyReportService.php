@@ -157,6 +157,7 @@ class DailyReportService
         $promiseCompliance = app(PromiseComplianceReportService::class)->summary($tenantId, $start->toDateString(), 3);
         $financeOperations = app(FinanceOperationsReportService::class)->summary($tenantId, $start->toDateString(), 7, 3, 3);
         $financeWorkflowMetrics = app(FinanceOperationsMetricsService::class)->summary($tenantId, $start->toDateString(), 7, 30);
+        $financeEscalations = app(FinanceEscalationReportService::class)->summary($tenantId, $start->toDateString(), 7, 5, 3);
         $billingMetrics = app(BillingProviderMetricsService::class)->summary($tenantId, $start->toDateString(), 1, 3);
 
         return [
@@ -255,6 +256,12 @@ class DailyReportService
                     'acknowledged_count' => $financeWorkflowMetrics['current_backlog']['acknowledged_count'],
                     'stale_acknowledged_count' => $financeWorkflowMetrics['current_backlog']['stale_acknowledged_count'],
                     'avg_minutes_from_ack_to_resolve' => $financeWorkflowMetrics['resolution_sla']['avg_minutes_from_ack_to_resolve'],
+                ],
+                'escalations' => [
+                    'open_count' => $financeEscalations['alert_summary']['open_count'],
+                    'critical_count' => $financeEscalations['alert_summary']['critical_count'],
+                    'warning_count' => $financeEscalations['alert_summary']['warning_count'],
+                    'workflow' => $financeEscalations['alert_summary']['workflow'],
                 ],
                 'priority_queue' => $financeOperations['priority_queue'],
             ],

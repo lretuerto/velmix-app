@@ -7,11 +7,20 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class FinanceEscalationReportService
 {
+    public const KNOWN_CODES = [
+        'finance.stale_acknowledged',
+        'finance.broken_promise',
+        'finance.severely_overdue',
+        'finance.stale_follow_up',
+        'finance.missing_follow_up',
+    ];
+
     private const MAX_LIMIT = 20;
     private const STALE_ACKNOWLEDGED_HOURS = 24;
 
     public function __construct(
         private readonly FinanceOperationsReportService $reportService,
+        private readonly FinanceEscalationStateService $stateService,
     ) {
     }
 
@@ -46,6 +55,7 @@ class FinanceEscalationReportService
             fn (array $item) => $this->buildItem($item, $baseDate, $staleFollowUpDays),
             $this->reportService->workflowItems($tenantId, $baseDate->toDateString(), $daysAhead),
         );
+        $statesByCode = $this->stateService->listByCode($tenantId);
 
         usort($items, function (array $left, array $right): int {
             if ($left['priority'] !== $right['priority']) {
@@ -60,6 +70,8 @@ class FinanceEscalationReportService
         });
 
         $visibleItems = array_slice($items, 0, $limit);
+        $alerts = $this->buildAlerts($items, $statesByCode);
+        $visibleAlerts = array_slice($alerts, 0, min($limit, 10));
 
         return [
             'tenant_id' => $tenantId,
@@ -89,11 +101,97 @@ class FinanceEscalationReportService
                     'missing_follow_up_count' => count(array_filter($items, fn (array $item) => $item['flags']['missing_follow_up'])),
                 ],
             ],
+            'alert_summary' => [
+                'open_count' => count($alerts),
+                'critical_count' => count(array_filter($alerts, fn (array $alert) => $alert['severity'] === 'critical')),
+                'warning_count' => count(array_filter($alerts, fn (array $alert) => $alert['severity'] === 'warning')),
+                'info_count' => count(array_filter($alerts, fn (array $alert) => $alert['severity'] === 'info')),
+                'workflow' => [
+                    'open_count' => count(array_filter($alerts, fn (array $alert) => $alert['workflow_status'] === 'open')),
+                    'acknowledged_count' => count(array_filter($alerts, fn (array $alert) => $alert['workflow_status'] === 'acknowledged')),
+                    'resolved_count' => count(array_filter($alerts, fn (array $alert) => $alert['workflow_status'] === 'resolved')),
+                ],
+            ],
             'items' => $visibleItems,
+            'alerts' => $visibleAlerts,
             'recommended_actions' => array_values(array_unique(array_map(
                 fn (array $item) => $item['recommended_action'],
-                $visibleItems,
+                $visibleAlerts !== [] ? $visibleAlerts : $visibleItems,
             ))),
+        ];
+    }
+
+    public function detail(
+        int $tenantId,
+        string $code,
+        ?string $date = null,
+        int $daysAhead = 7,
+        int $staleFollowUpDays = 3,
+    ): array {
+        if ($tenantId <= 0) {
+            throw new HttpException(403, 'Tenant context is required.');
+        }
+
+        if ($daysAhead < 1 || $daysAhead > 30) {
+            throw new HttpException(422, 'days_ahead is invalid.');
+        }
+
+        if ($staleFollowUpDays < 1 || $staleFollowUpDays > 30) {
+            throw new HttpException(422, 'stale_follow_up_days is invalid.');
+        }
+
+        $code = trim($code);
+
+        if ($code === '' || ! in_array($code, self::KNOWN_CODES, true)) {
+            throw new HttpException(404, 'Finance escalation code not found.');
+        }
+
+        $baseDate = $date !== null
+            ? CarbonImmutable::createFromFormat('Y-m-d', $date)->startOfDay()
+            : CarbonImmutable::now()->startOfDay();
+
+        $items = array_map(
+            fn (array $item) => $this->buildItem($item, $baseDate, $staleFollowUpDays),
+            $this->reportService->workflowItems($tenantId, $baseDate->toDateString(), $daysAhead),
+        );
+        $statesByCode = $this->stateService->listByCode($tenantId);
+        $alert = collect($this->buildAlerts($items, $statesByCode))
+            ->firstWhere('code', $code);
+
+        if ($alert === null) {
+            $state = $statesByCode[$code] ?? null;
+
+            if ($state === null) {
+                throw new HttpException(404, 'Finance escalation code not found.');
+            }
+
+            return [
+                'tenant_id' => $tenantId,
+                'window' => [
+                    'date' => $baseDate->toDateString(),
+                    'days_ahead' => $daysAhead,
+                    'stale_follow_up_days' => $staleFollowUpDays,
+                ],
+                'code' => $code,
+                'workflow_status' => $state['status'],
+                'is_currently_triggered' => false,
+                'state' => $state,
+                'active_item' => null,
+            ];
+        }
+
+        return [
+            'tenant_id' => $tenantId,
+            'window' => [
+                'date' => $baseDate->toDateString(),
+                'days_ahead' => $daysAhead,
+                'stale_follow_up_days' => $staleFollowUpDays,
+            ],
+            'code' => $code,
+            'workflow_status' => $alert['workflow_status'],
+            'is_currently_triggered' => true,
+            'state' => $alert['state'],
+            'active_item' => $alert,
         ];
     }
 
@@ -127,6 +225,130 @@ class FinanceEscalationReportService
             'latest_follow_up' => $item['latest_follow_up'],
             'state' => $item['state'],
         ];
+    }
+
+    private function buildAlerts(array $items, array $statesByCode): array
+    {
+        $alerts = [];
+
+        foreach (self::KNOWN_CODES as $code) {
+            $matchingItems = array_values(array_filter($items, fn (array $item) => $this->matchesCode($item, $code)));
+
+            if ($matchingItems === []) {
+                continue;
+            }
+
+            usort($matchingItems, function (array $left, array $right): int {
+                if ($left['priority'] !== $right['priority']) {
+                    return $right['priority'] <=> $left['priority'];
+                }
+
+                return $right['outstanding_amount'] <=> $left['outstanding_amount'];
+            });
+
+            $severity = $this->alertSeverity($matchingItems);
+            $state = $statesByCode[$code] ?? null;
+            $alerts[] = [
+                'code' => $code,
+                'severity' => $severity,
+                'priority' => $this->alertPriority($code, $severity),
+                'title' => $this->alertTitle($code),
+                'message' => $this->alertMessage($code, count($matchingItems)),
+                'recommended_action' => $this->alertRecommendedAction($code),
+                'metric_snapshot' => [
+                    'affected_count' => count($matchingItems),
+                    'affected_total' => round((float) array_sum(array_map(fn (array $item) => $item['outstanding_amount'], $matchingItems)), 2),
+                    'sample_entity_keys' => array_values(array_map(fn (array $item) => $item['entity_key'], array_slice($matchingItems, 0, 3))),
+                ],
+                'workflow_status' => $state['status'] ?? 'open',
+                'state' => $state,
+                'is_currently_triggered' => true,
+                'sample_items' => array_slice($matchingItems, 0, 3),
+            ];
+        }
+
+        usort($alerts, function (array $left, array $right): int {
+            if ($left['priority'] !== $right['priority']) {
+                return $right['priority'] <=> $left['priority'];
+            }
+
+            return strcmp($left['code'], $right['code']);
+        });
+
+        return $alerts;
+    }
+
+    private function matchesCode(array $item, string $code): bool
+    {
+        return match ($code) {
+            'finance.stale_acknowledged' => $item['flags']['stale_acknowledged'],
+            'finance.broken_promise' => $item['flags']['broken_promise'],
+            'finance.severely_overdue' => $item['flags']['severely_overdue'],
+            'finance.stale_follow_up' => $item['flags']['stale_follow_up'],
+            'finance.missing_follow_up' => $item['flags']['missing_follow_up'],
+            default => false,
+        };
+    }
+
+    private function alertSeverity(array $matchingItems): string
+    {
+        if (count(array_filter($matchingItems, fn (array $item) => $item['severity'] === 'critical')) > 0) {
+            return 'critical';
+        }
+
+        if (count(array_filter($matchingItems, fn (array $item) => $item['severity'] === 'warning')) > 0) {
+            return 'warning';
+        }
+
+        return 'info';
+    }
+
+    private function alertPriority(string $code, string $severity): int
+    {
+        return match ($code) {
+            'finance.stale_acknowledged' => $severity === 'critical' ? 100 : 80,
+            'finance.broken_promise' => $severity === 'critical' ? 95 : 75,
+            'finance.severely_overdue' => $severity === 'critical' ? 90 : 70,
+            'finance.stale_follow_up' => 60,
+            'finance.missing_follow_up' => 50,
+            default => 40,
+        };
+    }
+
+    private function alertTitle(string $code): string
+    {
+        return match ($code) {
+            'finance.stale_acknowledged' => 'Escalaciones financieras acknowledged envejecidas',
+            'finance.broken_promise' => 'Promesas financieras incumplidas',
+            'finance.severely_overdue' => 'Vencimientos financieros severos',
+            'finance.stale_follow_up' => 'Seguimientos financieros desactualizados',
+            'finance.missing_follow_up' => 'Prioridades financieras sin seguimiento',
+            default => $code,
+        };
+    }
+
+    private function alertMessage(string $code, int $affectedCount): string
+    {
+        return match ($code) {
+            'finance.stale_acknowledged' => sprintf('Hay %d prioridades financieras acknowledged sin cierre oportuno.', $affectedCount),
+            'finance.broken_promise' => sprintf('Hay %d prioridades financieras con promesas ya incumplidas.', $affectedCount),
+            'finance.severely_overdue' => sprintf('Hay %d prioridades financieras con atraso severo.', $affectedCount),
+            'finance.stale_follow_up' => sprintf('Hay %d prioridades financieras con seguimiento desactualizado.', $affectedCount),
+            'finance.missing_follow_up' => sprintf('Hay %d prioridades financieras sin nota o seguimiento operativo.', $affectedCount),
+            default => sprintf('Hay %d prioridades financieras activas en esta alerta.', $affectedCount),
+        };
+    }
+
+    private function alertRecommendedAction(string $code): string
+    {
+        return match ($code) {
+            'finance.stale_acknowledged' => 'Destrabar casos acknowledged envejecidos y registrar resolución o nueva acción operativa.',
+            'finance.broken_promise' => 'Recontactar cliente/proveedor, renegociar el compromiso y registrar el nuevo seguimiento.',
+            'finance.severely_overdue' => 'Priorizar gestión inmediata de vencidos críticos y escalar la toma de decisión operativa.',
+            'finance.stale_follow_up' => 'Actualizar las notas de seguimiento y refrescar el contexto antes del próximo corte diario.',
+            'finance.missing_follow_up' => 'Registrar seguimiento inicial para dejar trazabilidad y próximo paso definido.',
+            default => 'Revisar la cola financiera y actualizar el seguimiento operativo.',
+        };
     }
 
     private function flags(array $item, CarbonImmutable $baseDate, int $staleFollowUpDays): array

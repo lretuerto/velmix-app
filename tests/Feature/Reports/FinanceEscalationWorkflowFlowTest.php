@@ -7,80 +7,114 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
-class FinanceEscalationReportFlowTest extends TestCase
+class FinanceEscalationWorkflowFlowTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_reads_finance_escalations_for_current_tenant(): void
+    public function test_admin_can_acknowledge_and_resolve_finance_escalation(): void
     {
         $admin = $this->seedUserWithRole(10, 'ADMIN');
-        $scenario = $this->seedEscalationScenario($admin);
+        $this->seedUserWithRole(20, 'ADMIN');
+        $this->seedEscalationScenario($admin);
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/reports/finance-escalations/finance.stale_acknowledged?date=2026-03-12&days_ahead=7&stale_follow_up_days=3')
+            ->assertOk()
+            ->assertJsonPath('data.code', 'finance.stale_acknowledged')
+            ->assertJsonPath('data.workflow_status', 'open')
+            ->assertJsonPath('data.is_currently_triggered', true)
+            ->assertJsonPath('data.state', null)
+            ->assertJsonPath('data.active_item.code', 'finance.stale_acknowledged');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/reports/finance-escalations/finance.stale_acknowledged/acknowledge', [
+                'note' => 'Tesoreria ya tomó la alerta agregada.',
+                'date' => '2026-03-12',
+                'days_ahead' => 7,
+                'stale_follow_up_days' => 3,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.state.code', 'finance.stale_acknowledged')
+            ->assertJsonPath('data.state.status', 'acknowledged')
+            ->assertJsonPath('data.state.acknowledgement_note', 'Tesoreria ya tomó la alerta agregada.')
+            ->assertJsonPath('data.active_item.workflow_status', 'acknowledged');
 
         $this->actingAs($admin)
             ->withHeader('X-Tenant-Id', '10')
             ->getJson('/reports/finance-escalations?date=2026-03-12&days_ahead=7&limit=10&stale_follow_up_days=3')
             ->assertOk()
-            ->assertJsonPath('data.tenant_id', 10)
-            ->assertJsonPath('data.summary.open_count', 3)
-            ->assertJsonPath('data.summary.critical_count', 2)
-            ->assertJsonPath('data.summary.warning_count', 1)
-            ->assertJsonPath('data.summary.info_count', 0)
-            ->assertJsonPath('data.summary.workflow.open_count', 2)
-            ->assertJsonPath('data.summary.workflow.acknowledged_count', 1)
-            ->assertJsonPath('data.summary.workflow.resolved_count', 0)
-            ->assertJsonPath('data.alert_summary.open_count', 4)
-            ->assertJsonPath('data.alert_summary.critical_count', 3)
-            ->assertJsonPath('data.alert_summary.warning_count', 1)
-            ->assertJsonPath('data.alert_summary.workflow.open_count', 4)
-            ->assertJsonPath('data.summary.by_kind.receivable_count', 2)
-            ->assertJsonPath('data.summary.by_kind.payable_count', 1)
-            ->assertJsonPath('data.summary.flags.broken_promise_count', 1)
-            ->assertJsonPath('data.summary.flags.stale_acknowledged_count', 1)
-            ->assertJsonPath('data.summary.flags.missing_follow_up_count', 1)
-            ->assertJsonPath('data.alerts.0.code', 'finance.stale_acknowledged')
-            ->assertJsonPath('data.alerts.0.workflow_status', 'open')
-            ->assertJsonPath('data.alerts.1.code', 'finance.broken_promise')
-            ->assertJsonPath('data.items.0.entity_key', 'payable:'.$scenario['acknowledged_payable_id'])
-            ->assertJsonPath('data.items.0.severity', 'critical')
-            ->assertJsonPath('data.items.0.workflow_status', 'acknowledged')
-            ->assertJsonPath('data.items.1.entity_key', 'receivable:'.$scenario['broken_receivable_id'])
-            ->assertJsonPath('data.items.1.title', 'Cobranza con promesa rota')
+            ->assertJsonPath('data.alert_summary.workflow.acknowledged_count', 1)
             ->assertJsonFragment([
-                'entity_key' => 'receivable:'.$scenario['upcoming_receivable_id'],
-                'severity' => 'warning',
-                'workflow_status' => 'open',
+                'code' => 'finance.stale_acknowledged',
+                'workflow_status' => 'acknowledged',
             ]);
 
-        $this->assertNotEmpty($this->getJsonPayload('/reports/finance-escalations?date=2026-03-12&days_ahead=7&limit=10&stale_follow_up_days=3', $admin)['recommended_actions']);
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/reports/finance-escalations/finance.stale_acknowledged/resolve', [
+                'note' => 'Alerta agregada cerrada tras revisión del backlog.',
+                'date' => '2026-03-12',
+                'days_ahead' => 7,
+                'stale_follow_up_days' => 3,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.state.status', 'resolved')
+            ->assertJsonPath('data.state.resolution_note', 'Alerta agregada cerrada tras revisión del backlog.')
+            ->assertJsonPath('data.active_item.workflow_status', 'resolved');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/reports/finance-escalations/finance.stale_acknowledged?date=2026-03-12&days_ahead=7&stale_follow_up_days=3')
+            ->assertOk()
+            ->assertJsonPath('data.workflow_status', 'resolved')
+            ->assertJsonPath('data.state.status', 'resolved')
+            ->assertJsonPath('data.state.resolution_note', 'Alerta agregada cerrada tras revisión del backlog.');
     }
 
-    public function test_cashier_cannot_read_finance_escalations(): void
+    public function test_cashier_cannot_manage_finance_escalation(): void
     {
         $cashier = $this->seedUserWithRole(10, 'CAJERO');
 
         $this->actingAs($cashier)
             ->withHeader('X-Tenant-Id', '10')
-            ->getJson('/reports/finance-escalations')
+            ->postJson('/reports/finance-escalations/finance.stale_acknowledged/acknowledge', [
+                'note' => 'Intento sin permiso.',
+            ])
             ->assertStatus(403);
     }
 
-    private function getJsonPayload(string $uri, User $user): array
+    public function test_foreign_tenant_cannot_read_finance_escalation_detail(): void
     {
-        return $this->actingAs($user)
-            ->withHeader('X-Tenant-Id', '10')
-            ->getJson($uri)
-            ->assertOk()
-            ->json('data');
+        $admin10 = $this->seedUserWithRole(10, 'ADMIN');
+        $admin20 = $this->seedUserWithRole(20, 'ADMIN');
+        $this->seedEscalationScenario($admin10);
+
+        $this->actingAs($admin20)
+            ->withHeader('X-Tenant-Id', '20')
+            ->getJson('/reports/finance-escalations/finance.stale_acknowledged')
+            ->assertStatus(404);
     }
 
-    private function seedEscalationScenario(User $admin): array
+    public function test_resolve_requires_note(): void
     {
-        $customerId = $this->seedCustomer(10, 'Cliente Escalacion');
-        $supplierId = $this->seedSupplier(10, '20171717171', 'Proveedor Escalacion');
+        $admin = $this->seedUserWithRole(10, 'ADMIN');
+        $this->seedEscalationScenario($admin);
 
-        $brokenReceivableId = $this->seedReceivable(10, $admin->id, $customerId, 20.00, '2026-03-10 00:00:00', 'SALE-FIN-ESC-BROKEN');
-        $upcomingReceivableId = $this->seedReceivable(10, $admin->id, $customerId, 15.00, '2026-03-14 00:00:00', 'SALE-FIN-ESC-UPCOMING');
-        $acknowledgedPayableId = $this->seedPayable(10, $admin->id, $supplierId, 34.00, '2026-02-04 00:00:00', 'PUR-FIN-ESC-ACK');
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/reports/finance-escalations/finance.stale_acknowledged/resolve', [])
+            ->assertStatus(422);
+    }
+
+    private function seedEscalationScenario(User $admin): void
+    {
+        $customerId = $this->seedCustomer(10, 'Cliente Workflow Escalacion');
+        $supplierId = $this->seedSupplier(10, '20162626262', 'Proveedor Workflow Escalacion');
+
+        $brokenReceivableId = $this->seedReceivable(10, $admin->id, $customerId, 20.00, '2026-03-10 00:00:00', 'SALE-FIN-ESC-WF-BROKEN');
+        $acknowledgedPayableId = $this->seedPayable(10, $admin->id, $supplierId, 34.00, '2026-02-04 00:00:00', 'PUR-FIN-ESC-WF-ACK');
 
         DB::table('sale_receivable_follow_ups')->insert([
             'tenant_id' => 10,
@@ -102,7 +136,7 @@ class FinanceEscalationReportFlowTest extends TestCase
             'status' => 'acknowledged',
             'acknowledged_by_user_id' => $admin->id,
             'acknowledged_at' => '2026-03-11 08:00:00',
-            'acknowledgement_note' => 'Tesoreria ya tomo el caso.',
+            'acknowledgement_note' => 'Tesoreria ya tomó el caso.',
             'resolved_by_user_id' => null,
             'resolved_at' => null,
             'resolution_note' => null,
@@ -110,12 +144,6 @@ class FinanceEscalationReportFlowTest extends TestCase
             'created_at' => '2026-03-11 08:00:00',
             'updated_at' => '2026-03-11 08:00:00',
         ]);
-
-        return [
-            'broken_receivable_id' => $brokenReceivableId,
-            'upcoming_receivable_id' => $upcomingReceivableId,
-            'acknowledged_payable_id' => $acknowledgedPayableId,
-        ];
     }
 
     private function seedUserWithRole(int $tenantId, string $roleCode): User
