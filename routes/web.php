@@ -24,6 +24,7 @@ use App\Services\Purchasing\PurchaseReturnService;
 use App\Services\Purchasing\SupplierService;
 use App\Services\Reports\DailyReportService;
 use App\Services\Reports\BillingOperationsReportService;
+use App\Services\Reports\OperationsControlTowerReportService;
 use App\Services\Reports\BillingEscalationHistoryService;
 use App\Services\Reports\BillingEscalationMetricsService;
 use App\Services\Reports\BillingEscalationStateService;
@@ -61,7 +62,7 @@ Route::get('/docs', function () {
     return response()->json([
         'data' => [
             'project' => 'VELMiX ERP',
-            'version' => 'sprint1-day153',
+            'version' => 'sprint1-day156',
             'documents' => [
                 ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
                 ['name' => 'API Guide', 'path' => '/docs/api-guide'],
@@ -535,6 +536,29 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
 
         return response()->json(['data' => $result]);
     })->middleware('perm:reports.daily.read');
+
+    Route::get('/reports/operations-control-tower', function (OperationsControlTowerReportService $service) {
+        $payload = request()->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'billing_days' => ['nullable', 'integer', 'min:1', 'max:14'],
+            'finance_days_ahead' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'priority_limit' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'failure_limit' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'stale_follow_up_days' => ['nullable', 'integer', 'min:1', 'max:30'],
+        ]);
+
+        $result = $service->summary(
+            (int) request()->attributes->get('tenant_id'),
+            $payload['date'] ?? null,
+            (int) ($payload['billing_days'] ?? 7),
+            (int) ($payload['finance_days_ahead'] ?? 7),
+            (int) ($payload['priority_limit'] ?? 5),
+            (int) ($payload['failure_limit'] ?? 5),
+            (int) ($payload['stale_follow_up_days'] ?? 3),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.operations-control-tower.read');
 
     Route::get('/reports/due-reminders', function (DueReminderReportService $service) {
         $payload = request()->validate([

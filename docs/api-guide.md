@@ -105,6 +105,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 ### Reportes y auditoria
 
 - `GET /reports/daily`
+- `GET /reports/operations-control-tower`
 - `GET /reports/billing-operations`
 - `GET /reports/billing-escalations`
 - `GET /reports/billing-escalation-metrics`
@@ -222,6 +223,21 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - comparativo por `provider_environment`
   - aging actual del backlog pendiente
   - fallos recientes y alertas operativas
+
+## Tablero maestro operativo
+
+- `GET /reports/operations-control-tower` concentra en una sola vista:
+  - resumen ejecutivo diario de ventas, cobranza, caja, billing y finanzas
+  - `health_gates` por dominio operativo
+  - cola de foco con escalaciones cross-domain y prioridades financieras
+  - fallos recientes de billing y paths de drill-down
+- parametros utiles:
+  - `date`
+  - `billing_days`
+  - `finance_days_ahead`
+  - `priority_limit`
+  - `failure_limit`
+  - `stale_follow_up_days`
 
 ## Escalamiento de billing
 

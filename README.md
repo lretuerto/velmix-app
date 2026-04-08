@@ -86,6 +86,7 @@ php artisan test
   - `GET /reports/finance-operations/{kind}/{entity}/history`
   - `POST /reports/finance-operations/{kind}/{entity}/acknowledge`
   - `POST /reports/finance-operations/{kind}/{entity}/resolve`
+  - `GET /reports/operations-control-tower`
   - `GET /reports/operations-escalations`
   - `GET /reports/operations-escalations/history`
   - `GET /reports/operations-escalation-metrics`
@@ -159,6 +160,7 @@ composer run velmix:routes
 - Operations escalations workflow: acknowledge y resolve unificado desde la cola cross-domain
 - Operations escalations history: timeline, notas y responsables cross-domain por `queue_key`
 - Operations escalations metrics: backlog, eventos y SLA agregados entre billing y finanzas
+- Operations control tower: tablero maestro con health gates, action center y drill-down cross-domain
 - Auditoría: timeline transversal por tenant
 
 ## Validación recomendada antes de publicar cambios
