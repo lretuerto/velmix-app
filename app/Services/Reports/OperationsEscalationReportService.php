@@ -13,9 +13,11 @@ class OperationsEscalationReportService
         private readonly BillingEscalationReportService $billingReportService,
         private readonly BillingEscalationHistoryService $billingHistoryService,
         private readonly BillingEscalationMetricsService $billingMetricsService,
+        private readonly BillingEscalationStateService $billingStateService,
         private readonly FinanceEscalationReportService $financeReportService,
         private readonly FinanceEscalationHistoryService $financeHistoryService,
         private readonly FinanceEscalationMetricsService $financeMetricsService,
+        private readonly FinanceEscalationStateService $financeStateService,
     ) {
     }
 
@@ -152,12 +154,7 @@ class OperationsEscalationReportService
         $this->assertBillingDays($billingDays);
         $this->assertFinanceDaysAhead($financeDaysAhead);
         $this->assertStaleFollowUpDays($staleFollowUpDays);
-
-        $domain = trim($domain);
-
-        if (! in_array($domain, ['billing', 'finance'], true)) {
-            throw new HttpException(404, 'Escalation domain not found.');
-        }
+        $domain = $this->assertDomain($domain);
 
         $detail = $domain === 'billing'
             ? $this->billingHistoryService->detail(
@@ -184,10 +181,92 @@ class OperationsEscalationReportService
             'actions' => [
                 'detail_path' => sprintf('/reports/operations-escalations/%s/%s', $domain, $code),
                 'source_path' => sprintf('/reports/%s/%s', $domain === 'billing' ? 'billing-escalations' : 'finance-escalations', $code),
-                'acknowledge_path' => sprintf('/reports/%s/%s/acknowledge', $domain === 'billing' ? 'billing-escalations' : 'finance-escalations', $code),
-                'resolve_path' => sprintf('/reports/%s/%s/resolve', $domain === 'billing' ? 'billing-escalations' : 'finance-escalations', $code),
+                'acknowledge_path' => sprintf('/reports/operations-escalations/%s/%s/acknowledge', $domain, $code),
+                'resolve_path' => sprintf('/reports/operations-escalations/%s/%s/resolve', $domain, $code),
+                'source_acknowledge_path' => sprintf('/reports/%s/%s/acknowledge', $domain === 'billing' ? 'billing-escalations' : 'finance-escalations', $code),
+                'source_resolve_path' => sprintf('/reports/%s/%s/resolve', $domain === 'billing' ? 'billing-escalations' : 'finance-escalations', $code),
             ],
         ]);
+    }
+
+    public function acknowledge(
+        int $tenantId,
+        int $userId,
+        string $domain,
+        string $code,
+        ?string $note = null,
+        ?string $date = null,
+        int $billingDays = 7,
+        int $financeDaysAhead = 7,
+        int $historyDays = 30,
+        int $activityLimit = 20,
+        int $staleFollowUpDays = 3,
+    ): array {
+        $this->assertTenantId($tenantId);
+
+        if ($userId <= 0) {
+            throw new HttpException(403, 'Authenticated user is required.');
+        }
+
+        $domain = $this->assertDomain($domain);
+
+        if ($domain === 'billing') {
+            $this->billingStateService->acknowledge($tenantId, $userId, $code, $note);
+        } else {
+            $this->financeStateService->acknowledge($tenantId, $userId, $code, $note);
+        }
+
+        return $this->detail(
+            $tenantId,
+            $domain,
+            $code,
+            $date,
+            $billingDays,
+            $financeDaysAhead,
+            $historyDays,
+            $activityLimit,
+            $staleFollowUpDays,
+        );
+    }
+
+    public function resolve(
+        int $tenantId,
+        int $userId,
+        string $domain,
+        string $code,
+        string $note,
+        ?string $date = null,
+        int $billingDays = 7,
+        int $financeDaysAhead = 7,
+        int $historyDays = 30,
+        int $activityLimit = 20,
+        int $staleFollowUpDays = 3,
+    ): array {
+        $this->assertTenantId($tenantId);
+
+        if ($userId <= 0) {
+            throw new HttpException(403, 'Authenticated user is required.');
+        }
+
+        $domain = $this->assertDomain($domain);
+
+        if ($domain === 'billing') {
+            $this->billingStateService->resolve($tenantId, $userId, $code, $note);
+        } else {
+            $this->financeStateService->resolve($tenantId, $userId, $code, $note);
+        }
+
+        return $this->detail(
+            $tenantId,
+            $domain,
+            $code,
+            $date,
+            $billingDays,
+            $financeDaysAhead,
+            $historyDays,
+            $activityLimit,
+            $staleFollowUpDays,
+        );
     }
 
     private function normalizeBillingItem(array $item): array
@@ -207,8 +286,10 @@ class OperationsEscalationReportService
             'metric_snapshot' => $item['metric_snapshot'],
             'detail_path' => '/reports/operations-escalations/billing/'.$item['code'],
             'source_path' => '/reports/billing-escalations/'.$item['code'],
-            'acknowledge_path' => '/reports/billing-escalations/'.$item['code'].'/acknowledge',
-            'resolve_path' => '/reports/billing-escalations/'.$item['code'].'/resolve',
+            'acknowledge_path' => '/reports/operations-escalations/billing/'.$item['code'].'/acknowledge',
+            'resolve_path' => '/reports/operations-escalations/billing/'.$item['code'].'/resolve',
+            'source_acknowledge_path' => '/reports/billing-escalations/'.$item['code'].'/acknowledge',
+            'source_resolve_path' => '/reports/billing-escalations/'.$item['code'].'/resolve',
         ];
     }
 
@@ -229,8 +310,10 @@ class OperationsEscalationReportService
             'metric_snapshot' => $item['metric_snapshot'],
             'detail_path' => '/reports/operations-escalations/finance/'.$item['code'],
             'source_path' => '/reports/finance-escalations/'.$item['code'],
-            'acknowledge_path' => '/reports/finance-escalations/'.$item['code'].'/acknowledge',
-            'resolve_path' => '/reports/finance-escalations/'.$item['code'].'/resolve',
+            'acknowledge_path' => '/reports/operations-escalations/finance/'.$item['code'].'/acknowledge',
+            'resolve_path' => '/reports/operations-escalations/finance/'.$item['code'].'/resolve',
+            'source_acknowledge_path' => '/reports/finance-escalations/'.$item['code'].'/acknowledge',
+            'source_resolve_path' => '/reports/finance-escalations/'.$item['code'].'/resolve',
         ];
     }
 
@@ -274,5 +357,16 @@ class OperationsEscalationReportService
         if ($staleFollowUpDays < 1 || $staleFollowUpDays > 30) {
             throw new HttpException(422, 'stale_follow_up_days is invalid.');
         }
+    }
+
+    private function assertDomain(string $domain): string
+    {
+        $domain = trim($domain);
+
+        if (! in_array($domain, ['billing', 'finance'], true)) {
+            throw new HttpException(404, 'Escalation domain not found.');
+        }
+
+        return $domain;
     }
 }

@@ -37,6 +37,8 @@ use App\Services\Reports\FinanceOperationsHistoryService;
 use App\Services\Reports\FinanceOperationsMetricsService;
 use App\Services\Reports\FinanceOperationsReportService;
 use App\Services\Reports\FinanceOperationsStateService;
+use App\Services\Reports\OperationsEscalationHistoryService;
+use App\Services\Reports\OperationsEscalationMetricsService;
 use App\Services\Reports\PromiseComplianceReportService;
 use App\Services\Reports\ReceivableRiskReportService;
 use App\Services\Reports\OperationsEscalationReportService;
@@ -59,7 +61,7 @@ Route::get('/docs', function () {
     return response()->json([
         'data' => [
             'project' => 'VELMiX ERP',
-            'version' => 'sprint1-day150',
+            'version' => 'sprint1-day153',
             'documents' => [
                 ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
                 ['name' => 'API Guide', 'path' => '/docs/api-guide'],
@@ -903,6 +905,50 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         return response()->json(['data' => $result]);
     })->middleware('perm:reports.operations-escalations.read');
 
+    Route::get('/reports/operations-escalations/history', function (OperationsEscalationHistoryService $service) {
+        $payload = request()->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'billing_days' => ['nullable', 'integer', 'min:1', 'max:14'],
+            'finance_days_ahead' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'history_days' => ['nullable', 'integer', 'min:1', 'max:90'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'stale_follow_up_days' => ['nullable', 'integer', 'min:1', 'max:30'],
+        ]);
+
+        $result = $service->index(
+            (int) request()->attributes->get('tenant_id'),
+            $payload['date'] ?? null,
+            (int) ($payload['billing_days'] ?? 7),
+            (int) ($payload['finance_days_ahead'] ?? 7),
+            (int) ($payload['history_days'] ?? 30),
+            (int) ($payload['limit'] ?? 10),
+            (int) ($payload['stale_follow_up_days'] ?? 3),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.operations-escalations.read');
+
+    Route::get('/reports/operations-escalation-metrics', function (OperationsEscalationMetricsService $service) {
+        $payload = request()->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'billing_days' => ['nullable', 'integer', 'min:1', 'max:14'],
+            'finance_days_ahead' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'history_days' => ['nullable', 'integer', 'min:1', 'max:90'],
+            'stale_follow_up_days' => ['nullable', 'integer', 'min:1', 'max:30'],
+        ]);
+
+        $result = $service->summary(
+            (int) request()->attributes->get('tenant_id'),
+            $payload['date'] ?? null,
+            (int) ($payload['billing_days'] ?? 7),
+            (int) ($payload['finance_days_ahead'] ?? 7),
+            (int) ($payload['history_days'] ?? 30),
+            (int) ($payload['stale_follow_up_days'] ?? 3),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.operations-escalations.read');
+
     Route::get('/reports/operations-escalations/{domain}/{code}', function (
         string $domain,
         string $code,
@@ -931,6 +977,70 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
 
         return response()->json(['data' => $result]);
     })->middleware('perm:reports.operations-escalations.read');
+
+    Route::post('/reports/operations-escalations/{domain}/{code}/acknowledge', function (
+        string $domain,
+        string $code,
+        OperationsEscalationReportService $service
+    ) {
+        $payload = request()->validate([
+            'note' => ['nullable', 'string', 'max:1000'],
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'billing_days' => ['nullable', 'integer', 'min:1', 'max:14'],
+            'finance_days_ahead' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'history_days' => ['nullable', 'integer', 'min:1', 'max:90'],
+            'activity_limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'stale_follow_up_days' => ['nullable', 'integer', 'min:1', 'max:30'],
+        ]);
+
+        $result = $service->acknowledge(
+            (int) request()->attributes->get('tenant_id'),
+            (int) request()->user()->id,
+            $domain,
+            $code,
+            $payload['note'] ?? null,
+            $payload['date'] ?? null,
+            (int) ($payload['billing_days'] ?? 7),
+            (int) ($payload['finance_days_ahead'] ?? 7),
+            (int) ($payload['history_days'] ?? 30),
+            (int) ($payload['activity_limit'] ?? 20),
+            (int) ($payload['stale_follow_up_days'] ?? 3),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.operations-escalations.manage');
+
+    Route::post('/reports/operations-escalations/{domain}/{code}/resolve', function (
+        string $domain,
+        string $code,
+        OperationsEscalationReportService $service
+    ) {
+        $payload = request()->validate([
+            'note' => ['required', 'string', 'max:1000'],
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'billing_days' => ['nullable', 'integer', 'min:1', 'max:14'],
+            'finance_days_ahead' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'history_days' => ['nullable', 'integer', 'min:1', 'max:90'],
+            'activity_limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'stale_follow_up_days' => ['nullable', 'integer', 'min:1', 'max:30'],
+        ]);
+
+        $result = $service->resolve(
+            (int) request()->attributes->get('tenant_id'),
+            (int) request()->user()->id,
+            $domain,
+            $code,
+            (string) $payload['note'],
+            $payload['date'] ?? null,
+            (int) ($payload['billing_days'] ?? 7),
+            (int) ($payload['finance_days_ahead'] ?? 7),
+            (int) ($payload['history_days'] ?? 30),
+            (int) ($payload['activity_limit'] ?? 20),
+            (int) ($payload['stale_follow_up_days'] ?? 3),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.operations-escalations.manage');
 
     Route::get('/reports/finance-operations/history', function (FinanceOperationsHistoryService $service) {
         $payload = request()->validate([

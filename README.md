@@ -87,7 +87,11 @@ php artisan test
   - `POST /reports/finance-operations/{kind}/{entity}/acknowledge`
   - `POST /reports/finance-operations/{kind}/{entity}/resolve`
   - `GET /reports/operations-escalations`
+  - `GET /reports/operations-escalations/history`
+  - `GET /reports/operations-escalation-metrics`
   - `GET /reports/operations-escalations/{domain}/{code}`
+  - `POST /reports/operations-escalations/{domain}/{code}/acknowledge`
+  - `POST /reports/operations-escalations/{domain}/{code}/resolve`
   - `GET /reports/billing-escalations`
   - `GET /reports/billing-escalation-metrics`
   - `GET /reports/billing-escalations/history`
@@ -152,6 +156,9 @@ composer run velmix:routes
 - Finance escalation history: timeline, notas y responsables por codigo de alerta
 - Finance escalation metrics: backlog activo, aging y SLA de resolucion por alerta
 - Operations escalations: cola cross-domain para priorizar billing y finanzas en una sola vista
+- Operations escalations workflow: acknowledge y resolve unificado desde la cola cross-domain
+- Operations escalations history: timeline, notas y responsables cross-domain por `queue_key`
+- Operations escalations metrics: backlog, eventos y SLA agregados entre billing y finanzas
 - Auditoría: timeline transversal por tenant
 
 ## Validación recomendada antes de publicar cambios

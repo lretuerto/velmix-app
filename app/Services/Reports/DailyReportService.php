@@ -160,6 +160,7 @@ class DailyReportService
         $financeEscalations = app(FinanceEscalationReportService::class)->summary($tenantId, $start->toDateString(), 7, 5, 3);
         $financeEscalationMetrics = app(FinanceEscalationMetricsService::class)->summary($tenantId, $start->toDateString(), 7, 30, 3);
         $operationsEscalations = app(OperationsEscalationReportService::class)->summary($tenantId, $start->toDateString(), 3, 7, 5, 3);
+        $operationsEscalationMetrics = app(OperationsEscalationMetricsService::class)->summary($tenantId, $start->toDateString(), 3, 7, 30, 3);
         $billingMetrics = app(BillingProviderMetricsService::class)->summary($tenantId, $start->toDateString(), 1, 3);
 
         return [
@@ -279,6 +280,14 @@ class DailyReportService
                 'warning_count' => $operationsEscalations['summary']['warning_count'],
                 'workflow' => $operationsEscalations['summary']['workflow'],
                 'by_domain' => $operationsEscalations['summary']['by_domain'],
+                'workflow_metrics' => [
+                    'active_count' => $operationsEscalationMetrics['current_backlog']['active_count'],
+                    'acknowledged_count' => $operationsEscalationMetrics['current_backlog']['acknowledged_count'],
+                    'stale_acknowledged_count' => $operationsEscalationMetrics['current_backlog']['stale_acknowledged_count'],
+                    'acknowledged_event_count' => $operationsEscalationMetrics['workflow_events']['acknowledged_event_count'],
+                    'resolved_event_count' => $operationsEscalationMetrics['workflow_events']['resolved_event_count'],
+                    'avg_minutes_from_ack_to_resolve' => $operationsEscalationMetrics['resolution_sla']['avg_minutes_from_ack_to_resolve'],
+                ],
                 'top_queue' => $operationsEscalations['queue'],
             ],
             'activity' => [

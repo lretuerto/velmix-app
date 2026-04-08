@@ -116,7 +116,11 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `POST /reports/finance-escalations/{code}/acknowledge`
 - `POST /reports/finance-escalations/{code}/resolve`
 - `GET /reports/operations-escalations`
+- `GET /reports/operations-escalations/history`
+- `GET /reports/operations-escalation-metrics`
 - `GET /reports/operations-escalations/{domain}/{code}`
+- `POST /reports/operations-escalations/{domain}/{code}/acknowledge`
+- `POST /reports/operations-escalations/{domain}/{code}/resolve`
 - `GET /reports/finance-operations/history`
 - `GET /reports/finance-operations/metrics`
 - `GET /reports/finance-operations/{kind}/{entity}`
@@ -316,6 +320,15 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - resumen por severidad, workflow y dominio
   - acciones recomendadas deduplicadas
   - top de la cola priorizada cross-domain
+- `GET /reports/operations-escalations/history` devuelve:
+  - historial consolidado por `queue_key`
+  - ultima nota, ultimo actor y conteo de timeline
+  - estado actual del workflow aun si la alerta sigue activa
+- `GET /reports/operations-escalation-metrics` devuelve:
+  - backlog activo por dominio y workflow
+  - eventos de `acknowledge/resolve`
+  - SLA agregado entre acknowledge y resolve
+  - ultimas resoluciones cross-domain
 - parametros utiles:
   - `date`
   - `billing_days`
@@ -328,7 +341,13 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - `actions.source_path`
   - `actions.acknowledge_path`
   - `actions.resolve_path`
+- `POST /reports/operations-escalations/{domain}/{code}/acknowledge` registra toma de caso desde la cola unificada
+- `POST /reports/operations-escalations/{domain}/{code}/resolve` registra cierre manual con nota obligatoria desde la misma cola
 - `GET /reports/daily` ahora incluye tambien un snapshot resumido en `operations_escalations` para el corte diario
+  - `workflow_metrics.active_count`
+  - `workflow_metrics.acknowledged_count`
+  - `workflow_metrics.stale_acknowledged_count`
+  - `workflow_metrics.avg_minutes_from_ack_to_resolve`
 
 ## Payloads versionados de billing
 
