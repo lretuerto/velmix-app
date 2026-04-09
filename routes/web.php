@@ -63,7 +63,7 @@ Route::get('/docs', function () {
     return response()->json([
         'data' => [
             'project' => 'VELMiX ERP',
-            'version' => 'sprint1-day163',
+            'version' => 'sprint1-day166',
             'documents' => [
                 ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
                 ['name' => 'API Guide', 'path' => '/docs/api-guide'],
@@ -667,6 +667,40 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         $result = $service->export(
             (int) request()->attributes->get('tenant_id'),
             $snapshot,
+            $payload['format'] ?? 'markdown',
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.operations-control-tower.read');
+
+    Route::get('/reports/operations-control-tower/snapshots/{snapshot}/compare', function (int $snapshot, OperationsControlTowerSnapshotService $service) {
+        $payload = request()->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'against_snapshot' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $result = $service->compare(
+            (int) request()->attributes->get('tenant_id'),
+            $snapshot,
+            isset($payload['against_snapshot']) ? (int) $payload['against_snapshot'] : null,
+            $payload['date'] ?? null,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.operations-control-tower.read');
+
+    Route::get('/reports/operations-control-tower/snapshots/{snapshot}/compare/export', function (int $snapshot, OperationsControlTowerSnapshotService $service) {
+        $payload = request()->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'against_snapshot' => ['nullable', 'integer', 'min:1'],
+            'format' => ['nullable', 'in:markdown,json'],
+        ]);
+
+        $result = $service->exportComparison(
+            (int) request()->attributes->get('tenant_id'),
+            $snapshot,
+            isset($payload['against_snapshot']) ? (int) $payload['against_snapshot'] : null,
+            $payload['date'] ?? null,
             $payload['format'] ?? 'markdown',
         );
 

@@ -112,6 +112,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /reports/operations-control-tower/snapshots`
 - `GET /reports/operations-control-tower/snapshots/{snapshot}`
 - `GET /reports/operations-control-tower/snapshots/{snapshot}/export`
+- `GET /reports/operations-control-tower/snapshots/{snapshot}/compare`
+- `GET /reports/operations-control-tower/snapshots/{snapshot}/compare/export`
 - `GET /reports/billing-operations`
 - `GET /reports/billing-escalations`
 - `GET /reports/billing-escalation-metrics`
@@ -242,11 +244,14 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `POST /reports/operations-control-tower/snapshots` persiste una captura del tablero maestro con su payload completo
 - `GET /reports/operations-control-tower/snapshots` lista snapshots guardados por tenant
 - `GET /reports/operations-control-tower/snapshots/{snapshot}/export` entrega el snapshot en `markdown` o `json`
+- `GET /reports/operations-control-tower/snapshots/{snapshot}/compare` compara un snapshot guardado contra otra captura o contra el estado live
+- `GET /reports/operations-control-tower/snapshots/{snapshot}/compare/export` exporta esa comparación en `markdown` o `json`
 - parametros utiles:
   - `date`
   - `days`
   - `base_date`
   - `compare_date`
+  - `against_snapshot`
   - `billing_days`
   - `finance_days_ahead`
   - `priority_limit`

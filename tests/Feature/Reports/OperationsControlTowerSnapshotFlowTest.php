@@ -62,7 +62,9 @@ class OperationsControlTowerSnapshotFlowTest extends TestCase
             ->assertJsonPath('data.summary.critical_count', 1)
             ->assertJsonPath('data.items.0.id', $snapshotId)
             ->assertJsonPath('data.items.0.executive_summary.operations_open_alert_count', 9)
-            ->assertJsonPath('data.items.0.export_path', '/reports/operations-control-tower/snapshots/'.$snapshotId.'/export?format=markdown');
+            ->assertJsonPath('data.items.0.export_path', '/reports/operations-control-tower/snapshots/'.$snapshotId.'/export?format=markdown')
+            ->assertJsonPath('data.items.0.compare_path', '/reports/operations-control-tower/snapshots/'.$snapshotId.'/compare')
+            ->assertJsonPath('data.items.0.compare_export_path', '/reports/operations-control-tower/snapshots/'.$snapshotId.'/compare/export?format=markdown');
 
         $this->actingAs($admin)
             ->withHeader('X-Tenant-Id', '10')
@@ -93,6 +95,116 @@ class OperationsControlTowerSnapshotFlowTest extends TestCase
             ->assertJsonPath('data.payload.executive_summary.operations_open_alert_count', 9);
     }
 
+    public function test_admin_can_compare_control_tower_snapshot_against_live_and_another_snapshot(): void
+    {
+        $admin = $this->seedUserWithRole(10, 'ADMIN');
+        $this->seedDailySlice($admin);
+        $this->seedBillingSlice($admin);
+        $this->seedFinanceSlice($admin);
+
+        $baseSnapshotId = $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/reports/operations-control-tower/snapshots', [
+                'date' => '2026-03-12',
+                'billing_days' => 3,
+                'finance_days_ahead' => 7,
+                'priority_limit' => 5,
+                'failure_limit' => 5,
+                'stale_follow_up_days' => 3,
+                'label' => 'baseline',
+            ])
+            ->assertOk()
+            ->json('data.id');
+
+        $this->seedVoucherEvent(
+            tenantId: 10,
+            userId: $admin->id,
+            reference: 'SALE-BILL-OPS-12-FAIL-EXTRA',
+            voucherStatus: 'failed',
+            eventStatus: 'failed',
+            createdAt: '2026-03-12 15:00:00',
+            attemptStatus: 'failed',
+            attemptCreatedAt: '2026-03-12 15:03:00',
+            providerEnvironment: 'live',
+        );
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/reports/operations-control-tower/snapshots/'.$baseSnapshotId.'/compare?date=2026-03-12')
+            ->assertOk()
+            ->assertJsonPath('data.mode', 'live')
+            ->assertJsonPath('data.base.snapshot_id', $baseSnapshotId)
+            ->assertJsonPath('data.compare.type', 'live')
+            ->assertJsonPath('data.compare.snapshot_date', '2026-03-12')
+            ->assertJsonPath('data.compare.executive_summary.billing_failed_backlog_count', 2)
+            ->assertJsonPath('data.delta.billing_failed_backlog_count', 1)
+            ->assertJsonPath('data.movement', 'worsened')
+            ->assertJsonPath('data.windows.match', true)
+            ->assertJsonPath('data.paths.export_markdown', '/reports/operations-control-tower/snapshots/'.$baseSnapshotId.'/compare/export?format=markdown&date=2026-03-12');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/reports/operations-control-tower/snapshots/'.$baseSnapshotId.'/compare/export?date=2026-03-12&format=markdown')
+            ->assertOk()
+            ->assertJsonPath('data.format', 'markdown')
+            ->assertJsonPath('data.content', fn (string $content) => str_contains($content, '# Operations Control Tower Snapshot Comparison')
+                && str_contains($content, '- Compare live date: 2026-03-12')
+                && str_contains($content, '- Billing failed backlog delta: 1'));
+
+        $compareSnapshotId = $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/reports/operations-control-tower/snapshots', [
+                'date' => '2026-03-12',
+                'billing_days' => 3,
+                'finance_days_ahead' => 7,
+                'priority_limit' => 5,
+                'failure_limit' => 5,
+                'stale_follow_up_days' => 3,
+                'label' => 'after failure',
+            ])
+            ->assertOk()
+            ->json('data.id');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/reports/operations-control-tower/snapshots/'.$baseSnapshotId.'/compare?against_snapshot='.$compareSnapshotId)
+            ->assertOk()
+            ->assertJsonPath('data.mode', 'snapshot')
+            ->assertJsonPath('data.compare.type', 'snapshot')
+            ->assertJsonPath('data.compare.snapshot_id', $compareSnapshotId)
+            ->assertJsonPath('data.compare.executive_summary.billing_failed_backlog_count', 2)
+            ->assertJsonPath('data.delta.billing_failed_backlog_count', 1)
+            ->assertJsonPath('data.windows.match', true)
+            ->assertJsonPath('data.paths.export_json', '/reports/operations-control-tower/snapshots/'.$baseSnapshotId.'/compare/export?format=json&against_snapshot='.$compareSnapshotId);
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/reports/operations-control-tower/snapshots/'.$baseSnapshotId.'/compare/export?against_snapshot='.$compareSnapshotId.'&format=json')
+            ->assertOk()
+            ->assertJsonPath('data.format', 'json')
+            ->assertJsonPath('data.payload.mode', 'snapshot')
+            ->assertJsonPath('data.payload.delta.billing_failed_backlog_count', 1);
+    }
+
+    public function test_snapshot_compare_rejects_ambiguous_target(): void
+    {
+        $admin = $this->seedUserWithRole(10, 'ADMIN');
+        $this->seedDailySlice($admin);
+        $this->seedBillingSlice($admin);
+        $this->seedFinanceSlice($admin);
+
+        $snapshotId = $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/reports/operations-control-tower/snapshots', ['date' => '2026-03-12'])
+            ->assertOk()
+            ->json('data.id');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/reports/operations-control-tower/snapshots/'.$snapshotId.'/compare?date=2026-03-12&against_snapshot='.$snapshotId)
+            ->assertStatus(422);
+    }
+
     public function test_cashier_cannot_capture_or_read_control_tower_snapshots(): void
     {
         $cashier = $this->seedUserWithRole(10, 'CAJERO');
@@ -105,6 +217,11 @@ class OperationsControlTowerSnapshotFlowTest extends TestCase
         $this->actingAs($cashier)
             ->withHeader('X-Tenant-Id', '10')
             ->getJson('/reports/operations-control-tower/snapshots')
+            ->assertStatus(403);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/reports/operations-control-tower/snapshots/1/compare')
             ->assertStatus(403);
     }
 
@@ -130,6 +247,11 @@ class OperationsControlTowerSnapshotFlowTest extends TestCase
         $this->actingAs($admin20)
             ->withHeader('X-Tenant-Id', '20')
             ->getJson('/reports/operations-control-tower/snapshots/'.$snapshotId.'/export')
+            ->assertStatus(404);
+
+        $this->actingAs($admin20)
+            ->withHeader('X-Tenant-Id', '20')
+            ->getJson('/reports/operations-control-tower/snapshots/'.$snapshotId.'/compare')
             ->assertStatus(404);
     }
 

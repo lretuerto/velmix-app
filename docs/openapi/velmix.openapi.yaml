@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VELMiX ERP API
-  version: sprint1-day163
+  version: sprint1-day166
   description: |
     Contrato OpenAPI de endpoints prioritarios de VELMiX ERP.
     Cubre la convencion multi-tenant y los flujos criticos ya implementados.
@@ -1262,6 +1262,65 @@ paths:
       responses:
         '200':
           description: Export del snapshot del tablero maestro
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-control-tower/snapshots/{snapshot}/compare:
+    get:
+      tags: [Reports]
+      summary: Compara un snapshot del control tower contra live u otro snapshot
+      parameters:
+        - in: path
+          name: snapshot
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: against_snapshot
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Comparacion del snapshot del tablero maestro
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-control-tower/snapshots/{snapshot}/compare/export:
+    get:
+      tags: [Reports]
+      summary: Exporta la comparacion de un snapshot del control tower
+      parameters:
+        - in: path
+          name: snapshot
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: against_snapshot
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum: [markdown, json]
+      responses:
+        '200':
+          description: Export de la comparacion del snapshot del tablero maestro
           content:
             application/json:
               schema:

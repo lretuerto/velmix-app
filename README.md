@@ -93,6 +93,8 @@ php artisan test
   - `GET /reports/operations-control-tower/snapshots`
   - `GET /reports/operations-control-tower/snapshots/{snapshot}`
   - `GET /reports/operations-control-tower/snapshots/{snapshot}/export`
+  - `GET /reports/operations-control-tower/snapshots/{snapshot}/compare`
+  - `GET /reports/operations-control-tower/snapshots/{snapshot}/compare/export`
   - `GET /reports/operations-escalations`
   - `GET /reports/operations-escalations/history`
   - `GET /reports/operations-escalation-metrics`
@@ -169,6 +171,7 @@ composer run velmix:routes
 - Operations control tower: tablero maestro con health gates, action center y drill-down cross-domain
 - Operations control tower history/compare: tendencia diaria y delta entre fechas para el tablero maestro
 - Operations control tower snapshots: capturas persistidas y exportables del tablero maestro
+- Operations control tower snapshot compare: drift entre snapshots guardados y estado live
 - Auditoría: timeline transversal por tenant
 
 ## Validación recomendada antes de publicar cambios
