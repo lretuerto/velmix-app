@@ -36,6 +36,8 @@ class OpenApiDocsTest extends TestCase
         $this->assertStringContainsString('/billing/outbox/provider-trace', $response->getContent());
         $this->assertStringContainsString('/billing/outbox/summary', $response->getContent());
         $this->assertStringContainsString('/reports/operations-control-tower', $response->getContent());
+        $this->assertStringContainsString('/reports/operations-control-tower/briefing', $response->getContent());
+        $this->assertStringContainsString('/reports/operations-control-tower/briefing/export', $response->getContent());
         $this->assertStringContainsString('/reports/operations-control-tower/history', $response->getContent());
         $this->assertStringContainsString('/reports/operations-control-tower/compare', $response->getContent());
         $this->assertStringContainsString('/reports/operations-control-tower/snapshots', $response->getContent());
@@ -90,6 +92,8 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('GET /billing/outbox/{event}/lineage', false)
             ->assertSee('GET /billing/outbox/provider-trace', false)
             ->assertSee('GET /reports/operations-control-tower', false)
+            ->assertSee('GET /reports/operations-control-tower/briefing', false)
+            ->assertSee('GET /reports/operations-control-tower/briefing/export', false)
             ->assertSee('GET /reports/operations-control-tower/history', false)
             ->assertSee('GET /reports/operations-control-tower/compare', false)
             ->assertSee('POST /reports/operations-control-tower/snapshots', false)

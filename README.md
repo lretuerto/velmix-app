@@ -87,6 +87,8 @@ php artisan test
   - `POST /reports/finance-operations/{kind}/{entity}/acknowledge`
   - `POST /reports/finance-operations/{kind}/{entity}/resolve`
   - `GET /reports/operations-control-tower`
+  - `GET /reports/operations-control-tower/briefing`
+  - `GET /reports/operations-control-tower/briefing/export`
   - `GET /reports/operations-control-tower/history`
   - `GET /reports/operations-control-tower/compare`
   - `POST /reports/operations-control-tower/snapshots`
@@ -169,6 +171,7 @@ composer run velmix:routes
 - Operations escalations history: timeline, notas y responsables cross-domain por `queue_key`
 - Operations escalations metrics: backlog, eventos y SLA agregados entre billing y finanzas
 - Operations control tower: tablero maestro con health gates, action center y drill-down cross-domain
+- Operations control tower briefing: paquete ejecutivo live con tendencia y drift contra snapshots
 - Operations control tower history/compare: tendencia diaria y delta entre fechas para el tablero maestro
 - Operations control tower snapshots: capturas persistidas y exportables del tablero maestro
 - Operations control tower snapshot compare: drift entre snapshots guardados y estado live

@@ -106,6 +106,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 
 - `GET /reports/daily`
 - `GET /reports/operations-control-tower`
+- `GET /reports/operations-control-tower/briefing`
+- `GET /reports/operations-control-tower/briefing/export`
 - `GET /reports/operations-control-tower/history`
 - `GET /reports/operations-control-tower/compare`
 - `POST /reports/operations-control-tower/snapshots`
@@ -239,6 +241,12 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - `health_gates` por dominio operativo
   - cola de foco con escalaciones cross-domain y prioridades financieras
   - fallos recientes de billing y paths de drill-down
+- `GET /reports/operations-control-tower/briefing` arma un paquete ejecutivo reutilizable con:
+  - estado live actual
+  - tendencia corta
+  - ultimo snapshot disponible para esa fecha
+  - drift contra snapshot y highlights accionables
+- `GET /reports/operations-control-tower/briefing/export` exporta ese briefing en `markdown` o `json`
 - `GET /reports/operations-control-tower/history` devuelve la tendencia diaria del tablero maestro para una ventana corta
 - `GET /reports/operations-control-tower/compare` contrasta dos fechas y devuelve delta de métricas y cambios de `health_gates`
 - `POST /reports/operations-control-tower/snapshots` persiste una captura del tablero maestro con su payload completo

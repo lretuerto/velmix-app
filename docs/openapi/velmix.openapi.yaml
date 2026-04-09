@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VELMiX ERP API
-  version: sprint1-day166
+  version: sprint1-day169
   description: |
     Contrato OpenAPI de endpoints prioritarios de VELMiX ERP.
     Cubre la convencion multi-tenant y los flujos criticos ya implementados.
@@ -1059,6 +1059,119 @@ paths:
       responses:
         '200':
           description: Vista ejecutiva consolidada para operar billing, finanzas y escalaciones
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-control-tower/briefing:
+    get:
+      tags: [Reports]
+      summary: Paquete ejecutivo del control tower con drift contra snapshots
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: billing_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+        - in: query
+          name: finance_days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: priority_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+        - in: query
+          name: failure_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: snapshot_id
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Briefing ejecutivo del tablero maestro
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-control-tower/briefing/export:
+    get:
+      tags: [Reports]
+      summary: Exporta el briefing ejecutivo del control tower
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: billing_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+        - in: query
+          name: finance_days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: priority_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+        - in: query
+          name: failure_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: snapshot_id
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum: [markdown, json]
+      responses:
+        '200':
+          description: Export del briefing ejecutivo del tablero maestro
           content:
             application/json:
               schema:
