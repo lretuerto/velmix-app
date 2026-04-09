@@ -106,6 +106,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 
 - `GET /reports/daily`
 - `GET /reports/operations-control-tower`
+- `GET /reports/operations-control-tower/history`
+- `GET /reports/operations-control-tower/compare`
 - `GET /reports/billing-operations`
 - `GET /reports/billing-escalations`
 - `GET /reports/billing-escalation-metrics`
@@ -231,8 +233,13 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - `health_gates` por dominio operativo
   - cola de foco con escalaciones cross-domain y prioridades financieras
   - fallos recientes de billing y paths de drill-down
+- `GET /reports/operations-control-tower/history` devuelve la tendencia diaria del tablero maestro para una ventana corta
+- `GET /reports/operations-control-tower/compare` contrasta dos fechas y devuelve delta de métricas y cambios de `health_gates`
 - parametros utiles:
   - `date`
+  - `days`
+  - `base_date`
+  - `compare_date`
   - `billing_days`
   - `finance_days_ahead`
   - `priority_limit`

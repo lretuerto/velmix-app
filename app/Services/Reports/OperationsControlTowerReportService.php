@@ -7,6 +7,8 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class OperationsControlTowerReportService
 {
+    private const MAX_HISTORY_DAYS = 30;
+
     public function __construct(
         private readonly DailyReportService $dailyReport,
         private readonly BillingOperationsReportService $billingOperations,
@@ -40,12 +42,14 @@ class OperationsControlTowerReportService
         $operations = $this->operationsEscalations->summary($tenantId, $baseDate->toDateString(), $billingDays, $financeDaysAhead, $priorityLimit, $staleFollowUpDays);
         $operationsMetrics = $this->operationsEscalationMetrics->summary($tenantId, $baseDate->toDateString(), $billingDays, $financeDaysAhead, 30, $staleFollowUpDays);
 
-        $paths = [
-            'daily' => sprintf('/reports/daily?date=%s', $baseDate->toDateString()),
-            'billing_operations' => sprintf('/reports/billing-operations?date=%s&days=%d&failure_limit=%d', $baseDate->toDateString(), $billingDays, $failureLimit),
-            'finance_operations' => sprintf('/reports/finance-operations?date=%s&days_ahead=%d&limit=%d&stale_follow_up_days=%d', $baseDate->toDateString(), $financeDaysAhead, $priorityLimit, $staleFollowUpDays),
-            'operations_escalations' => sprintf('/reports/operations-escalations?date=%s&billing_days=%d&finance_days_ahead=%d&limit=%d&stale_follow_up_days=%d', $baseDate->toDateString(), $billingDays, $financeDaysAhead, $priorityLimit, $staleFollowUpDays),
-        ];
+        $paths = $this->summaryPaths(
+            $baseDate,
+            $billingDays,
+            $financeDaysAhead,
+            $priorityLimit,
+            $failureLimit,
+            $staleFollowUpDays,
+        );
 
         $healthGates = [
             'sales_cash' => $this->salesCashGate($daily, $paths['daily']),
@@ -130,6 +134,173 @@ class OperationsControlTowerReportService
                     ],
                 ],
             ],
+        ];
+    }
+
+    public function history(
+        int $tenantId,
+        ?string $date = null,
+        int $days = 7,
+        int $billingDays = 7,
+        int $financeDaysAhead = 7,
+        int $priorityLimit = 5,
+        int $failureLimit = 5,
+        int $staleFollowUpDays = 3,
+    ): array {
+        $this->assertTenantId($tenantId);
+        $this->assertHistoryDays($days);
+        $this->assertBillingDays($billingDays);
+        $this->assertFinanceDaysAhead($financeDaysAhead);
+        $this->assertPriorityLimit($priorityLimit);
+        $this->assertFailureLimit($failureLimit);
+        $this->assertStaleFollowUpDays($staleFollowUpDays);
+
+        $baseDate = $this->resolveBaseDate($date);
+        $timeline = [];
+
+        for ($offset = $days - 1; $offset >= 0; $offset--) {
+            $snapshot = $this->summary(
+                $tenantId,
+                $baseDate->subDays($offset)->toDateString(),
+                $billingDays,
+                $financeDaysAhead,
+                $priorityLimit,
+                $failureLimit,
+                $staleFollowUpDays,
+            );
+
+            $timeline[] = $this->timelineItem($snapshot);
+        }
+
+        $statusBreakdown = [
+            'ok_count' => count(array_filter($timeline, fn (array $item) => $item['overall_status'] === 'ok')),
+            'warning_count' => count(array_filter($timeline, fn (array $item) => $item['overall_status'] === 'warning')),
+            'critical_count' => count(array_filter($timeline, fn (array $item) => $item['overall_status'] === 'critical')),
+        ];
+
+        return [
+            'tenant_id' => $tenantId,
+            'base_date' => $baseDate->toDateString(),
+            'history_window' => [
+                'days' => $days,
+                'start_date' => $baseDate->subDays($days - 1)->toDateString(),
+                'end_date' => $baseDate->toDateString(),
+            ],
+            'windows' => [
+                'billing_days' => $billingDays,
+                'finance_days_ahead' => $financeDaysAhead,
+                'priority_limit' => $priorityLimit,
+                'failure_limit' => $failureLimit,
+                'stale_follow_up_days' => $staleFollowUpDays,
+            ],
+            'summary' => [
+                'status_breakdown' => $statusBreakdown,
+                'worst_day' => $this->worstTimelineItem($timeline),
+                'maxima' => [
+                    'sales_completed_total' => $this->maxTimelineMetric($timeline, 'sales_completed_total'),
+                    'collections_total' => $this->maxTimelineMetric($timeline, 'collections_total'),
+                    'cash_discrepancy_total' => $this->maxTimelineMetric($timeline, 'cash_discrepancy_total'),
+                    'billing_failed_backlog_count' => (int) $this->maxTimelineMetric($timeline, 'billing_failed_backlog_count'),
+                    'billing_pending_backlog_count' => (int) $this->maxTimelineMetric($timeline, 'billing_pending_backlog_count'),
+                    'finance_overdue_total' => $this->maxTimelineMetric($timeline, 'finance_overdue_total'),
+                    'operations_open_alert_count' => (int) $this->maxTimelineMetric($timeline, 'operations_open_alert_count'),
+                ],
+            ],
+            'timeline' => $timeline,
+        ];
+    }
+
+    public function compare(
+        int $tenantId,
+        string $baseDate,
+        string $compareDate,
+        int $billingDays = 7,
+        int $financeDaysAhead = 7,
+        int $priorityLimit = 5,
+        int $failureLimit = 5,
+        int $staleFollowUpDays = 3,
+    ): array {
+        $this->assertTenantId($tenantId);
+        $this->assertBillingDays($billingDays);
+        $this->assertFinanceDaysAhead($financeDaysAhead);
+        $this->assertPriorityLimit($priorityLimit);
+        $this->assertFailureLimit($failureLimit);
+        $this->assertStaleFollowUpDays($staleFollowUpDays);
+
+        $baseSnapshot = $this->summary(
+            $tenantId,
+            $this->resolveBaseDate($baseDate)->toDateString(),
+            $billingDays,
+            $financeDaysAhead,
+            $priorityLimit,
+            $failureLimit,
+            $staleFollowUpDays,
+        );
+        $compareSnapshot = $this->summary(
+            $tenantId,
+            $this->resolveBaseDate($compareDate)->toDateString(),
+            $billingDays,
+            $financeDaysAhead,
+            $priorityLimit,
+            $failureLimit,
+            $staleFollowUpDays,
+        );
+
+        return [
+            'tenant_id' => $tenantId,
+            'windows' => [
+                'billing_days' => $billingDays,
+                'finance_days_ahead' => $financeDaysAhead,
+                'priority_limit' => $priorityLimit,
+                'failure_limit' => $failureLimit,
+                'stale_follow_up_days' => $staleFollowUpDays,
+            ],
+            'base' => $this->compareSnapshot($baseSnapshot),
+            'compare' => $this->compareSnapshot($compareSnapshot),
+            'delta' => [
+                'sales_completed_total' => round(
+                    (float) $compareSnapshot['executive_summary']['sales_completed_total']
+                    - (float) $baseSnapshot['executive_summary']['sales_completed_total'],
+                    2,
+                ),
+                'collections_total' => round(
+                    (float) $compareSnapshot['executive_summary']['collections_total']
+                    - (float) $baseSnapshot['executive_summary']['collections_total'],
+                    2,
+                ),
+                'cash_discrepancy_total' => round(
+                    (float) $compareSnapshot['executive_summary']['cash_discrepancy_total']
+                    - (float) $baseSnapshot['executive_summary']['cash_discrepancy_total'],
+                    2,
+                ),
+                'billing_pending_backlog_count' => (int) $compareSnapshot['executive_summary']['billing_pending_backlog_count']
+                    - (int) $baseSnapshot['executive_summary']['billing_pending_backlog_count'],
+                'billing_failed_backlog_count' => (int) $compareSnapshot['executive_summary']['billing_failed_backlog_count']
+                    - (int) $baseSnapshot['executive_summary']['billing_failed_backlog_count'],
+                'finance_overdue_total' => round(
+                    (float) $compareSnapshot['executive_summary']['finance_overdue_total']
+                    - (float) $baseSnapshot['executive_summary']['finance_overdue_total'],
+                    2,
+                ),
+                'finance_broken_promise_count' => (int) $compareSnapshot['executive_summary']['finance_broken_promise_count']
+                    - (int) $baseSnapshot['executive_summary']['finance_broken_promise_count'],
+                'operations_open_alert_count' => (int) $compareSnapshot['executive_summary']['operations_open_alert_count']
+                    - (int) $baseSnapshot['executive_summary']['operations_open_alert_count'],
+            ],
+            'overall_status_change' => [
+                'from' => $baseSnapshot['executive_summary']['overall_status'],
+                'to' => $compareSnapshot['executive_summary']['overall_status'],
+                'changed' => $baseSnapshot['executive_summary']['overall_status'] !== $compareSnapshot['executive_summary']['overall_status'],
+            ],
+            'gate_changes' => collect($baseSnapshot['health_gates'])
+                ->mapWithKeys(fn (array $gate, string $key) => [
+                    $key => [
+                        'from' => $gate['status'],
+                        'to' => $compareSnapshot['health_gates'][$key]['status'] ?? 'ok',
+                        'changed' => $gate['status'] !== ($compareSnapshot['health_gates'][$key]['status'] ?? 'ok'),
+                    ],
+                ])
+                ->all(),
         ];
     }
 
@@ -360,6 +531,99 @@ class OperationsControlTowerReportService
         return $max;
     }
 
+    private function summaryPaths(
+        CarbonImmutable $baseDate,
+        int $billingDays,
+        int $financeDaysAhead,
+        int $priorityLimit,
+        int $failureLimit,
+        int $staleFollowUpDays,
+    ): array {
+        return [
+            'daily' => sprintf('/reports/daily?date=%s', $baseDate->toDateString()),
+            'billing_operations' => sprintf('/reports/billing-operations?date=%s&days=%d&failure_limit=%d', $baseDate->toDateString(), $billingDays, $failureLimit),
+            'finance_operations' => sprintf('/reports/finance-operations?date=%s&days_ahead=%d&limit=%d&stale_follow_up_days=%d', $baseDate->toDateString(), $financeDaysAhead, $priorityLimit, $staleFollowUpDays),
+            'operations_escalations' => sprintf('/reports/operations-escalations?date=%s&billing_days=%d&finance_days_ahead=%d&limit=%d&stale_follow_up_days=%d', $baseDate->toDateString(), $billingDays, $financeDaysAhead, $priorityLimit, $staleFollowUpDays),
+            'history' => sprintf('/reports/operations-control-tower/history?date=%s&days=%d&billing_days=%d&finance_days_ahead=%d&priority_limit=%d&failure_limit=%d&stale_follow_up_days=%d', $baseDate->toDateString(), 7, $billingDays, $financeDaysAhead, $priorityLimit, $failureLimit, $staleFollowUpDays),
+            'compare_previous_day' => sprintf('/reports/operations-control-tower/compare?base_date=%s&compare_date=%s&billing_days=%d&finance_days_ahead=%d&priority_limit=%d&failure_limit=%d&stale_follow_up_days=%d', $baseDate->subDay()->toDateString(), $baseDate->toDateString(), $billingDays, $financeDaysAhead, $priorityLimit, $failureLimit, $staleFollowUpDays),
+        ];
+    }
+
+    private function timelineItem(array $snapshot): array
+    {
+        return [
+            'date' => $snapshot['date'],
+            'overall_status' => $snapshot['executive_summary']['overall_status'],
+            'critical_gate_count' => $snapshot['executive_summary']['critical_gate_count'],
+            'warning_gate_count' => $snapshot['executive_summary']['warning_gate_count'],
+            'sales_completed_total' => round((float) $snapshot['executive_summary']['sales_completed_total'], 2),
+            'collections_total' => round((float) $snapshot['executive_summary']['collections_total'], 2),
+            'cash_discrepancy_total' => round((float) $snapshot['executive_summary']['cash_discrepancy_total'], 2),
+            'billing_pending_backlog_count' => (int) $snapshot['executive_summary']['billing_pending_backlog_count'],
+            'billing_failed_backlog_count' => (int) $snapshot['executive_summary']['billing_failed_backlog_count'],
+            'finance_overdue_total' => round((float) $snapshot['executive_summary']['finance_overdue_total'], 2),
+            'finance_broken_promise_count' => (int) $snapshot['executive_summary']['finance_broken_promise_count'],
+            'operations_open_alert_count' => (int) $snapshot['executive_summary']['operations_open_alert_count'],
+            'report_path' => sprintf('/reports/operations-control-tower?date=%s', $snapshot['date']),
+        ];
+    }
+
+    private function compareSnapshot(array $snapshot): array
+    {
+        return [
+            'date' => $snapshot['date'],
+            'path' => sprintf('/reports/operations-control-tower?date=%s', $snapshot['date']),
+            'executive_summary' => $snapshot['executive_summary'],
+            'health_gates' => $snapshot['health_gates'],
+        ];
+    }
+
+    private function worstTimelineItem(array $timeline): ?array
+    {
+        if ($timeline === []) {
+            return null;
+        }
+
+        $rank = ['ok' => 0, 'warning' => 1, 'critical' => 2];
+        $worst = $timeline[0];
+
+        foreach ($timeline as $item) {
+            if (($rank[$item['overall_status']] ?? 0) > ($rank[$worst['overall_status']] ?? 0)) {
+                $worst = $item;
+
+                continue;
+            }
+
+            if ($item['overall_status'] !== $worst['overall_status']) {
+                continue;
+            }
+
+            if ($item['critical_gate_count'] > $worst['critical_gate_count']) {
+                $worst = $item;
+
+                continue;
+            }
+
+            if ($item['operations_open_alert_count'] > $worst['operations_open_alert_count']) {
+                $worst = $item;
+            }
+        }
+
+        return $worst;
+    }
+
+    private function maxTimelineMetric(array $timeline, string $metric): float
+    {
+        if ($timeline === []) {
+            return 0.0;
+        }
+
+        return round((float) max(array_map(
+            fn (array $item) => (float) ($item[$metric] ?? 0),
+            $timeline,
+        )), 2);
+    }
+
     private function resolveBaseDate(?string $date): CarbonImmutable
     {
         return $date !== null
@@ -406,6 +670,13 @@ class OperationsControlTowerReportService
     {
         if ($staleFollowUpDays < 1 || $staleFollowUpDays > 30) {
             throw new HttpException(422, 'stale_follow_up_days is invalid.');
+        }
+    }
+
+    private function assertHistoryDays(int $days): void
+    {
+        if ($days < 1 || $days > self::MAX_HISTORY_DAYS) {
+            throw new HttpException(422, 'operations control tower history window is invalid.');
         }
     }
 }
