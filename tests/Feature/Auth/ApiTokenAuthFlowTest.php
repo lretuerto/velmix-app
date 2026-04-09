@@ -142,6 +142,41 @@ class ApiTokenAuthFlowTest extends TestCase
             ->assertStatus(403);
     }
 
+    public function test_bearer_token_is_limited_by_declared_abilities_on_permissioned_routes(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $user = $this->seedTenantAdminUser(10);
+        $plainTextToken = $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/auth/tokens', [
+                'name' => 'Reporte Diario',
+                'abilities' => [' reports.daily.read ', 'reports.daily.read'],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.abilities.0', 'reports.daily.read')
+            ->json('data.plain_text_token');
+
+        $this->withToken((string) $plainTextToken)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/reports/daily?date=2026-03-12')
+            ->assertOk();
+
+        $this->withToken((string) $plainTextToken)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/pos/sale')
+            ->assertStatus(403);
+
+        $this->assertDatabaseHas('api_tokens', [
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'name' => 'Reporte Diario',
+        ]);
+    }
+
     private function createTokenForUser(User $user, int $tenantId, string $name): string
     {
         $response = $this->actingAs($user)
@@ -162,6 +197,29 @@ class ApiTokenAuthFlowTest extends TestCase
         DB::table('tenant_user')->insert([
             'tenant_id' => $tenantId,
             'user_id' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $user;
+    }
+
+    private function seedTenantAdminUser(int $tenantId): User
+    {
+        $user = User::factory()->create();
+        $roleId = DB::table('roles')->where('code', 'ADMIN')->value('id');
+
+        DB::table('tenant_user')->insert([
+            'tenant_id' => $tenantId,
+            'user_id' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('tenant_user_role')->insert([
+            'tenant_id' => $tenantId,
+            'user_id' => $user->id,
+            'role_id' => $roleId,
             'created_at' => now(),
             'updated_at' => now(),
         ]);

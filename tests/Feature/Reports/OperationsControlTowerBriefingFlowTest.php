@@ -114,6 +114,43 @@ class OperationsControlTowerBriefingFlowTest extends TestCase
             ->assertJsonPath('data.payload.highlights.snapshot_drift.movement', 'worsened');
     }
 
+    public function test_briefing_uses_requested_windows_for_snapshot_drift_when_they_do_not_match_snapshot(): void
+    {
+        $admin = $this->seedUserWithRole(10, 'ADMIN');
+        $this->seedDailySlice($admin);
+        $this->seedBillingSlice($admin);
+        $this->seedFinanceSlice($admin);
+
+        $snapshotId = $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/reports/operations-control-tower/snapshots', [
+                'date' => '2026-03-12',
+                'billing_days' => 3,
+                'finance_days_ahead' => 7,
+                'priority_limit' => 5,
+                'failure_limit' => 5,
+                'stale_follow_up_days' => 3,
+                'label' => 'baseline 3d',
+            ])
+            ->assertOk()
+            ->json('data.id');
+
+        $response = $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/reports/operations-control-tower/briefing?date=2026-03-12&history_days=3&billing_days=1&finance_days_ahead=7&priority_limit=5&failure_limit=5&stale_follow_up_days=3&snapshot_id='.$snapshotId)
+            ->assertOk()
+            ->assertJsonPath('data.snapshot_context.requested_windows_match_snapshot_windows', false)
+            ->assertJsonPath('data.snapshot_context.compare.windows.match', false)
+            ->assertJsonPath('data.snapshot_context.compare.windows.compare.billing_days', 1);
+
+        $payload = $response->json('data');
+
+        $this->assertSame(
+            $payload['executive_summary'],
+            $payload['snapshot_context']['compare']['compare']['executive_summary'],
+        );
+    }
+
     public function test_briefing_can_be_read_without_snapshot_context(): void
     {
         $admin = $this->seedUserWithRole(10, 'ADMIN');

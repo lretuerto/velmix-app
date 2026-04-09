@@ -56,7 +56,10 @@ class OperationsControlTowerBriefingService
 
         if ($resolvedSnapshot !== null) {
             $snapshotDetail = $this->snapshotService->detail($tenantId, $resolvedSnapshot->id);
-            $snapshotCompare = $this->snapshotService->compare($tenantId, $resolvedSnapshot->id, null, $current['date']);
+            $requestedWindowsMatchSnapshotWindows = $current['windows'] === $snapshotDetail['windows'];
+            $snapshotCompare = $requestedWindowsMatchSnapshotWindows
+                ? $this->snapshotService->compare($tenantId, $resolvedSnapshot->id, null, $current['date'])
+                : $this->compareSnapshotToCurrentBriefing($tenantId, $snapshotDetail, $current);
 
             $snapshotContext = [
                 'snapshot' => [
@@ -70,7 +73,7 @@ class OperationsControlTowerBriefingService
                     'compare_path' => $snapshotDetail['compare_path'],
                 ],
                 'compare' => $snapshotCompare,
-                'requested_windows_match_snapshot_windows' => $current['windows'] === $snapshotDetail['windows'],
+                'requested_windows_match_snapshot_windows' => $requestedWindowsMatchSnapshotWindows,
             ];
         }
 
@@ -204,6 +207,76 @@ class OperationsControlTowerBriefingService
             ->all();
     }
 
+    private function compareSnapshotToCurrentBriefing(int $tenantId, array $snapshotDetail, array $current): array
+    {
+        $baseSummary = $snapshotDetail['executive_summary'];
+        $compareSummary = $current['executive_summary'];
+
+        return [
+            'tenant_id' => $tenantId,
+            'mode' => 'live',
+            'base' => [
+                'type' => 'snapshot',
+                'snapshot_id' => $snapshotDetail['id'],
+                'snapshot_date' => $snapshotDetail['snapshot_date'],
+                'label' => $snapshotDetail['label'],
+                'captured_at' => $snapshotDetail['captured_at'],
+                'captured_by' => $snapshotDetail['captured_by'],
+                'path' => $snapshotDetail['detail_path'],
+                'export_path' => $snapshotDetail['export_path'],
+                'compare_path' => $snapshotDetail['compare_path'],
+                'executive_summary' => $baseSummary,
+                'health_gates' => $snapshotDetail['payload']['health_gates'] ?? [],
+            ],
+            'compare' => [
+                'type' => 'live',
+                'snapshot_id' => null,
+                'snapshot_date' => $current['date'],
+                'label' => null,
+                'captured_at' => null,
+                'captured_by' => null,
+                'path' => $current['paths']['self'] ?? sprintf('/reports/operations-control-tower?date=%s', $current['date']),
+                'export_path' => null,
+                'compare_path' => null,
+                'executive_summary' => $compareSummary,
+                'health_gates' => $current['health_gates'] ?? [],
+            ],
+            'windows' => [
+                'base' => $snapshotDetail['windows'],
+                'compare' => $current['windows'],
+                'match' => false,
+            ],
+            'delta' => $this->deltaMetrics($baseSummary, $compareSummary),
+            'overall_status_change' => [
+                'from' => $baseSummary['overall_status'],
+                'to' => $compareSummary['overall_status'],
+                'changed' => $baseSummary['overall_status'] !== $compareSummary['overall_status'],
+            ],
+            'gate_changes' => $this->gateChanges(
+                $snapshotDetail['payload']['health_gates'] ?? [],
+                $current['health_gates'] ?? [],
+            ),
+            'movement' => $this->comparisonMovement($baseSummary, $compareSummary),
+            'paths' => [
+                'self' => sprintf(
+                    '/reports/operations-control-tower/snapshots/%d/compare?date=%s',
+                    $snapshotDetail['id'],
+                    $current['date'],
+                ),
+                'export_markdown' => sprintf(
+                    '/reports/operations-control-tower/snapshots/%d/compare/export?format=markdown&date=%s',
+                    $snapshotDetail['id'],
+                    $current['date'],
+                ),
+                'export_json' => sprintf(
+                    '/reports/operations-control-tower/snapshots/%d/compare/export?format=json&date=%s',
+                    $snapshotDetail['id'],
+                    $current['date'],
+                ),
+            ],
+        ];
+    }
+
     private function snapshotDrift(array $compare): array
     {
         return [
@@ -260,6 +333,87 @@ class OperationsControlTowerBriefingService
         }
 
         return array_values(array_unique($insights));
+    }
+
+    private function deltaMetrics(array $baseSummary, array $compareSummary): array
+    {
+        return [
+            'sales_completed_total' => round(
+                (float) ($compareSummary['sales_completed_total'] ?? 0)
+                - (float) ($baseSummary['sales_completed_total'] ?? 0),
+                2,
+            ),
+            'collections_total' => round(
+                (float) ($compareSummary['collections_total'] ?? 0)
+                - (float) ($baseSummary['collections_total'] ?? 0),
+                2,
+            ),
+            'cash_discrepancy_total' => round(
+                (float) ($compareSummary['cash_discrepancy_total'] ?? 0)
+                - (float) ($baseSummary['cash_discrepancy_total'] ?? 0),
+                2,
+            ),
+            'billing_pending_backlog_count' => (int) ($compareSummary['billing_pending_backlog_count'] ?? 0)
+                - (int) ($baseSummary['billing_pending_backlog_count'] ?? 0),
+            'billing_failed_backlog_count' => (int) ($compareSummary['billing_failed_backlog_count'] ?? 0)
+                - (int) ($baseSummary['billing_failed_backlog_count'] ?? 0),
+            'finance_overdue_total' => round(
+                (float) ($compareSummary['finance_overdue_total'] ?? 0)
+                - (float) ($baseSummary['finance_overdue_total'] ?? 0),
+                2,
+            ),
+            'finance_broken_promise_count' => (int) ($compareSummary['finance_broken_promise_count'] ?? 0)
+                - (int) ($baseSummary['finance_broken_promise_count'] ?? 0),
+            'operations_open_alert_count' => (int) ($compareSummary['operations_open_alert_count'] ?? 0)
+                - (int) ($baseSummary['operations_open_alert_count'] ?? 0),
+        ];
+    }
+
+    private function gateChanges(array $baseGates, array $compareGates): array
+    {
+        $keys = array_values(array_unique(array_merge(array_keys($baseGates), array_keys($compareGates))));
+        $changes = [];
+
+        foreach ($keys as $key) {
+            $from = $baseGates[$key]['status'] ?? 'ok';
+            $to = $compareGates[$key]['status'] ?? 'ok';
+
+            $changes[$key] = [
+                'from' => $from,
+                'to' => $to,
+                'changed' => $from !== $to,
+            ];
+        }
+
+        return $changes;
+    }
+
+    private function comparisonMovement(array $baseSummary, array $compareSummary): string
+    {
+        $baseScore = $this->riskScore($baseSummary);
+        $compareScore = $this->riskScore($compareSummary);
+
+        if ($compareScore > $baseScore) {
+            return 'worsened';
+        }
+
+        if ($compareScore < $baseScore) {
+            return 'improved';
+        }
+
+        return 'unchanged';
+    }
+
+    private function riskScore(array $summary): int
+    {
+        $rank = ['ok' => 0, 'warning' => 1, 'critical' => 2];
+
+        return (($rank[$summary['overall_status'] ?? 'ok'] ?? 0) * 100000)
+            + ((int) ($summary['critical_gate_count'] ?? 0) * 10000)
+            + ((int) ($summary['warning_gate_count'] ?? 0) * 1000)
+            + ((int) ($summary['billing_failed_backlog_count'] ?? 0) * 100)
+            + ((int) ($summary['finance_broken_promise_count'] ?? 0) * 10)
+            + (int) ($summary['operations_open_alert_count'] ?? 0);
     }
 
     private function briefingPaths(

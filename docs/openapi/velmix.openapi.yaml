@@ -77,6 +77,7 @@ paths:
     post:
       tags: [Tenant]
       summary: Emite token API para el usuario actual
+      description: Si se envian abilities, el bearer token queda limitado a rutas protegidas por esos permisos. Soporta `*` y prefijos `modulo.*`.
       security:
         - laravelSession: []
           tenantHeader: []
@@ -1064,9 +1065,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/DataEnvelope'
   /reports/operations-control-tower/briefing:
-    get:
-      tags: [Reports]
-      summary: Paquete ejecutivo del control tower con drift contra snapshots
+      get:
+        tags: [Reports]
+        summary: Paquete ejecutivo del control tower con drift contra snapshots
+        description: Si las ventanas pedidas difieren del snapshot usado como contexto, el drift se calcula contra el briefing live actual usando esas ventanas solicitadas.
       parameters:
         - $ref: '#/components/parameters/ReportDate'
         - in: query
@@ -2859,15 +2861,16 @@ components:
           type: object
           additionalProperties: true
     ApiTokenCreateRequest:
-      type: object
-      required: [name]
-      properties:
-        name:
-          type: string
-        abilities:
-          type: array
-          items:
+        type: object
+        required: [name]
+        properties:
+          name:
             type: string
-        expires_at:
-          type: string
-          format: date
+          abilities:
+            type: array
+            description: Permisos que puede usar el bearer token en rutas protegidas. Acepta `*` y prefijos `modulo.*`.
+            items:
+              type: string
+          expires_at:
+            type: string
+            format: date

@@ -172,11 +172,12 @@ composer run velmix:routes
 - Operations escalations history: timeline, notas y responsables cross-domain por `queue_key`
 - Operations escalations metrics: backlog, eventos y SLA agregados entre billing y finanzas
 - Operations control tower: tablero maestro con health gates, action center y drill-down cross-domain
-- Operations control tower briefing: paquete ejecutivo live con tendencia y drift contra snapshots
+- Operations control tower briefing: paquete ejecutivo live con tendencia y drift contra snapshots usando las ventanas solicitadas cuando difieren de la captura
 - Operations control tower history/compare: tendencia diaria y delta entre fechas para el tablero maestro
 - Operations control tower snapshots: capturas persistidas y exportables del tablero maestro
 - Operations control tower snapshot index: conteo total real y filtros por estado, fecha y etiqueta
 - Operations control tower snapshot compare: drift entre snapshots guardados y estado live
+- API tokens: bearer tokens con `abilities` limitan rutas protegidas por permiso; soportan `*` y prefijos `modulo.*`
 - Auditoría: timeline transversal por tenant
 
 ## Validación recomendada antes de publicar cambios

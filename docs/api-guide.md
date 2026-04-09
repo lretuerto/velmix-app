@@ -9,6 +9,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - Autenticacion: los endpoints de negocio pasan por `auth.hybrid`
 - El backend acepta sesion Laravel o `Authorization: Bearer <token>`
 - Si una request trae sesion y bearer token al mismo tiempo, se evalua el bearer token
+- Si el token define `abilities`, solo puede usar rutas protegidas por permisos incluidos en esa lista; soporta `*` y prefijos `modulo.*`
 - Contexto tenant: enviar `X-Tenant-Id`
 - Formato de salida: casi todos responden `{"data": ...}`
 - Errores esperados:
@@ -247,6 +248,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - tendencia corta
   - ultimo snapshot disponible para esa fecha
   - drift contra snapshot y highlights accionables
+  - si las ventanas pedidas difieren del snapshot, el drift se calcula contra el briefing actual con esas ventanas
 - `GET /reports/operations-control-tower/briefing/export` exporta ese briefing en `markdown` o `json`
 - `GET /reports/operations-control-tower/history` devuelve la tendencia diaria del tablero maestro para una ventana corta
 - `GET /reports/operations-control-tower/compare` contrasta dos fechas y devuelve delta de métricas y cambios de `health_gates`

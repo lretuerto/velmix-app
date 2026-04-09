@@ -17,14 +17,22 @@ class ApiTokenService
             throw new HttpException(403, 'Tenant context or authenticated user missing.');
         }
 
+        $name = trim($name);
+
+        if ($name === '') {
+            throw new HttpException(422, 'API token name is required.');
+        }
+
+        $abilities = $this->normalizeAbilities($abilities);
+
         $plainTextToken = Str::random(64);
         $token = ApiToken::query()->create([
             'tenant_id' => $tenantId,
             'user_id' => $userId,
-            'name' => trim($name),
+            'name' => $name,
             'token_prefix' => substr($plainTextToken, 0, 12),
             'token_hash' => hash('sha256', $plainTextToken),
-            'abilities' => array_values($abilities),
+            'abilities' => $abilities,
             'expires_at' => $expiresAt !== null ? CarbonImmutable::parse($expiresAt) : null,
         ]);
 
@@ -119,6 +127,17 @@ class ApiTokenService
     public function userForToken(ApiToken $token): ?User
     {
         return User::query()->find($token->user_id);
+    }
+
+    private function normalizeAbilities(array $abilities): array
+    {
+        return collect($abilities)
+            ->filter(fn (mixed $ability) => is_string($ability))
+            ->map(fn (string $ability) => trim($ability))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function serialize(ApiToken $token, ?string $plainTextToken = null): array
