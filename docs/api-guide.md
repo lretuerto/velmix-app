@@ -108,6 +108,10 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /reports/operations-control-tower`
 - `GET /reports/operations-control-tower/history`
 - `GET /reports/operations-control-tower/compare`
+- `POST /reports/operations-control-tower/snapshots`
+- `GET /reports/operations-control-tower/snapshots`
+- `GET /reports/operations-control-tower/snapshots/{snapshot}`
+- `GET /reports/operations-control-tower/snapshots/{snapshot}/export`
 - `GET /reports/billing-operations`
 - `GET /reports/billing-escalations`
 - `GET /reports/billing-escalation-metrics`
@@ -235,6 +239,9 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - fallos recientes de billing y paths de drill-down
 - `GET /reports/operations-control-tower/history` devuelve la tendencia diaria del tablero maestro para una ventana corta
 - `GET /reports/operations-control-tower/compare` contrasta dos fechas y devuelve delta de métricas y cambios de `health_gates`
+- `POST /reports/operations-control-tower/snapshots` persiste una captura del tablero maestro con su payload completo
+- `GET /reports/operations-control-tower/snapshots` lista snapshots guardados por tenant
+- `GET /reports/operations-control-tower/snapshots/{snapshot}/export` entrega el snapshot en `markdown` o `json`
 - parametros utiles:
   - `date`
   - `days`

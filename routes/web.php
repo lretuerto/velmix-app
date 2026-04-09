@@ -25,6 +25,7 @@ use App\Services\Purchasing\SupplierService;
 use App\Services\Reports\DailyReportService;
 use App\Services\Reports\BillingOperationsReportService;
 use App\Services\Reports\OperationsControlTowerReportService;
+use App\Services\Reports\OperationsControlTowerSnapshotService;
 use App\Services\Reports\BillingEscalationHistoryService;
 use App\Services\Reports\BillingEscalationMetricsService;
 use App\Services\Reports\BillingEscalationStateService;
@@ -62,7 +63,7 @@ Route::get('/docs', function () {
     return response()->json([
         'data' => [
             'project' => 'VELMiX ERP',
-            'version' => 'sprint1-day160',
+            'version' => 'sprint1-day163',
             'documents' => [
                 ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
                 ['name' => 'API Guide', 'path' => '/docs/api-guide'],
@@ -605,6 +606,68 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
             (int) ($payload['priority_limit'] ?? 5),
             (int) ($payload['failure_limit'] ?? 5),
             (int) ($payload['stale_follow_up_days'] ?? 3),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.operations-control-tower.read');
+
+    Route::post('/reports/operations-control-tower/snapshots', function (OperationsControlTowerSnapshotService $service) {
+        $payload = request()->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'billing_days' => ['nullable', 'integer', 'min:1', 'max:14'],
+            'finance_days_ahead' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'priority_limit' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'failure_limit' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'stale_follow_up_days' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'label' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $result = $service->create(
+            (int) request()->attributes->get('tenant_id'),
+            request()->user()?->id,
+            $payload['date'] ?? null,
+            (int) ($payload['billing_days'] ?? 7),
+            (int) ($payload['finance_days_ahead'] ?? 7),
+            (int) ($payload['priority_limit'] ?? 5),
+            (int) ($payload['failure_limit'] ?? 5),
+            (int) ($payload['stale_follow_up_days'] ?? 3),
+            $payload['label'] ?? null,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.operations-control-tower.manage');
+
+    Route::get('/reports/operations-control-tower/snapshots', function (OperationsControlTowerSnapshotService $service) {
+        $payload = request()->validate([
+            'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+        ]);
+
+        $result = $service->index(
+            (int) request()->attributes->get('tenant_id'),
+            (int) ($payload['limit'] ?? 20),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.operations-control-tower.read');
+
+    Route::get('/reports/operations-control-tower/snapshots/{snapshot}', function (int $snapshot, OperationsControlTowerSnapshotService $service) {
+        $result = $service->detail(
+            (int) request()->attributes->get('tenant_id'),
+            $snapshot,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.operations-control-tower.read');
+
+    Route::get('/reports/operations-control-tower/snapshots/{snapshot}/export', function (int $snapshot, OperationsControlTowerSnapshotService $service) {
+        $payload = request()->validate([
+            'format' => ['nullable', 'in:markdown,json'],
+        ]);
+
+        $result = $service->export(
+            (int) request()->attributes->get('tenant_id'),
+            $snapshot,
+            $payload['format'] ?? 'markdown',
         );
 
         return response()->json(['data' => $result]);

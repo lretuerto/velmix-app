@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VELMiX ERP API
-  version: sprint1-day160
+  version: sprint1-day163
   description: |
     Contrato OpenAPI de endpoints prioritarios de VELMiX ERP.
     Cubre la convencion multi-tenant y los flujos criticos ya implementados.
@@ -1162,6 +1162,106 @@ paths:
       responses:
         '200':
           description: Delta de estado y metricas del control tower entre dos fechas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-control-tower/snapshots:
+    get:
+      tags: [Reports]
+      summary: Lista snapshots persistidos del control tower
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+      responses:
+        '200':
+          description: Lista snapshots del tablero maestro por tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+    post:
+      tags: [Reports]
+      summary: Captura snapshot persistido del control tower
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                date:
+                  type: string
+                  format: date
+                billing_days:
+                  type: integer
+                  minimum: 1
+                  maximum: 14
+                finance_days_ahead:
+                  type: integer
+                  minimum: 1
+                  maximum: 30
+                priority_limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 20
+                failure_limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 20
+                stale_follow_up_days:
+                  type: integer
+                  minimum: 1
+                  maximum: 30
+                label:
+                  type: string
+                  maxLength: 120
+      responses:
+        '200':
+          description: Snapshot persistido del tablero maestro
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-control-tower/snapshots/{snapshot}:
+    get:
+      tags: [Reports]
+      summary: Lee el detalle de un snapshot del control tower
+      parameters:
+        - in: path
+          name: snapshot
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Detalle del snapshot del tablero maestro
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-control-tower/snapshots/{snapshot}/export:
+    get:
+      tags: [Reports]
+      summary: Exporta un snapshot del control tower en markdown o json
+      parameters:
+        - in: path
+          name: snapshot
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum: [markdown, json]
+      responses:
+        '200':
+          description: Export del snapshot del tablero maestro
           content:
             application/json:
               schema:

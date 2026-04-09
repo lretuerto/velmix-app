@@ -546,6 +546,8 @@ class OperationsControlTowerReportService
             'operations_escalations' => sprintf('/reports/operations-escalations?date=%s&billing_days=%d&finance_days_ahead=%d&limit=%d&stale_follow_up_days=%d', $baseDate->toDateString(), $billingDays, $financeDaysAhead, $priorityLimit, $staleFollowUpDays),
             'history' => sprintf('/reports/operations-control-tower/history?date=%s&days=%d&billing_days=%d&finance_days_ahead=%d&priority_limit=%d&failure_limit=%d&stale_follow_up_days=%d', $baseDate->toDateString(), 7, $billingDays, $financeDaysAhead, $priorityLimit, $failureLimit, $staleFollowUpDays),
             'compare_previous_day' => sprintf('/reports/operations-control-tower/compare?base_date=%s&compare_date=%s&billing_days=%d&finance_days_ahead=%d&priority_limit=%d&failure_limit=%d&stale_follow_up_days=%d', $baseDate->subDay()->toDateString(), $baseDate->toDateString(), $billingDays, $financeDaysAhead, $priorityLimit, $failureLimit, $staleFollowUpDays),
+            'snapshots' => '/reports/operations-control-tower/snapshots',
+            'create_snapshot' => '/reports/operations-control-tower/snapshots',
         ];
     }
 
