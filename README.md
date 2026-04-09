@@ -66,6 +66,7 @@ php artisan test
 - Guía operativa API: `GET /docs/api-guide`
 - Checklist de release: `GET /docs/release-readiness`
 - Worker manual outbox: `php artisan billing:dispatch-outbox --limit=20`
+- Script de validación outbox: `composer run velmix:outbox` no falla si la base aún no fue migrada
 - Perfil/provider billing por tenant:
   - `GET /billing/provider-profile`
   - `PUT /billing/provider-profile`
@@ -174,6 +175,7 @@ composer run velmix:routes
 - Operations control tower briefing: paquete ejecutivo live con tendencia y drift contra snapshots
 - Operations control tower history/compare: tendencia diaria y delta entre fechas para el tablero maestro
 - Operations control tower snapshots: capturas persistidas y exportables del tablero maestro
+- Operations control tower snapshot index: conteo total real y filtros por estado, fecha y etiqueta
 - Operations control tower snapshot compare: drift entre snapshots guardados y estado live
 - Auditoría: timeline transversal por tenant
 

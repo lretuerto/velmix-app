@@ -64,7 +64,7 @@ Route::get('/docs', function () {
     return response()->json([
         'data' => [
             'project' => 'VELMiX ERP',
-            'version' => 'sprint1-day169',
+            'version' => 'sprint1-day172',
             'documents' => [
                 ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
                 ['name' => 'API Guide', 'path' => '/docs/api-guide'],
@@ -697,11 +697,19 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
     Route::get('/reports/operations-control-tower/snapshots', function (OperationsControlTowerSnapshotService $service) {
         $payload = request()->validate([
             'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'status' => ['nullable', 'in:ok,warning,critical'],
+            'from_date' => ['nullable', 'date_format:Y-m-d'],
+            'to_date' => ['nullable', 'date_format:Y-m-d'],
+            'label' => ['nullable', 'string', 'max:120'],
         ]);
 
         $result = $service->index(
             (int) request()->attributes->get('tenant_id'),
             (int) ($payload['limit'] ?? 20),
+            $payload['status'] ?? null,
+            $payload['from_date'] ?? null,
+            $payload['to_date'] ?? null,
+            $payload['label'] ?? null,
         );
 
         return response()->json(['data' => $result]);

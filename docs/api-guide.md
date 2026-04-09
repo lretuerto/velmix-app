@@ -203,6 +203,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - Comando manual: `php artisan billing:dispatch-outbox --limit=20`
 - Si no se pasa `--tenant`, procesa tenants con eventos pendientes
 - Para pruebas controladas: `--simulate-result=accepted|rejected|transient_fail`
+- Para QA reproducible existe `composer run velmix:outbox`, que sale en verde si la base todavía no está migrada
 
 ## Provider profile de billing
 
@@ -251,6 +252,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /reports/operations-control-tower/compare` contrasta dos fechas y devuelve delta de métricas y cambios de `health_gates`
 - `POST /reports/operations-control-tower/snapshots` persiste una captura del tablero maestro con su payload completo
 - `GET /reports/operations-control-tower/snapshots` lista snapshots guardados por tenant
+- el listado de snapshots acepta filtros por `status`, `from_date`, `to_date` y `label`
 - `GET /reports/operations-control-tower/snapshots/{snapshot}/export` entrega el snapshot en `markdown` o `json`
 - `GET /reports/operations-control-tower/snapshots/{snapshot}/compare` compara un snapshot guardado contra otra captura o contra el estado live
 - `GET /reports/operations-control-tower/snapshots/{snapshot}/compare/export` exporta esa comparación en `markdown` o `json`

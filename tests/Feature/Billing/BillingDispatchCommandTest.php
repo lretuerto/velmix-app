@@ -2,10 +2,13 @@
 
 namespace Tests\Feature\Billing;
 
+use App\Services\Billing\OutboxDispatchService;
 use App\Models\User;
+use Exception;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Database\QueryException;
 use Tests\TestCase;
 
 class BillingDispatchCommandTest extends TestCase
@@ -63,6 +66,45 @@ class BillingDispatchCommandTest extends TestCase
 
         $this->assertSame(0, $exitCode);
         $this->assertStringContainsString('No pending outbox events.', trim($output));
+    }
+
+    public function test_command_can_exit_gracefully_when_outbox_storage_is_not_ready(): void
+    {
+        $service = \Mockery::mock(OutboxDispatchService::class);
+        $service->shouldReceive('pendingTenantIds')
+            ->once()
+            ->andThrow(new QueryException('sqlite', 'select * from outbox_events', [], new Exception('storage not ready')));
+        $this->app->instance(OutboxDispatchService::class, $service);
+
+        $exitCode = Artisan::call('billing:dispatch-outbox', [
+            '--limit' => 5,
+            '--graceful-if-unmigrated' => true,
+        ]);
+        $output = Artisan::output();
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('Outbox tables are not ready. Run php artisan migrate first.', trim($output));
+    }
+
+    public function test_command_can_exit_gracefully_when_specific_tenant_storage_is_not_ready(): void
+    {
+        $service = \Mockery::mock(OutboxDispatchService::class);
+        $service->shouldNotReceive('pendingTenantIds');
+        $service->shouldReceive('dispatchBatch')
+            ->once()
+            ->with(10, 5, null)
+            ->andThrow(new QueryException('sqlite', 'select * from outbox_events where tenant_id = ?', [10], new Exception('storage not ready')));
+        $this->app->instance(OutboxDispatchService::class, $service);
+
+        $exitCode = Artisan::call('billing:dispatch-outbox', [
+            '--tenant' => 10,
+            '--limit' => 5,
+            '--graceful-if-unmigrated' => true,
+        ]);
+        $output = Artisan::output();
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('Outbox tables are not ready. Run php artisan migrate first.', trim($output));
     }
 
     private function seedPendingVoucher(int $tenantId, int $number): array

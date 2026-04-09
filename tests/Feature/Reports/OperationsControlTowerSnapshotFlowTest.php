@@ -58,7 +58,8 @@ class OperationsControlTowerSnapshotFlowTest extends TestCase
             ->withHeader('X-Tenant-Id', '10')
             ->getJson('/reports/operations-control-tower/snapshots')
             ->assertOk()
-            ->assertJsonPath('data.summary.count', 1)
+            ->assertJsonPath('data.summary.total_count', 1)
+            ->assertJsonPath('data.summary.returned_count', 1)
             ->assertJsonPath('data.summary.critical_count', 1)
             ->assertJsonPath('data.items.0.id', $snapshotId)
             ->assertJsonPath('data.items.0.executive_summary.operations_open_alert_count', 9)
@@ -93,6 +94,94 @@ class OperationsControlTowerSnapshotFlowTest extends TestCase
             ->assertJsonPath('data.snapshot_id', $snapshotId)
             ->assertJsonPath('data.format', 'json')
             ->assertJsonPath('data.payload.executive_summary.operations_open_alert_count', 9);
+    }
+
+    public function test_snapshot_index_uses_total_counts_and_supports_filters(): void
+    {
+        $admin = $this->seedUserWithRole(10, 'ADMIN');
+        $this->seedDailySlice($admin);
+        $this->seedBillingSlice($admin);
+        $this->seedFinanceSlice($admin);
+
+        $firstSnapshotId = $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/reports/operations-control-tower/snapshots', [
+                'date' => '2026-03-10',
+                'label' => 'inicio turno',
+            ])
+            ->assertOk()
+            ->json('data.id');
+
+        $secondSnapshotId = $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/reports/operations-control-tower/snapshots', [
+                'date' => '2026-03-12',
+                'label' => 'cierre operativo',
+            ])
+            ->assertOk()
+            ->json('data.id');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/reports/operations-control-tower/snapshots?limit=1')
+            ->assertOk()
+            ->assertJsonPath('data.summary.total_count', 2)
+            ->assertJsonPath('data.summary.returned_count', 1)
+            ->assertJsonPath('data.summary.critical_count', 2)
+            ->assertJsonPath('data.items.0.id', $secondSnapshotId);
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/reports/operations-control-tower/snapshots?label=cierre')
+            ->assertOk()
+            ->assertJsonPath('data.filters.label', 'cierre')
+            ->assertJsonPath('data.summary.total_count', 1)
+            ->assertJsonPath('data.summary.returned_count', 1)
+            ->assertJsonPath('data.items.0.id', $secondSnapshotId);
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/reports/operations-control-tower/snapshots?status=critical&from_date=2026-03-12')
+            ->assertOk()
+            ->assertJsonPath('data.filters.status', 'critical')
+            ->assertJsonPath('data.filters.from_date', '2026-03-12')
+            ->assertJsonPath('data.summary.total_count', 1)
+            ->assertJsonPath('data.items.0.id', $secondSnapshotId);
+
+        $this->assertNotSame($firstSnapshotId, $secondSnapshotId);
+    }
+
+    public function test_snapshot_index_treats_label_filter_as_literal_text(): void
+    {
+        $admin = $this->seedUserWithRole(10, 'ADMIN');
+        $this->seedDailySlice($admin);
+        $this->seedBillingSlice($admin);
+        $this->seedFinanceSlice($admin);
+
+        $percentSnapshotId = $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/reports/operations-control-tower/snapshots', [
+                'date' => '2026-03-12',
+                'label' => 'avance 100% cierre',
+            ])
+            ->assertOk()
+            ->json('data.id');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/reports/operations-control-tower/snapshots', [
+                'date' => '2026-03-12',
+                'label' => 'avance 100x cierre',
+            ])
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/reports/operations-control-tower/snapshots?label=100%25')
+            ->assertOk()
+            ->assertJsonPath('data.filters.label', '100%')
+            ->assertJsonPath('data.summary.total_count', 1)
+            ->assertJsonPath('data.items.0.id', $percentSnapshotId);
     }
 
     public function test_admin_can_compare_control_tower_snapshot_against_live_and_another_snapshot(): void

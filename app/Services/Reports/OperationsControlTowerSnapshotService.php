@@ -81,14 +81,29 @@ class OperationsControlTowerSnapshotService
         return $this->detail($tenantId, $row->id);
     }
 
-    public function index(int $tenantId, int $limit = 20): array
+    public function index(
+        int $tenantId,
+        int $limit = 20,
+        ?string $status = null,
+        ?string $fromDate = null,
+        ?string $toDate = null,
+        ?string $label = null,
+    ): array
     {
         $this->assertTenantId($tenantId);
         $this->assertLimit($limit);
+        $this->assertStatus($status);
 
-        $items = DB::table('operations_control_tower_snapshots')
+        $label = $this->normalizeSearchLabel($label);
+        $query = $this->filteredIndexQuery($tenantId, $status, $fromDate, $toDate, $label);
+        $statusCounts = (clone $query)
+            ->select('overall_status', DB::raw('COUNT(*) as aggregate'))
+            ->groupBy('overall_status')
+            ->pluck('aggregate', 'overall_status');
+        $totalCount = (clone $query)->count();
+
+        $items = (clone $query)
             ->leftJoin('users', 'users.id', '=', 'operations_control_tower_snapshots.user_id')
-            ->where('operations_control_tower_snapshots.tenant_id', $tenantId)
             ->orderByDesc('operations_control_tower_snapshots.snapshot_date')
             ->orderByDesc('operations_control_tower_snapshots.id')
             ->limit($limit)
@@ -101,11 +116,18 @@ class OperationsControlTowerSnapshotService
 
         return [
             'tenant_id' => $tenantId,
+            'filters' => [
+                'status' => $status,
+                'from_date' => $fromDate,
+                'to_date' => $toDate,
+                'label' => $label,
+            ],
             'summary' => [
-                'count' => count($items),
-                'critical_count' => count(array_filter($items, fn (array $item) => $item['executive_summary']['overall_status'] === 'critical')),
-                'warning_count' => count(array_filter($items, fn (array $item) => $item['executive_summary']['overall_status'] === 'warning')),
-                'ok_count' => count(array_filter($items, fn (array $item) => $item['executive_summary']['overall_status'] === 'ok')),
+                'total_count' => $totalCount,
+                'returned_count' => count($items),
+                'critical_count' => (int) ($statusCounts['critical'] ?? 0),
+                'warning_count' => (int) ($statusCounts['warning'] ?? 0),
+                'ok_count' => (int) ($statusCounts['ok'] ?? 0),
             ],
             'items' => $items,
         ];
@@ -571,6 +593,38 @@ class OperationsControlTowerSnapshotService
         return implode("\n", $lines);
     }
 
+    private function filteredIndexQuery(
+        int $tenantId,
+        ?string $status,
+        ?string $fromDate,
+        ?string $toDate,
+        ?string $label,
+    ) {
+        $query = DB::table('operations_control_tower_snapshots')
+            ->where('operations_control_tower_snapshots.tenant_id', $tenantId);
+
+        if ($status !== null) {
+            $query->where('operations_control_tower_snapshots.overall_status', $status);
+        }
+
+        if ($fromDate !== null) {
+            $query->whereDate('operations_control_tower_snapshots.snapshot_date', '>=', $fromDate);
+        }
+
+        if ($toDate !== null) {
+            $query->whereDate('operations_control_tower_snapshots.snapshot_date', '<=', $toDate);
+        }
+
+        if ($label !== null) {
+            $query->whereRaw(
+                "operations_control_tower_snapshots.label like ? escape '\\'",
+                ['%'.$this->escapeLikePattern($label).'%'],
+            );
+        }
+
+        return $query;
+    }
+
     private function normalizeLabel(?string $label): ?string
     {
         if ($label === null) {
@@ -602,6 +656,29 @@ class OperationsControlTowerSnapshotService
         if ($limit < 1 || $limit > self::MAX_LIMIT) {
             throw new HttpException(422, 'Snapshot limit is invalid.');
         }
+    }
+
+    private function assertStatus(?string $status): void
+    {
+        if ($status !== null && ! in_array($status, ['ok', 'warning', 'critical'], true)) {
+            throw new HttpException(422, 'Snapshot status filter is invalid.');
+        }
+    }
+
+    private function normalizeSearchLabel(?string $label): ?string
+    {
+        if ($label === null) {
+            return null;
+        }
+
+        $label = trim($label);
+
+        return $label === '' ? null : $label;
+    }
+
+    private function escapeLikePattern(string $value): string
+    {
+        return addcslashes($value, '\\%_');
     }
 
     private function assertComparisonTarget(?int $againstSnapshotId, ?string $date): void
