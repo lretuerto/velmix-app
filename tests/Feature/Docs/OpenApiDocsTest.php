@@ -2,8 +2,10 @@
 
 namespace Tests\Feature\Docs;
 
+use App\Models\ApiToken;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class OpenApiDocsTest extends TestCase
@@ -13,9 +15,34 @@ class OpenApiDocsTest extends TestCase
     public function test_docs_endpoints_require_authentication(): void
     {
         $this->getJson('/docs')->assertStatus(401);
-        $this->get('/docs/openapi.yaml')->assertStatus(401);
-        $this->get('/docs/api-guide')->assertStatus(401);
-        $this->get('/docs/release-readiness')->assertStatus(401);
+        $this->get('/docs/openapi.yaml', ['Accept' => 'application/json'])->assertStatus(401);
+        $this->get('/docs/api-guide', ['Accept' => 'application/json'])->assertStatus(401);
+        $this->get('/docs/release-readiness', ['Accept' => 'application/json'])->assertStatus(401);
+    }
+
+    public function test_docs_endpoints_do_not_accept_bearer_tokens(): void
+    {
+        $this->seed(\Database\Seeders\TenantSeeder::class);
+
+        $user = User::factory()->create();
+        $plainTextToken = Str::random(64);
+
+        ApiToken::query()->create([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'name' => 'Docs probe',
+            'token_prefix' => substr($plainTextToken, 0, 12),
+            'token_hash' => hash('sha256', $plainTextToken),
+            'abilities' => ['*'],
+        ]);
+
+        $this->withToken($plainTextToken)
+            ->getJson('/docs')
+            ->assertStatus(401);
+
+        $this->withToken($plainTextToken)
+            ->get('/docs/openapi.yaml', ['Accept' => 'application/json'])
+            ->assertStatus(401);
     }
 
     public function test_exposes_docs_index_with_expected_documents(): void
@@ -89,6 +116,7 @@ class OpenApiDocsTest extends TestCase
         $this->assertStringContainsString('/reports/billing-escalations/{code}/resolve', $response->getContent());
         $this->assertStringContainsString('/audit/timeline', $response->getContent());
         $this->assertStringContainsString('/auth/tokens', $response->getContent());
+        $this->assertStringContainsString('security.api-token.manage', $response->getContent());
         $this->assertStringContainsString('bearerAuth', $response->getContent());
         $this->assertStringContainsString('X-Tenant-Id', $response->getContent());
     }
@@ -101,6 +129,8 @@ class OpenApiDocsTest extends TestCase
             ->get('/docs/api-guide')
             ->assertOk()
             ->assertSee('X-Tenant-Id', false)
+            ->assertSee('security.api-token.manage', false)
+            ->assertSee('no acepta bearer tokens', false)
             ->assertSee('POST /pos/sales', false)
             ->assertSee('GET /billing/provider-profile', false)
             ->assertSee('POST /billing/provider-profile/check', false)

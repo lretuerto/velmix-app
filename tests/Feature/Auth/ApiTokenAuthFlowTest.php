@@ -11,11 +11,14 @@ class ApiTokenAuthFlowTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_session_user_can_create_and_list_api_tokens_for_current_tenant(): void
+    public function test_session_admin_can_create_and_list_api_tokens_for_current_tenant(): void
     {
-        $this->seed(\Database\Seeders\TenantSeeder::class);
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
 
-        $user = $this->seedTenantUser(10);
+        $user = $this->seedTenantAdminUser(10);
 
         $createResponse = $this->actingAs($user)
             ->withHeader('X-Tenant-Id', '10')
@@ -64,9 +67,12 @@ class ApiTokenAuthFlowTest extends TestCase
 
     public function test_bearer_token_can_access_protected_route_for_its_tenant(): void
     {
-        $this->seed(\Database\Seeders\TenantSeeder::class);
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
 
-        $user = $this->seedTenantUser(10);
+        $user = $this->seedTenantAdminUser(10);
         $plainTextToken = $this->createTokenForUser($user, 10, 'API App');
 
         $this->withToken($plainTextToken)
@@ -87,9 +93,12 @@ class ApiTokenAuthFlowTest extends TestCase
 
     public function test_revoked_token_cannot_access_protected_route(): void
     {
-        $this->seed(\Database\Seeders\TenantSeeder::class);
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
 
-        $user = $this->seedTenantUser(10);
+        $user = $this->seedTenantAdminUser(10);
         $createResponse = $this->actingAs($user)
             ->withHeader('X-Tenant-Id', '10')
             ->postJson('/auth/tokens', [
@@ -123,9 +132,12 @@ class ApiTokenAuthFlowTest extends TestCase
 
     public function test_token_is_scoped_to_its_tenant_even_if_user_has_other_memberships(): void
     {
-        $this->seed(\Database\Seeders\TenantSeeder::class);
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
 
-        $user = $this->seedTenantUser(10);
+        $user = $this->seedTenantAdminUser(10);
 
         DB::table('tenant_user')->insert([
             'tenant_id' => 20,
@@ -175,6 +187,33 @@ class ApiTokenAuthFlowTest extends TestCase
             'user_id' => $user->id,
             'name' => 'Reporte Diario',
         ]);
+    }
+
+    public function test_non_admin_tenant_member_cannot_manage_api_tokens(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $user = $this->seedTenantUser(10);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/auth/tokens')
+            ->assertStatus(403);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/auth/tokens', [
+                'name' => 'No permitido',
+            ])
+            ->assertStatus(403);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->deleteJson('/auth/tokens/999')
+            ->assertStatus(403);
     }
 
     private function createTokenForUser(User $user, int $tenantId, string $name): string

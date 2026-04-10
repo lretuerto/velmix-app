@@ -55,16 +55,17 @@ php artisan test
   - `GET /auth/tokens`
   - `POST /auth/tokens`
   - `DELETE /auth/tokens/{token}`
+- La gestión de tokens requiere el permiso `security.api-token.manage` y hoy queda reservada a perfiles administrativos del tenant
 - Validación de contexto actual:
   - `GET /auth/me`
 - Si una request trae sesión y bearer token al mismo tiempo, el bearer token tiene prioridad
 
 ## Documentación disponible
 
-- Portal de docs interno autenticado: `GET /docs`
-- OpenAPI YAML autenticado: `GET /docs/openapi.yaml`
-- Guía operativa API autenticada: `GET /docs/api-guide`
-- Checklist de release autenticado: `GET /docs/release-readiness`
+- Portal de docs interno autenticado por sesión web: `GET /docs`
+- OpenAPI YAML autenticado por sesión web: `GET /docs/openapi.yaml`
+- Guía operativa API autenticada por sesión web: `GET /docs/api-guide`
+- Checklist de release autenticado por sesión web: `GET /docs/release-readiness`
 - Worker manual outbox: `php artisan billing:dispatch-outbox --limit=20`
 - Script de validación outbox: `composer run velmix:outbox` no falla si la base aún no fue migrada
 - Perfil/provider billing por tenant:

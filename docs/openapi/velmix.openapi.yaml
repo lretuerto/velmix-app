@@ -64,6 +64,7 @@ paths:
     get:
       tags: [Tenant]
       summary: Lista tokens del usuario actual en el tenant
+      description: Requiere usuario autenticado por sesion con permiso `security.api-token.manage`.
       security:
         - laravelSession: []
           tenantHeader: []
@@ -77,7 +78,7 @@ paths:
     post:
       tags: [Tenant]
       summary: Emite token API para el usuario actual
-      description: Si se envian abilities, el bearer token queda limitado a rutas protegidas por esos permisos. Soporta `*` y prefijos `modulo.*`.
+      description: Requiere usuario autenticado por sesion con permiso `security.api-token.manage`. Si se envian abilities, el bearer token queda limitado a rutas protegidas por esos permisos. Soporta `*` y prefijos `modulo.*`.
       security:
         - laravelSession: []
           tenantHeader: []
@@ -98,6 +99,7 @@ paths:
     delete:
       tags: [Tenant]
       summary: Revoca token API propio
+      description: Requiere usuario autenticado por sesion con permiso `security.api-token.manage`.
       security:
         - laravelSession: []
           tenantHeader: []
