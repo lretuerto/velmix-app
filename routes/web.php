@@ -60,54 +60,49 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/docs', function () {
-    return response()->json([
-        'data' => [
-            'project' => 'VELMiX ERP',
-            'version' => 'sprint1-day175',
-            'documents' => [
-                ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
-                ['name' => 'API Guide', 'path' => '/docs/api-guide'],
-                ['name' => 'Release Readiness', 'path' => '/docs/release-readiness'],
+Route::middleware('auth.hybrid')->group(function () {
+    Route::get('/docs', function () {
+        return response()->json([
+            'data' => [
+                'project' => 'VELMiX ERP',
+                'version' => 'sprint1-day175',
+                'documents' => [
+                    ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
+                    ['name' => 'API Guide', 'path' => '/docs/api-guide'],
+                    ['name' => 'Release Readiness', 'path' => '/docs/release-readiness'],
+                ],
+                'conventions' => [
+                    'Business endpoints support Laravel session auth or Bearer token auth.',
+                    'Multi-tenant endpoints require X-Tenant-Id.',
+                    'Most responses are wrapped in a data envelope.',
+                ],
             ],
-            'conventions' => [
-                'Business endpoints support Laravel session auth or Bearer token auth.',
-                'Multi-tenant endpoints require X-Tenant-Id.',
-                'Most responses are wrapped in a data envelope.',
-            ],
-        ],
-    ]);
-});
+        ]);
+    });
 
-Route::get('/docs/openapi.yaml', function () {
-    return response(
-        file_get_contents(base_path('docs/openapi/velmix.openapi.yaml')),
-        200,
-        ['Content-Type' => 'application/yaml; charset=UTF-8'],
-    );
-});
+    Route::get('/docs/openapi.yaml', function () {
+        return response(
+            file_get_contents(base_path('docs/openapi/velmix.openapi.yaml')),
+            200,
+            ['Content-Type' => 'application/yaml; charset=UTF-8'],
+        );
+    });
 
-Route::get('/docs/api-guide', function () {
-    return response(
-        file_get_contents(base_path('docs/api-guide.md')),
-        200,
-        ['Content-Type' => 'text/markdown; charset=UTF-8'],
-    );
-});
+    Route::get('/docs/api-guide', function () {
+        return response(
+            file_get_contents(base_path('docs/api-guide.md')),
+            200,
+            ['Content-Type' => 'text/markdown; charset=UTF-8'],
+        );
+    });
 
-Route::get('/docs/release-readiness', function () {
-    return response(
-        file_get_contents(base_path('docs/sprint1/day90-release-readiness-checklist.md')),
-        200,
-        ['Content-Type' => 'text/markdown; charset=UTF-8'],
-    );
-});
-
-Route::middleware('tenant.context')->get('/tenant/ping', function () {
-    return response()->json([
-        'ok' => true,
-        'tenant' => app('currentTenantId'),
-    ]);
+    Route::get('/docs/release-readiness', function () {
+        return response(
+            file_get_contents(base_path('docs/sprint1/day90-release-readiness-checklist.md')),
+            200,
+            ['Content-Type' => 'text/markdown; charset=UTF-8'],
+        );
+    });
 });
 
 Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function () {
@@ -151,6 +146,14 @@ Route::middleware(['auth', 'tenant.context', 'tenant.access'])->group(function (
 });
 
 Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(function () {
+    Route::get('/tenant/ping', function () {
+        return response()->json([
+            'ok' => true,
+            'tenant' => app('currentTenantId'),
+            'auth_mode' => (string) request()->attributes->get('auth_mode', 'session'),
+        ]);
+    });
+
     Route::get('/auth/me', function () {
         $user = request()->user();
 

@@ -426,4 +426,4 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 ## Donde mirar el contrato completo
 
 - [`docs/openapi/velmix.openapi.yaml`](C:\Users\user\Desktop\velmix-app\docs\openapi\velmix.openapi.yaml)
-- `GET /docs/openapi.yaml`
+- `GET /docs/openapi.yaml` requiere autenticación

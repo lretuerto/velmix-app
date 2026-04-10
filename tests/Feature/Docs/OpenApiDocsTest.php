@@ -2,13 +2,28 @@
 
 namespace Tests\Feature\Docs;
 
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class OpenApiDocsTest extends TestCase
 {
+    use RefreshDatabase;
+
+    public function test_docs_endpoints_require_authentication(): void
+    {
+        $this->getJson('/docs')->assertStatus(401);
+        $this->get('/docs/openapi.yaml')->assertStatus(401);
+        $this->get('/docs/api-guide')->assertStatus(401);
+        $this->get('/docs/release-readiness')->assertStatus(401);
+    }
+
     public function test_exposes_docs_index_with_expected_documents(): void
     {
-        $this->getJson('/docs')
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->getJson('/docs')
             ->assertOk()
             ->assertJsonPath('data.project', 'VELMiX ERP')
             ->assertJsonFragment(['path' => '/docs/openapi.yaml'])
@@ -18,7 +33,8 @@ class OpenApiDocsTest extends TestCase
 
     public function test_serves_openapi_yaml_for_priority_endpoints(): void
     {
-        $response = $this->get('/docs/openapi.yaml');
+        $user = User::factory()->create();
+        $response = $this->actingAs($user)->get('/docs/openapi.yaml');
 
         $response->assertOk();
         $this->assertStringContainsString('/pos/sales', $response->getContent());
@@ -79,7 +95,10 @@ class OpenApiDocsTest extends TestCase
 
     public function test_serves_api_guide_and_release_checklist(): void
     {
-        $this->get('/docs/api-guide')
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->get('/docs/api-guide')
             ->assertOk()
             ->assertSee('X-Tenant-Id', false)
             ->assertSee('POST /pos/sales', false)
@@ -129,7 +148,8 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('POST /reports/billing-escalations/{code}/acknowledge', false)
             ->assertSee('POST /reports/billing-escalations/{code}/resolve', false);
 
-        $this->get('/docs/release-readiness')
+        $this->actingAs($user)
+            ->get('/docs/release-readiness')
             ->assertOk()
             ->assertSee('composer run velmix:qa', false)
             ->assertSee('docs internas accesibles desde `/docs`', false);

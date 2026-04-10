@@ -61,10 +61,10 @@ php artisan test
 
 ## Documentación disponible
 
-- Portal de docs interno: `GET /docs`
-- OpenAPI YAML: `GET /docs/openapi.yaml`
-- Guía operativa API: `GET /docs/api-guide`
-- Checklist de release: `GET /docs/release-readiness`
+- Portal de docs interno autenticado: `GET /docs`
+- OpenAPI YAML autenticado: `GET /docs/openapi.yaml`
+- Guía operativa API autenticada: `GET /docs/api-guide`
+- Checklist de release autenticado: `GET /docs/release-readiness`
 - Worker manual outbox: `php artisan billing:dispatch-outbox --limit=20`
 - Script de validación outbox: `composer run velmix:outbox` no falla si la base aún no fue migrada
 - Perfil/provider billing por tenant:
