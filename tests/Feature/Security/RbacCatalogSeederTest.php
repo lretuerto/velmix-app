@@ -38,6 +38,7 @@ class RbacCatalogSeederTest extends TestCase
         $this->assertDatabaseHas('permissions', ['code' => 'billing.outbox.dispatch']);
         $this->assertDatabaseHas('permissions', ['code' => 'billing.outbox.read']);
         $this->assertDatabaseHas('permissions', ['code' => 'billing.provider.manage']);
+        $this->assertDatabaseHas('permissions', ['code' => 'security.docs.read']);
         $this->assertDatabaseHas('permissions', ['code' => 'security.api-token.manage']);
         $this->assertDatabaseHas('permissions', ['code' => 'cash.session.open']);
         $this->assertDatabaseHas('permissions', ['code' => 'cash.session.close']);
@@ -88,6 +89,13 @@ class RbacCatalogSeederTest extends TestCase
         $this->assertDatabaseHas('role_permission', [
             'role_id' => $adminId,
             'permission_id' => $tokenPermId,
+        ]);
+
+        $docsPermId = DB::table('permissions')->where('code', 'security.docs.read')->value('id');
+
+        $this->assertDatabaseHas('role_permission', [
+            'role_id' => $adminId,
+            'permission_id' => $docsPermId,
         ]);
     }
 }

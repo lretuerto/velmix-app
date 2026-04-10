@@ -60,7 +60,7 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:security.docs.read'])->group(function () {
     Route::get('/docs', function () {
         return response()->json([
             'data' => [
@@ -105,7 +105,7 @@ Route::middleware('auth')->group(function () {
     });
 });
 
-Route::middleware(['auth', 'tenant.context', 'tenant.access', 'perm:security.api-token.manage'])->group(function () {
+Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:security.api-token.manage'])->group(function () {
     Route::get('/auth/tokens', function (ApiTokenService $service) {
         $result = $service->listForUser(
             (int) request()->attributes->get('tenant_id'),

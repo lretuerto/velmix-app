@@ -11,6 +11,23 @@ class ApiTokenAuthFlowTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_api_token_management_endpoints_return_401_without_session(): void
+    {
+        $this->withHeader('X-Tenant-Id', '10')
+            ->get('/auth/tokens')
+            ->assertStatus(401);
+
+        $this->withHeader('X-Tenant-Id', '10')
+            ->postJson('/auth/tokens', [
+                'name' => 'Sin sesion',
+            ])
+            ->assertStatus(401);
+
+        $this->withHeader('X-Tenant-Id', '10')
+            ->delete('/auth/tokens/1')
+            ->assertStatus(401);
+    }
+
     public function test_session_admin_can_create_and_list_api_tokens_for_current_tenant(): void
     {
         $this->seed([

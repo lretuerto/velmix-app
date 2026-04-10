@@ -5,6 +5,7 @@ namespace Tests\Feature\Docs;
 use App\Models\ApiToken;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -15,9 +16,25 @@ class OpenApiDocsTest extends TestCase
     public function test_docs_endpoints_require_authentication(): void
     {
         $this->getJson('/docs')->assertStatus(401);
+        $this->get('/docs/openapi.yaml')->assertStatus(401);
         $this->get('/docs/openapi.yaml', ['Accept' => 'application/json'])->assertStatus(401);
         $this->get('/docs/api-guide', ['Accept' => 'application/json'])->assertStatus(401);
         $this->get('/docs/release-readiness', ['Accept' => 'application/json'])->assertStatus(401);
+    }
+
+    public function test_docs_endpoints_require_tenant_context_for_authenticated_session(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $user = $this->seedTenantAdminUser(10);
+
+        $this->actingAs($user)
+            ->getJson('/docs')
+            ->assertStatus(400)
+            ->assertJsonPath('message', 'Tenant context is required');
     }
 
     public function test_docs_endpoints_do_not_accept_bearer_tokens(): void
@@ -45,11 +62,32 @@ class OpenApiDocsTest extends TestCase
             ->assertStatus(401);
     }
 
-    public function test_exposes_docs_index_with_expected_documents(): void
+    public function test_tenant_member_without_docs_permission_cannot_read_docs(): void
     {
-        $user = User::factory()->create();
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $user = $this->seedTenantUser(10);
 
         $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/docs')
+            ->assertStatus(403);
+    }
+
+    public function test_exposes_docs_index_with_expected_documents(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $user = $this->seedTenantAdminUser(10);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
             ->getJson('/docs')
             ->assertOk()
             ->assertJsonPath('data.project', 'VELMiX ERP')
@@ -60,8 +98,15 @@ class OpenApiDocsTest extends TestCase
 
     public function test_serves_openapi_yaml_for_priority_endpoints(): void
     {
-        $user = User::factory()->create();
-        $response = $this->actingAs($user)->get('/docs/openapi.yaml');
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $user = $this->seedTenantAdminUser(10);
+        $response = $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->get('/docs/openapi.yaml');
 
         $response->assertOk();
         $this->assertStringContainsString('/pos/sales', $response->getContent());
@@ -123,12 +168,19 @@ class OpenApiDocsTest extends TestCase
 
     public function test_serves_api_guide_and_release_checklist(): void
     {
-        $user = User::factory()->create();
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $user = $this->seedTenantAdminUser(10);
 
         $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
             ->get('/docs/api-guide')
             ->assertOk()
             ->assertSee('X-Tenant-Id', false)
+            ->assertSee('security.docs.read', false)
             ->assertSee('security.api-token.manage', false)
             ->assertSee('no acepta bearer tokens', false)
             ->assertSee('POST /pos/sales', false)
@@ -179,9 +231,47 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('POST /reports/billing-escalations/{code}/resolve', false);
 
         $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
             ->get('/docs/release-readiness')
             ->assertOk()
             ->assertSee('composer run velmix:qa', false)
             ->assertSee('docs internas accesibles desde `/docs`', false);
+    }
+
+    private function seedTenantUser(int $tenantId): User
+    {
+        $user = User::factory()->create();
+
+        DB::table('tenant_user')->insert([
+            'tenant_id' => $tenantId,
+            'user_id' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $user;
+    }
+
+    private function seedTenantAdminUser(int $tenantId): User
+    {
+        $user = User::factory()->create();
+        $roleId = DB::table('roles')->where('code', 'ADMIN')->value('id');
+
+        DB::table('tenant_user')->insert([
+            'tenant_id' => $tenantId,
+            'user_id' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('tenant_user_role')->insert([
+            'tenant_id' => $tenantId,
+            'user_id' => $user->id,
+            'role_id' => $roleId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $user;
     }
 }

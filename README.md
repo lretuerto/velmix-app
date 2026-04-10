@@ -66,6 +66,7 @@ php artisan test
 - OpenAPI YAML autenticado por sesión web: `GET /docs/openapi.yaml`
 - Guía operativa API autenticada por sesión web: `GET /docs/api-guide`
 - Checklist de release autenticado por sesión web: `GET /docs/release-readiness`
+- El portal de docs exige `X-Tenant-Id`, membresía al tenant y permiso `security.docs.read`
 - Worker manual outbox: `php artisan billing:dispatch-outbox --limit=20`
 - Script de validación outbox: `composer run velmix:outbox` no falla si la base aún no fue migrada
 - Perfil/provider billing por tenant:
