@@ -420,6 +420,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `POST /billing/vouchers/{voucher}/replay` crea un nuevo `outbox_event` con lineage hacia el evento anterior solo si el documento no fue aceptado
 - `POST /billing/credit-notes/{creditNote}/replay` reencola la nota de credito solo si el documento no fue aceptado
 - Los documentos `accepted` quedan inmutables: el replay no limpia `sunat_ticket` ni reabre el comprobante canonico
+- `POST /billing/outbox/{event}/retry` solo aplica a eventos `failed` cuando el documento aun no fue aceptado y no existe otro evento `pending` para el mismo agregado
 - `GET /billing/outbox/{event}/lineage` devuelve la cadena completa de eventos, payloads, intentos y actividades relacionadas
 
 ## Donde mirar el contrato completo

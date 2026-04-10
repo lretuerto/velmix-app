@@ -972,7 +972,7 @@ paths:
   /billing/outbox/{event}/retry:
     post:
       tags: [Billing]
-      summary: Reintenta evento fallido
+      summary: Reintenta evento fallido solo si el documento no fue aceptado y no existe otro pending
       parameters:
         - $ref: '#/components/parameters/OutboxEventId'
       responses:

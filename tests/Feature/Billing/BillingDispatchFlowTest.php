@@ -132,6 +132,81 @@ class BillingDispatchFlowTest extends TestCase
         ]);
     }
 
+    public function test_rejects_retry_when_document_already_has_another_pending_event(): void
+    {
+        [$user, $voucherId, $eventId] = $this->seedPendingVoucherScenario();
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/outbox/dispatch', [
+                'simulate_result' => 'transient_fail',
+            ])
+            ->assertStatus(503);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson("/billing/vouchers/{$voucherId}/replay")
+            ->assertOk();
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson("/billing/outbox/{$eventId}/retry")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Document already has another pending outbox event.');
+
+        $this->assertDatabaseHas('outbox_events', [
+            'id' => $eventId,
+            'status' => 'failed',
+        ]);
+
+        $this->assertSame(
+            1,
+            DB::table('outbox_events')
+                ->where('aggregate_type', 'electronic_voucher')
+                ->where('aggregate_id', $voucherId)
+                ->where('status', 'pending')
+                ->count(),
+        );
+    }
+
+    public function test_rejects_retry_for_failed_credit_note_when_document_was_accepted_by_newer_replay(): void
+    {
+        [$user, $creditNoteId, $eventId] = $this->seedPendingCreditNoteScenario();
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/outbox/dispatch', [
+                'simulate_result' => 'transient_fail',
+            ])
+            ->assertStatus(503);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson("/billing/credit-notes/{$creditNoteId}/replay")
+            ->assertOk();
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/outbox/dispatch')
+            ->assertOk();
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson("/billing/outbox/{$eventId}/retry")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Accepted billing documents cannot be retried.');
+
+        $this->assertDatabaseHas('sale_credit_notes', [
+            'id' => $creditNoteId,
+            'status' => 'accepted',
+        ]);
+
+        $this->assertDatabaseHas('outbox_events', [
+            'id' => $eventId,
+            'status' => 'failed',
+        ]);
+    }
+
     public function test_dispatches_pending_credit_note_and_marks_it_accepted(): void
     {
         [$user, $creditNoteId, $eventId] = $this->seedPendingCreditNoteScenario();

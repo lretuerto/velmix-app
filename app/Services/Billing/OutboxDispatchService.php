@@ -385,6 +385,34 @@ class OutboxDispatchService
                 throw new HttpException(422, 'Only failed outbox events can be retried.');
             }
 
+            $documentTable = $event->aggregate_type === 'sale_credit_note'
+                ? 'sale_credit_notes'
+                : 'electronic_vouchers';
+            $document = DB::table($documentTable)
+                ->where('id', $event->aggregate_id)
+                ->lockForUpdate()
+                ->first(['id', 'status']);
+
+            if ($document === null) {
+                throw new HttpException(404, 'Billing document not found for outbox retry.');
+            }
+
+            if ((string) $document->status === 'accepted') {
+                throw new HttpException(422, 'Accepted billing documents cannot be retried.');
+            }
+
+            $hasOtherPending = DB::table('outbox_events')
+                ->where('tenant_id', $tenantId)
+                ->where('aggregate_type', $event->aggregate_type)
+                ->where('aggregate_id', $event->aggregate_id)
+                ->where('status', 'pending')
+                ->where('id', '!=', $event->id)
+                ->exists();
+
+            if ($hasOtherPending) {
+                throw new HttpException(422, 'Document already has another pending outbox event.');
+            }
+
             DB::table('outbox_events')
                 ->where('id', $event->id)
                 ->update([
@@ -393,7 +421,7 @@ class OutboxDispatchService
                     'updated_at' => now(),
                 ]);
 
-            DB::table($event->aggregate_type === 'sale_credit_note' ? 'sale_credit_notes' : 'electronic_vouchers')
+            DB::table($documentTable)
                 ->where('id', $event->aggregate_id)
                 ->update([
                     'status' => 'pending',
