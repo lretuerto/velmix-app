@@ -24,6 +24,8 @@ class BillingProviderProfileFlowTest extends TestCase
             ->assertJsonPath('data.provider_code', 'fake_sunat')
             ->assertJsonPath('data.environment', 'sandbox')
             ->assertJsonPath('data.default_outcome', 'accepted')
+            ->assertJsonPath('data.credentials', null)
+            ->assertJsonPath('data.credentials_configured', false)
             ->assertJsonPath('data.health_status', 'unknown')
             ->assertJsonPath('data.health_checked_at', null);
     }
@@ -44,7 +46,18 @@ class BillingProviderProfileFlowTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('data.default_outcome', 'rejected')
+            ->assertJsonPath('data.credentials', null)
+            ->assertJsonPath('data.credentials_configured', true)
+            ->assertJsonPath('data.credential_keys.0', 'endpoint')
             ->assertJsonPath('data.health_status', 'unknown');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/billing/provider-profile')
+            ->assertOk()
+            ->assertJsonPath('data.credentials', null)
+            ->assertJsonPath('data.credentials_configured', true)
+            ->assertJsonPath('data.credential_keys.0', 'endpoint');
 
         $this->actingAs($admin)
             ->withHeader('X-Tenant-Id', '10')

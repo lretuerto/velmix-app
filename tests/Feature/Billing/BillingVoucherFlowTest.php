@@ -90,7 +90,7 @@ class BillingVoucherFlowTest extends TestCase
             ->assertJsonPath('data.0.document_number', 'B001-1');
     }
 
-    public function test_can_regenerate_and_replay_voucher_payload_with_new_provider_profile(): void
+    public function test_can_regenerate_and_replay_failed_voucher_payload_with_new_provider_profile(): void
     {
         $saleId = $this->createSaleForTenant(10);
         $admin = $this->createBillingUserForTenant(10, 'ADMIN');
@@ -142,8 +142,10 @@ class BillingVoucherFlowTest extends TestCase
 
         $this->actingAs($admin)
             ->withHeader('X-Tenant-Id', '10')
-            ->postJson('/billing/outbox/dispatch')
-            ->assertOk()
+            ->postJson('/billing/outbox/dispatch', [
+                'simulate_result' => 'transient_fail',
+            ])
+            ->assertStatus(503)
             ->assertJsonPath('data.provider_environment', 'live');
 
         $replayResponse = $this->actingAs($admin)
@@ -198,6 +200,46 @@ class BillingVoucherFlowTest extends TestCase
             'aggregate_type' => 'outbox_event',
             'aggregate_id' => $replayEventId,
         ]);
+    }
+
+    public function test_rejects_replay_for_accepted_voucher(): void
+    {
+        $saleId = $this->createSaleForTenant(10);
+        $admin = $this->createBillingUserForTenant(10, 'ADMIN');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/vouchers', [
+                'sale_id' => $saleId,
+                'type' => 'boleta',
+            ])
+            ->assertOk();
+
+        $voucherId = (int) DB::table('electronic_vouchers')->where('sale_id', $saleId)->value('id');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/outbox/dispatch')
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson("/billing/vouchers/{$voucherId}/replay")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Accepted billing documents cannot be replayed.');
+
+        $this->assertDatabaseHas('electronic_vouchers', [
+            'id' => $voucherId,
+            'status' => 'accepted',
+        ]);
+
+        $this->assertSame(
+            1,
+            DB::table('outbox_events')
+                ->where('aggregate_type', 'electronic_voucher')
+                ->where('aggregate_id', $voucherId)
+                ->count(),
+        );
     }
 
     public function test_rejects_voucher_creation_for_sale_from_other_tenant(): void

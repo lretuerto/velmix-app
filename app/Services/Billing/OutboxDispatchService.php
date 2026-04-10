@@ -136,7 +136,7 @@ class OutboxDispatchService
             'pending_count' => (int) ($counts->pending_count ?? 0),
             'failed_count' => (int) ($counts->failed_count ?? 0),
             'processed_count' => (int) ($counts->processed_count ?? 0),
-            'provider_profile' => $profile,
+            'provider_profile' => app(BillingProviderProfileService::class)->publicSerializeArray($profile),
             'oldest_pending' => $oldestPending !== null ? [
                 'event_id' => (int) $oldestPending->id,
                 'aggregate_type' => (string) $oldestPending->aggregate_type,

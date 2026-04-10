@@ -85,7 +85,7 @@ class BillingProviderMetricsService
                 'end_date' => $windowEnd->toDateString(),
                 'days' => $days,
             ],
-            'provider_profile' => $profile,
+            'provider_profile' => app(BillingProviderProfileService::class)->publicSerializeArray($profile),
             'health' => $health,
             'queue' => $queue,
             'performance' => $performance,

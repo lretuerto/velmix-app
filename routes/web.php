@@ -2061,7 +2061,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
     })->middleware('perm:billing.outbox.read');
 
     Route::get('/billing/provider-profile', function (BillingProviderProfileService $service) {
-        $result = $service->current((int) request()->attributes->get('tenant_id'));
+        $result = $service->publicCurrent((int) request()->attributes->get('tenant_id'));
 
         return response()->json(['data' => $result]);
     })->middleware('perm:billing.provider.manage');

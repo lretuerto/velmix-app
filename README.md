@@ -71,6 +71,7 @@ php artisan test
   - `GET /billing/provider-profile`
   - `PUT /billing/provider-profile`
   - `POST /billing/provider-profile/check`
+  - las lecturas redactan `credentials` y exponen solo metadata segura
   - `GET /billing/outbox/provider-trace`
   - `GET /billing/provider-metrics`
   - `GET /billing/outbox/{event}/lineage`
@@ -154,7 +155,7 @@ composer run velmix:routes
 - Billing escalation history: timeline operativo, ultima nota y responsables por codigo
 - Billing escalation metrics: backlog activo, eventos de workflow y SLA de resolucion
 - Billing payloads: snapshots versionados por provider/esquema para voucher y nota de credito
-- Billing replay: regeneracion y reemision controlada sin recrear la venta o la nota
+- Billing replay: regeneracion y reemision controlada solo para documentos no aceptados
 - Billing lineage: trazabilidad completa payload -> outbox original -> replay -> intentos
 - Compras: proveedores, órdenes, recepciones, devoluciones y créditos
 - Caja: aperturas, cierres, cobranzas y movimientos no comerciales

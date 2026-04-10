@@ -37,6 +37,10 @@ class BillingReplayService
                 throw new HttpException(422, 'Document already has a pending outbox event.');
             }
 
+            if (($context['document_status'] ?? null) === 'accepted') {
+                throw new HttpException(422, 'Accepted billing documents cannot be replayed.');
+            }
+
             $snapshot = $this->latestOrCreateSnapshot($tenantId, $aggregateType, $aggregateId, $userId);
 
             DB::table($context['document_table'])
@@ -140,6 +144,7 @@ class BillingReplayService
                 'electronic_vouchers.sale_id',
                 'electronic_vouchers.series',
                 'electronic_vouchers.number',
+                'electronic_vouchers.status',
                 'sales.reference as sale_reference',
                 'sales.total_amount',
             ]);
@@ -156,6 +161,7 @@ class BillingReplayService
 
         return [
             'document_table' => 'electronic_vouchers',
+            'document_status' => (string) $voucher->status,
             'event_type' => 'voucher.created',
             'document_number' => sprintf('%s-%d', $voucher->series, $voucher->number),
             'latest_event_id' => $latestEventId !== null ? (int) $latestEventId : null,
@@ -175,7 +181,7 @@ class BillingReplayService
         $creditNote = DB::table('sale_credit_notes')
             ->where('tenant_id', $tenantId)
             ->where('id', $creditNoteId)
-            ->first(['id', 'sale_id', 'series', 'number']);
+            ->first(['id', 'sale_id', 'series', 'number', 'status']);
 
         if ($creditNote === null) {
             throw new HttpException(404, 'Credit note not found.');
@@ -189,6 +195,7 @@ class BillingReplayService
 
         return [
             'document_table' => 'sale_credit_notes',
+            'document_status' => (string) $creditNote->status,
             'event_type' => 'credit_note.created',
             'document_number' => sprintf('%s-%d', $creditNote->series, $creditNote->number),
             'latest_event_id' => $latestEventId !== null ? (int) $latestEventId : null,

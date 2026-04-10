@@ -43,7 +43,7 @@ class BillingProviderHealthService
         );
 
         return array_merge(
-            $profiles->current($tenantId),
+            $profiles->publicCurrent($tenantId),
             ['capabilities' => $health['capabilities'] ?? []],
         );
     }
@@ -124,7 +124,7 @@ class BillingProviderHealthService
 
         return [
             'tenant_id' => $tenantId,
-            'provider_profile' => $profile,
+            'provider_profile' => app(BillingProviderProfileService::class)->publicSerializeArray($profile),
             'status_breakdown' => $statusBreakdown,
             'recent_attempts' => $recentAttempts,
         ];

@@ -312,7 +312,7 @@ class BillingCreditNoteFlowTest extends TestCase
         ]);
     }
 
-    public function test_can_regenerate_and_replay_credit_note_payload_with_new_provider_profile(): void
+    public function test_can_regenerate_and_replay_failed_credit_note_payload_with_new_provider_profile(): void
     {
         [$admin, $saleId] = $this->seedCashSaleWithVoucher();
 
@@ -356,8 +356,10 @@ class BillingCreditNoteFlowTest extends TestCase
 
         $this->actingAs($admin)
             ->withHeader('X-Tenant-Id', '10')
-            ->postJson('/billing/outbox/dispatch')
-            ->assertOk()
+            ->postJson('/billing/outbox/dispatch', [
+                'simulate_result' => 'transient_fail',
+            ])
+            ->assertStatus(503)
             ->assertJsonPath('data.document_id', $creditNoteId)
             ->assertJsonPath('data.provider_environment', 'live');
 
@@ -388,6 +390,52 @@ class BillingCreditNoteFlowTest extends TestCase
 
         $this->assertSame('live', $replayPayload['provider_environment']);
         $this->assertSame($regenerated['id'], $replayPayload['billing_payload_id']);
+    }
+
+    public function test_rejects_replay_for_accepted_credit_note(): void
+    {
+        [$admin, $saleId] = $this->seedCashSaleWithVoucher();
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/cash/sessions/open', [
+                'opening_amount' => 100,
+            ])
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/credit-notes', [
+                'sale_id' => $saleId,
+                'reason' => 'Credito aceptado y luego reintento invalido',
+            ])
+            ->assertOk();
+
+        $creditNoteId = (int) DB::table('sale_credit_notes')->where('sale_id', $saleId)->value('id');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/outbox/dispatch')
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson("/billing/credit-notes/{$creditNoteId}/replay")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Accepted billing documents cannot be replayed.');
+
+        $this->assertDatabaseHas('sale_credit_notes', [
+            'id' => $creditNoteId,
+            'status' => 'accepted',
+        ]);
+
+        $this->assertSame(
+            1,
+            DB::table('outbox_events')
+                ->where('aggregate_type', 'sale_credit_note')
+                ->where('aggregate_id', $creditNoteId)
+                ->count(),
+        );
     }
 
     private function seedCashSaleWithVoucher(): array

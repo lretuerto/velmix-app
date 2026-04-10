@@ -10,7 +10,12 @@ class BillingProviderProfileService
 {
     public function current(int $tenantId): array
     {
-        return $this->serialize($this->ensureModel($tenantId));
+        return $this->serializeInternal($this->ensureModel($tenantId));
+    }
+
+    public function publicCurrent(int $tenantId): array
+    {
+        return $this->publicSerializeArray($this->current($tenantId));
     }
 
     public function update(int $tenantId, int $userId, array $attributes): array
@@ -60,7 +65,7 @@ class BillingProviderProfileService
             ],
         );
 
-        return $this->serialize($profile->fresh());
+        return $this->publicSerializeModel($profile->fresh());
     }
 
     public function ensureModel(int $tenantId): BillingProviderProfile
@@ -83,7 +88,27 @@ class BillingProviderProfileService
         );
     }
 
-    private function serialize(BillingProviderProfile $profile): array
+    public function publicSerializeArray(array $profile): array
+    {
+        $credentials = $profile['credentials'] ?? null;
+
+        return array_merge($profile, [
+            'credentials' => null,
+            'credentials_configured' => is_array($credentials)
+                ? $credentials !== []
+                : $credentials !== null,
+            'credential_keys' => is_array($credentials)
+                ? array_values(array_map('strval', array_keys($credentials)))
+                : [],
+        ]);
+    }
+
+    private function publicSerializeModel(BillingProviderProfile $profile): array
+    {
+        return $this->publicSerializeArray($this->serializeInternal($profile));
+    }
+
+    private function serializeInternal(BillingProviderProfile $profile): array
     {
         return [
             'id' => $profile->id,

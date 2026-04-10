@@ -769,7 +769,7 @@ paths:
   /billing/vouchers/{voucher}/replay:
     post:
       tags: [Billing]
-      summary: Reencola un voucher con el ultimo snapshot disponible
+      summary: Reencola un voucher no aceptado con el ultimo snapshot disponible
       parameters:
         - $ref: '#/components/parameters/VoucherId'
       responses:
@@ -838,7 +838,7 @@ paths:
   /billing/credit-notes/{creditNote}/replay:
     post:
       tags: [Billing]
-      summary: Reencola una nota de credito con el ultimo snapshot disponible
+      summary: Reencola una nota de credito no aceptada con el ultimo snapshot disponible
       parameters:
         - $ref: '#/components/parameters/CreditNoteId'
       responses:
@@ -876,7 +876,7 @@ paths:
   /billing/provider-profile:
     get:
       tags: [Billing]
-      summary: Lee el provider profile de billing del tenant
+      summary: Lee el provider profile de billing del tenant con credenciales redactadas
       responses:
         '200':
           description: Perfil de provider
