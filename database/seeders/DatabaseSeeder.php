@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace Database\Seeders;
 
@@ -8,10 +8,10 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        \->call([
-            RoleSeeder::class,
-            PermissionSeeder::class,
-            RolePermissionSeeder::class,
+        $this->call([
+            TenantSeeder::class,
+            RbacCatalogSeeder::class,
+            InventoryCatalogSeeder::class,
         ]);
     }
 }
