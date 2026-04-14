@@ -38,6 +38,7 @@ class RbacCatalogSeederTest extends TestCase
         $this->assertDatabaseHas('permissions', ['code' => 'billing.outbox.dispatch']);
         $this->assertDatabaseHas('permissions', ['code' => 'billing.outbox.read']);
         $this->assertDatabaseHas('permissions', ['code' => 'billing.provider.manage']);
+        $this->assertDatabaseHas('permissions', ['code' => 'security.context.read']);
         $this->assertDatabaseHas('permissions', ['code' => 'security.docs.read']);
         $this->assertDatabaseHas('permissions', ['code' => 'security.api-token.manage']);
         $this->assertDatabaseHas('permissions', ['code' => 'cash.session.open']);
@@ -92,10 +93,28 @@ class RbacCatalogSeederTest extends TestCase
         ]);
 
         $docsPermId = DB::table('permissions')->where('code', 'security.docs.read')->value('id');
+        $contextPermId = DB::table('permissions')->where('code', 'security.context.read')->value('id');
+        $cashierId = DB::table('roles')->where('code', 'CAJERO')->value('id');
+        $warehouseId = DB::table('roles')->where('code', 'ALMACENERO')->value('id');
 
         $this->assertDatabaseHas('role_permission', [
             'role_id' => $adminId,
             'permission_id' => $docsPermId,
+        ]);
+
+        $this->assertDatabaseHas('role_permission', [
+            'role_id' => $adminId,
+            'permission_id' => $contextPermId,
+        ]);
+
+        $this->assertDatabaseHas('role_permission', [
+            'role_id' => $cashierId,
+            'permission_id' => $contextPermId,
+        ]);
+
+        $this->assertDatabaseHas('role_permission', [
+            'role_id' => $warehouseId,
+            'permission_id' => $contextPermId,
         ]);
     }
 }

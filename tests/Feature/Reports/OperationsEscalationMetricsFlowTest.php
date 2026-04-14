@@ -80,7 +80,7 @@ class OperationsEscalationMetricsFlowTest extends TestCase
             'updated_at' => '2026-03-12 10:00:00',
         ]);
 
-        $staleAcknowledgedAt = now()->subHours(36)->toDateTimeString();
+        $staleAcknowledgedAt = '2026-03-11 11:00:00';
         $billingAcknowledgedStateId = DB::table('billing_escalation_states')->insertGetId([
             'tenant_id' => 10,
             'escalation_code' => 'billing.pending_backlog',

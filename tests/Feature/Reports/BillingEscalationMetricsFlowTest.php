@@ -58,8 +58,6 @@ class BillingEscalationMetricsFlowTest extends TestCase
 
     private function seedEscalationWorkflowMetrics(User $admin): void
     {
-        $now = now();
-
         $resolvedStateId = DB::table('billing_escalation_states')->insertGetId([
             'tenant_id' => 10,
             'escalation_code' => 'billing.failed_backlog',
@@ -75,7 +73,7 @@ class BillingEscalationMetricsFlowTest extends TestCase
             'updated_at' => '2026-03-12 10:00:00',
         ]);
 
-        $staleAcknowledgedAt = $now->copy()->subHours(36)->toDateTimeString();
+        $staleAcknowledgedAt = '2026-03-11 11:00:00';
         $acknowledgedStateId = DB::table('billing_escalation_states')->insertGetId([
             'tenant_id' => 10,
             'escalation_code' => 'billing.pending_backlog',

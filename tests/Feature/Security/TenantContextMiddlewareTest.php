@@ -13,8 +13,7 @@ class TenantContextMiddlewareTest extends TestCase
 
     public function test_rejects_request_without_tenant_header(): void
     {
-        $this->seed(\Database\Seeders\TenantSeeder::class);
-        $user = $this->seedTenantUser(10);
+        $user = $this->seedTenantUser(10, withRole: true);
 
         $this->actingAs($user)
             ->getJson('/tenant/ping')
@@ -24,7 +23,10 @@ class TenantContextMiddlewareTest extends TestCase
 
     public function test_rejects_unauthenticated_request_even_with_tenant_header(): void
     {
-        $this->seed(\Database\Seeders\TenantSeeder::class);
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
 
         $this->withHeaders(['X-Tenant-Id' => '10'])
             ->getJson('/tenant/ping')
@@ -33,8 +35,7 @@ class TenantContextMiddlewareTest extends TestCase
 
     public function test_allows_authenticated_request_with_tenant_header(): void
     {
-        $this->seed(\Database\Seeders\TenantSeeder::class);
-        $user = $this->seedTenantUser(10);
+        $user = $this->seedTenantUser(10, withRole: true);
 
         $this->actingAs($user)
             ->withHeaders(['X-Tenant-Id' => '10'])
@@ -47,8 +48,13 @@ class TenantContextMiddlewareTest extends TestCase
             ]);
     }
 
-    private function seedTenantUser(int $tenantId): User
+    private function seedTenantUser(int $tenantId, bool $withRole = false): User
     {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
         $user = User::factory()->create();
 
         DB::table('tenant_user')->insert([
@@ -57,6 +63,18 @@ class TenantContextMiddlewareTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        if ($withRole) {
+            $roleId = DB::table('roles')->where('code', 'CAJERO')->value('id');
+
+            DB::table('tenant_user_role')->insert([
+                'tenant_id' => $tenantId,
+                'user_id' => $user->id,
+                'role_id' => $roleId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
 
         return $user;
     }

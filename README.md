@@ -58,6 +58,7 @@ php artisan test
 - La gestión de tokens requiere el permiso `security.api-token.manage` y hoy queda reservada a perfiles administrativos del tenant
 - Validación de contexto actual:
   - `GET /auth/me`
+- `GET /auth/me` y `GET /tenant/ping` requieren `security.context.read`; un bearer token con `abilities` limitadas debe incluirlo explícitamente
 - Si una request trae sesión y bearer token al mismo tiempo, el bearer token tiene prioridad
 
 ## Documentación disponible

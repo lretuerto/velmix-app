@@ -4,6 +4,7 @@ namespace Tests\Feature\Reports;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -84,23 +85,31 @@ class BillingEscalationHistoryFlowTest extends TestCase
 
     private function recordEscalationWorkflow(User $admin): void
     {
-        $this->actingAs($admin)
-            ->withHeader('X-Tenant-Id', '10')
-            ->postJson('/reports/billing-escalations/billing.failed_backlog/acknowledge', [
-                'note' => 'Equipo de soporte revisando retry.',
-                'date' => '2026-03-12',
-                'days' => 1,
-            ])
-            ->assertOk();
+        Carbon::setTestNow('2026-03-12 08:30:00');
 
-        $this->actingAs($admin)
-            ->withHeader('X-Tenant-Id', '10')
-            ->postJson('/reports/billing-escalations/billing.failed_backlog/resolve', [
-                'note' => 'Retry manual ejecutado y monitoreo en curso.',
-                'date' => '2026-03-12',
-                'days' => 1,
-            ])
-            ->assertOk();
+        try {
+            $this->actingAs($admin)
+                ->withHeader('X-Tenant-Id', '10')
+                ->postJson('/reports/billing-escalations/billing.failed_backlog/acknowledge', [
+                    'note' => 'Equipo de soporte revisando retry.',
+                    'date' => '2026-03-12',
+                    'days' => 1,
+                ])
+                ->assertOk();
+
+            Carbon::setTestNow('2026-03-12 10:00:00');
+
+            $this->actingAs($admin)
+                ->withHeader('X-Tenant-Id', '10')
+                ->postJson('/reports/billing-escalations/billing.failed_backlog/resolve', [
+                    'note' => 'Retry manual ejecutado y monitoreo en curso.',
+                    'date' => '2026-03-12',
+                    'days' => 1,
+                ])
+                ->assertOk();
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     private function seedUserWithRole(int $tenantId, string $roleCode): User

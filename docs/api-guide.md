@@ -10,6 +10,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - El backend acepta sesion Laravel o `Authorization: Bearer <token>`
 - Si una request trae sesion y bearer token al mismo tiempo, se evalua el bearer token
 - Si el token define `abilities`, solo puede usar rutas protegidas por permisos incluidos en esa lista; soporta `*` y prefijos `modulo.*`
+- `GET /auth/me` y `GET /tenant/ping` requieren el permiso `security.context.read`; los bearer tokens limitados deben declararlo en `abilities` para usarlos
 - El portal interno `/docs` requiere sesion web, `X-Tenant-Id`, membresia al tenant y permiso `security.docs.read`
 - La emision, listado y revocacion de `API tokens` requiere el permiso `security.api-token.manage`
 - El portal interno `/docs` es solo para sesion web autenticada; no acepta bearer tokens

@@ -106,6 +106,13 @@ class ApiTokenAuthFlowTest extends TestCase
             'name' => 'API App',
             'last_used_at' => null,
         ]);
+
+        $this->withToken($plainTextToken)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/tenant/ping')
+            ->assertOk()
+            ->assertJsonPath('tenant', 10)
+            ->assertJsonPath('auth_mode', 'bearer');
     }
 
     public function test_revoked_token_cannot_access_protected_route(): void
@@ -199,11 +206,53 @@ class ApiTokenAuthFlowTest extends TestCase
             ->getJson('/pos/sale')
             ->assertStatus(403);
 
+        $this->withToken((string) $plainTextToken)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/auth/me')
+            ->assertStatus(403);
+
+        $this->withToken((string) $plainTextToken)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/tenant/ping')
+            ->assertStatus(403);
+
         $this->assertDatabaseHas('api_tokens', [
             'tenant_id' => 10,
             'user_id' => $user->id,
             'name' => 'Reporte Diario',
         ]);
+    }
+
+    public function test_bearer_token_can_read_auth_context_when_security_context_ability_is_granted(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $user = $this->seedTenantAdminUser(10);
+        $plainTextToken = $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/auth/tokens', [
+                'name' => 'Contexto',
+                'abilities' => ['security.context.read'],
+            ])
+            ->assertOk()
+            ->json('data.plain_text_token');
+
+        $this->withToken((string) $plainTextToken)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/auth/me')
+            ->assertOk()
+            ->assertJsonPath('data.tenant_id', 10)
+            ->assertJsonPath('data.auth_mode', 'bearer');
+
+        $this->withToken((string) $plainTextToken)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/tenant/ping')
+            ->assertOk()
+            ->assertJsonPath('tenant', 10)
+            ->assertJsonPath('auth_mode', 'bearer');
     }
 
     public function test_non_admin_tenant_member_cannot_manage_api_tokens(): void

@@ -28,15 +28,17 @@ class BillingEscalationMetricsService
             throw new HttpException(422, 'Escalation metrics history window is invalid.');
         }
 
+        $baseDate = $this->resolveBaseDate($date);
+        $referenceTime = $baseDate->endOfDay();
         $activeReport = $this->reportService->summary(
             $tenantId,
-            $date,
+            $baseDate->toDateString(),
             $days,
             count(BillingEscalationReportService::KNOWN_CODES),
         );
         $activeItems = collect($activeReport['items']);
         $statesByCode = collect($this->stateService->listByCode($tenantId));
-        $historyWindow = $this->historyWindow($historyDays);
+        $historyWindow = $this->historyWindow($historyDays, $baseDate);
         $activities = $this->fetchActivities($tenantId, $historyWindow['start_at'], $historyWindow['end_at']);
         $resolutionPairs = $this->buildResolutionPairs($activities);
         $recentResolutions = $resolutionPairs
@@ -60,7 +62,7 @@ class BillingEscalationMetricsService
             ->all();
 
         $staleAcknowledged = $activeItems
-            ->filter(function (array $item) {
+            ->filter(function (array $item) use ($referenceTime) {
                 $acknowledgedAt = $item['state']['acknowledged_at'] ?? null;
 
                 if ($item['workflow_status'] !== 'acknowledged' || $acknowledgedAt === null) {
@@ -68,7 +70,7 @@ class BillingEscalationMetricsService
                 }
 
                 return CarbonImmutable::parse($acknowledgedAt)
-                    ->lt(CarbonImmutable::now()->subHours(self::STALE_ACKNOWLEDGED_HOURS));
+                    ->lt($referenceTime->subHours(self::STALE_ACKNOWLEDGED_HOURS));
             })
             ->values();
 
@@ -76,7 +78,7 @@ class BillingEscalationMetricsService
             ->filter(fn (array $item) => $item['workflow_status'] === 'acknowledged' && ($item['state']['acknowledged_at'] ?? null) !== null)
             ->map(fn (array $item) => $this->diffMinutes(
                 (string) $item['state']['acknowledged_at'],
-                CarbonImmutable::now()->toDateTimeString(),
+                $referenceTime->toDateTimeString(),
             ))
             ->values();
 
@@ -213,9 +215,9 @@ class BillingEscalationMetricsService
             ->values();
     }
 
-    private function historyWindow(int $historyDays): array
+    private function historyWindow(int $historyDays, CarbonImmutable $baseDate): array
     {
-        $endAt = CarbonImmutable::now()->endOfDay();
+        $endAt = $baseDate->endOfDay();
         $startAt = $endAt->subDays($historyDays - 1)->startOfDay();
 
         return [
@@ -244,5 +246,12 @@ class BillingEscalationMetricsService
             'billing.mixed_environments' => 'Actividad mixta entre sandbox y live',
             default => $code,
         };
+    }
+
+    private function resolveBaseDate(?string $date): CarbonImmutable
+    {
+        return $date !== null
+            ? CarbonImmutable::createFromFormat('Y-m-d', $date)->startOfDay()
+            : CarbonImmutable::now()->startOfDay();
     }
 }

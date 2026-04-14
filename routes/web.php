@@ -152,7 +152,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
             'tenant' => app('currentTenantId'),
             'auth_mode' => (string) request()->attributes->get('auth_mode', 'session'),
         ]);
-    });
+    })->middleware('perm:security.context.read');
 
     Route::get('/auth/me', function () {
         $user = request()->user();
@@ -169,7 +169,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
                 'api_token_id' => request()->attributes->get('api_token_id'),
             ],
         ]);
-    });
+    })->middleware('perm:security.context.read');
 
     Route::get('/pos/sale', fn () => response()->json(['ok' => true, 'flow' => 'sale']))
         ->middleware('perm:pos.sale.execute');

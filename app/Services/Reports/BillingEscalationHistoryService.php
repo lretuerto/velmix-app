@@ -38,9 +38,10 @@ class BillingEscalationHistoryService
             throw new HttpException(422, 'Escalation history limit is invalid.');
         }
 
+        $baseDate = $this->resolveBaseDate($date);
         $activeReport = $this->reportService->summary(
             $tenantId,
-            $date,
+            $baseDate->toDateString(),
             $days,
             count(BillingEscalationReportService::KNOWN_CODES),
         );
@@ -48,7 +49,7 @@ class BillingEscalationHistoryService
             ->keyBy('code')
             ->all();
         $statesByCode = $this->stateService->listByCode($tenantId);
-        $activitiesByCode = $this->activitiesByCode($tenantId, $historyDays);
+        $activitiesByCode = $this->activitiesByCode($tenantId, $historyDays, $baseDate);
 
         $trackedCodes = collect(BillingEscalationReportService::KNOWN_CODES)
             ->filter(fn (string $code) => isset($activeByCode[$code]) || isset($statesByCode[$code]) || isset($activitiesByCode[$code]))
@@ -80,7 +81,7 @@ class BillingEscalationHistoryService
         return [
             'tenant_id' => $tenantId,
             'active_window' => $activeReport['window'],
-            'history_window' => $this->historyWindowData($historyDays),
+            'history_window' => $this->historyWindowData($historyDays, $baseDate),
             'summary' => [
                 'tracked_count' => count($items),
                 'active_count' => count(array_filter($items, fn (array $item) => $item['is_currently_triggered'])),
@@ -118,15 +119,16 @@ class BillingEscalationHistoryService
             throw new HttpException(422, 'Escalation activity limit is invalid.');
         }
 
+        $baseDate = $this->resolveBaseDate($date);
         $activeReport = $this->reportService->summary(
             $tenantId,
-            $date,
+            $baseDate->toDateString(),
             $days,
             count(BillingEscalationReportService::KNOWN_CODES),
         );
         $activeItem = collect($activeReport['items'])->firstWhere('code', $code);
         $state = $this->stateService->listByCode($tenantId)[$code] ?? null;
-        $timeline = $this->activitiesByCode($tenantId, $historyDays)[$code] ?? [];
+        $timeline = $this->activitiesByCode($tenantId, $historyDays, $baseDate)[$code] ?? [];
 
         if ($activeItem === null && $state === null && $timeline === []) {
             throw new HttpException(404, 'Billing escalation history not found.');
@@ -139,7 +141,7 @@ class BillingEscalationHistoryService
             'code' => $code,
             'title' => $activeItem['title'] ?? $this->titleForCode($code),
             'active_window' => $activeReport['window'],
-            'history_window' => $this->historyWindowData($historyDays),
+            'history_window' => $this->historyWindowData($historyDays, $baseDate),
             'workflow_status' => $activeItem['workflow_status'] ?? $state['status'] ?? 'open',
             'is_currently_triggered' => $activeItem !== null,
             'active_item' => $activeItem,
@@ -176,18 +178,18 @@ class BillingEscalationHistoryService
         ];
     }
 
-    private function activitiesByCode(int $tenantId, int $historyDays): array
+    private function activitiesByCode(int $tenantId, int $historyDays, CarbonImmutable $baseDate): array
     {
-        return $this->fetchActivities($tenantId, $historyDays)
+        return $this->fetchActivities($tenantId, $historyDays, $baseDate)
             ->groupBy(fn (array $activity) => (string) ($activity['metadata']['escalation_code'] ?? ''))
             ->filter(fn (Collection $group, string $code) => $code !== '')
             ->map(fn (Collection $group) => $group->values()->all())
             ->all();
     }
 
-    private function fetchActivities(int $tenantId, int $historyDays): Collection
+    private function fetchActivities(int $tenantId, int $historyDays, CarbonImmutable $baseDate): Collection
     {
-        $window = $this->historyWindow($historyDays);
+        $window = $this->historyWindow($historyDays, $baseDate);
 
         return DB::table('tenant_activity_logs')
             ->leftJoin('users', 'users.id', '=', 'tenant_activity_logs.user_id')
@@ -228,9 +230,9 @@ class BillingEscalationHistoryService
             });
     }
 
-    private function historyWindow(int $historyDays): array
+    private function historyWindow(int $historyDays, CarbonImmutable $baseDate): array
     {
-        $endAt = CarbonImmutable::now()->endOfDay();
+        $endAt = $baseDate->endOfDay();
         $startAt = $endAt->subDays($historyDays - 1)->startOfDay();
 
         return [
@@ -242,9 +244,9 @@ class BillingEscalationHistoryService
         ];
     }
 
-    private function historyWindowData(int $historyDays): array
+    private function historyWindowData(int $historyDays, CarbonImmutable $baseDate): array
     {
-        $window = $this->historyWindow($historyDays);
+        $window = $this->historyWindow($historyDays, $baseDate);
 
         return [
             'days' => $window['days'],
@@ -265,5 +267,12 @@ class BillingEscalationHistoryService
             'billing.mixed_environments' => 'Actividad mixta entre sandbox y live',
             default => $code,
         };
+    }
+
+    private function resolveBaseDate(?string $date): CarbonImmutable
+    {
+        return $date !== null
+            ? CarbonImmutable::createFromFormat('Y-m-d', $date)->startOfDay()
+            : CarbonImmutable::now()->startOfDay();
     }
 }

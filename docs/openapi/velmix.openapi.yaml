@@ -53,6 +53,12 @@ paths:
     get:
       tags: [Tenant]
       summary: Resuelve el actor autenticado actual
+      description: Requiere el permiso `security.context.read`. Los bearer tokens con `abilities` limitadas deben incluirlo para usar este endpoint.
+      security:
+        - laravelSession: []
+          tenantHeader: []
+        - bearerAuth: []
+          tenantHeader: []
       responses:
         '200':
           description: Usuario y tenant actual
@@ -116,6 +122,12 @@ paths:
     get:
       tags: [Tenant]
       summary: Verifica contexto tenant
+      description: Requiere el permiso `security.context.read`. Los bearer tokens con `abilities` limitadas deben incluirlo para usar este endpoint.
+      security:
+        - laravelSession: []
+          tenantHeader: []
+        - bearerAuth: []
+          tenantHeader: []
       responses:
         '200':
           description: Contexto tenant resuelto
