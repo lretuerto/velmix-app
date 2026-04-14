@@ -213,6 +213,37 @@ class PurchasePayableFlowTest extends TestCase
             ->assertStatus(404);
     }
 
+    public function test_rejects_duplicate_payment_reference_for_same_payable(): void
+    {
+        [$admin, $payableId] = $this->seedPayableScenario(10, 'ADMIN');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson("/purchases/payables/{$payableId}/payments", [
+                'amount' => 10,
+                'payment_method' => 'bank_transfer',
+                'reference' => 'TRX-DUP-001',
+            ])
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson("/purchases/payables/{$payableId}/payments", [
+                'amount' => 5,
+                'payment_method' => 'bank_transfer',
+                'reference' => 'TRX-DUP-001',
+            ])
+            ->assertStatus(409);
+
+        $this->assertSame(
+            1,
+            DB::table('purchase_payments')
+                ->where('purchase_payable_id', $payableId)
+                ->where('reference', 'TRX-DUP-001')
+                ->count()
+        );
+    }
+
     public function test_rejects_credit_application_without_available_credit_or_for_other_tenant(): void
     {
         [$admin, $payableId] = $this->seedPayableScenario(10, 'ADMIN');

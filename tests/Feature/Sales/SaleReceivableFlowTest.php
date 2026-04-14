@@ -130,6 +130,45 @@ class SaleReceivableFlowTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_rejects_duplicate_payment_reference_for_same_receivable(): void
+    {
+        $cashier = $this->seedBaseCatalogAndCashier();
+        [$receivableId] = $this->seedReceivableScenario(10, $cashier->id);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/cash/sessions/open', [
+                'opening_amount' => 50,
+            ])
+            ->assertOk();
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson("/sales/receivables/{$receivableId}/payments", [
+                'amount' => 8,
+                'payment_method' => 'cash',
+                'reference' => 'COBRO-DUP-001',
+            ])
+            ->assertOk();
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson("/sales/receivables/{$receivableId}/payments", [
+                'amount' => 2,
+                'payment_method' => 'cash',
+                'reference' => 'COBRO-DUP-001',
+            ])
+            ->assertStatus(409);
+
+        $this->assertSame(
+            1,
+            DB::table('sale_receivable_payments')
+                ->where('sale_receivable_id', $receivableId)
+                ->where('reference', 'COBRO-DUP-001')
+                ->count()
+        );
+    }
+
     public function test_can_register_receivable_follow_up_and_read_it_from_detail_and_customer_statement(): void
     {
         $cashier = $this->seedBaseCatalogAndCashier();

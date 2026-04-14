@@ -4,6 +4,7 @@ namespace App\Services\Purchasing;
 
 use App\Services\Audit\TenantActivityLogService;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -183,80 +184,103 @@ class PurchasePayableService
             throw new HttpException(422, 'Payment method is invalid.');
         }
 
-        return DB::transaction(function () use ($tenantId, $userId, $payableId, $amount, $paymentMethod, $reference) {
-            $payable = DB::table('purchase_payables')
-                ->where('tenant_id', $tenantId)
-                ->where('id', $payableId)
-                ->lockForUpdate()
-                ->first(['id', 'total_amount', 'paid_amount', 'outstanding_amount', 'status']);
+        $reference = trim($reference);
 
-            if ($payable === null) {
-                throw new HttpException(404, 'Purchase payable not found.');
-            }
+        if ($reference === '') {
+            throw new HttpException(422, 'Payment reference is required.');
+        }
 
-            if ($payable->status === 'paid') {
-                throw new HttpException(422, 'Purchase payable is already fully paid.');
-            }
+        try {
+            return DB::transaction(function () use ($tenantId, $userId, $payableId, $amount, $paymentMethod, $reference) {
+                $payable = DB::table('purchase_payables')
+                    ->where('tenant_id', $tenantId)
+                    ->where('id', $payableId)
+                    ->lockForUpdate()
+                    ->first(['id', 'total_amount', 'paid_amount', 'outstanding_amount', 'status']);
 
-            $outstandingAmount = round((float) $payable->outstanding_amount, 2);
+                if ($payable === null) {
+                    throw new HttpException(404, 'Purchase payable not found.');
+                }
 
-            if ($amount > $outstandingAmount) {
-                throw new HttpException(422, 'Payment amount exceeds outstanding amount.');
-            }
+                if ($payable->status === 'paid') {
+                    throw new HttpException(422, 'Purchase payable is already fully paid.');
+                }
 
-            $paymentId = DB::table('purchase_payments')->insertGetId([
-                'purchase_payable_id' => $payable->id,
-                'user_id' => $userId,
-                'amount' => $amount,
-                'payment_method' => $paymentMethod,
-                'reference' => $reference,
-                'paid_at' => now(),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+                $outstandingAmount = round((float) $payable->outstanding_amount, 2);
 
-            $newPaidAmount = round((float) $payable->paid_amount + $amount, 2);
-            $newOutstandingAmount = round((float) $payable->total_amount - $newPaidAmount, 2);
-            $newStatus = $newOutstandingAmount <= 0 ? 'paid' : ($newPaidAmount > 0 ? 'partial_paid' : 'pending');
+                if ($amount > $outstandingAmount) {
+                    throw new HttpException(422, 'Payment amount exceeds outstanding amount.');
+                }
 
-            DB::table('purchase_payables')
-                ->where('id', $payable->id)
-                ->update([
-                    'paid_amount' => $newPaidAmount,
-                    'outstanding_amount' => $newOutstandingAmount,
-                    'status' => $newStatus,
+                $duplicateReference = DB::table('purchase_payments')
+                    ->where('purchase_payable_id', $payable->id)
+                    ->where('reference', $reference)
+                    ->exists();
+
+                if ($duplicateReference) {
+                    throw new HttpException(409, 'Payment reference already exists for this payable.');
+                }
+
+                $paymentId = DB::table('purchase_payments')->insertGetId([
+                    'purchase_payable_id' => $payable->id,
+                    'user_id' => $userId,
+                    'amount' => $amount,
+                    'payment_method' => $paymentMethod,
+                    'reference' => $reference,
+                    'paid_at' => now(),
+                    'created_at' => now(),
                     'updated_at' => now(),
                 ]);
 
-            app(TenantActivityLogService::class)->record(
-                $tenantId,
-                $userId,
-                'purchasing',
-                'purchasing.payable.payment_registered',
-                'purchase_payable',
-                $payable->id,
-                'Pago registrado para cuenta por pagar '.$payable->id,
-                [
+                $newPaidAmount = round((float) $payable->paid_amount + $amount, 2);
+                $newOutstandingAmount = round((float) $payable->total_amount - $newPaidAmount, 2);
+                $newStatus = $newOutstandingAmount <= 0 ? 'paid' : ($newPaidAmount > 0 ? 'partial_paid' : 'pending');
+
+                DB::table('purchase_payables')
+                    ->where('id', $payable->id)
+                    ->update([
+                        'paid_amount' => $newPaidAmount,
+                        'outstanding_amount' => $newOutstandingAmount,
+                        'status' => $newStatus,
+                        'updated_at' => now(),
+                    ]);
+
+                app(TenantActivityLogService::class)->record(
+                    $tenantId,
+                    $userId,
+                    'purchasing',
+                    'purchasing.payable.payment_registered',
+                    'purchase_payable',
+                    $payable->id,
+                    'Pago registrado para cuenta por pagar '.$payable->id,
+                    [
+                        'purchase_payable_id' => $payable->id,
+                        'amount' => round($amount, 2),
+                        'payment_method' => $paymentMethod,
+                        'reference' => $reference,
+                        'status' => $newStatus,
+                        'outstanding_amount' => $newOutstandingAmount,
+                    ],
+                );
+
+                return [
+                    'payment_id' => $paymentId,
                     'purchase_payable_id' => $payable->id,
                     'amount' => round($amount, 2),
                     'payment_method' => $paymentMethod,
                     'reference' => $reference,
-                    'status' => $newStatus,
+                    'paid_amount' => $newPaidAmount,
                     'outstanding_amount' => $newOutstandingAmount,
-                ],
-            );
+                    'status' => $newStatus,
+                ];
+            });
+        } catch (QueryException $exception) {
+            if ($this->isDuplicatePaymentReferenceConstraint($exception)) {
+                throw new HttpException(409, 'Payment reference already exists for this payable.');
+            }
 
-            return [
-                'payment_id' => $paymentId,
-                'purchase_payable_id' => $payable->id,
-                'amount' => round($amount, 2),
-                'payment_method' => $paymentMethod,
-                'reference' => $reference,
-                'paid_amount' => $newPaidAmount,
-                'outstanding_amount' => $newOutstandingAmount,
-                'status' => $newStatus,
-            ];
-        });
+            throw $exception;
+        }
     }
 
     public function addFollowUp(
@@ -374,6 +398,25 @@ class PurchasePayableService
             'tenant_id' => $tenantId,
             'summary' => $buckets,
         ];
+    }
+
+    private function isDuplicatePaymentReferenceConstraint(QueryException $exception): bool
+    {
+        $message = strtolower($exception->getMessage());
+        $previous = strtolower($exception->getPrevious()?->getMessage() ?? '');
+
+        foreach ([
+            'purchase_payments_payable_reference_unique',
+            'purchase_payments.purchase_payable_id, purchase_payments.reference',
+            'unique constraint failed',
+            'duplicate entry',
+        ] as $needle) {
+            if (str_contains($message, $needle) || ($previous !== '' && str_contains($previous, $needle))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function loadPayable(int $tenantId, int $payableId, bool $lockForUpdate = false): object

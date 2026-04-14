@@ -201,6 +201,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 }
 ```
 
+- `reference` debe ser unica dentro de la misma cuenta por cobrar; si se repite, el backend responde `409`
+
 ### Recepcion de compra creando lote inline
 
 ```json
@@ -293,6 +295,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `POST /purchases/payables/{payable}/payments`
 - `POST /cash/movements`
 - esos endpoints aceptan `Idempotency-Key`; si se repite con el mismo payload se devuelve la misma respuesta y se marca `X-Idempotency-Status: replayed`
+- las referencias de cobranza y pago a proveedor tambien quedan protegidas por unicidad por entidad; si se reutiliza la misma referencia para la misma cuenta, el backend responde `409`
   - replay backlog y fallos recientes
 
 ## Dashboard ejecutivo de billing

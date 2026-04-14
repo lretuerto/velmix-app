@@ -4,6 +4,7 @@ namespace App\Services\Sales;
 
 use App\Services\Audit\TenantActivityLogService;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -127,111 +128,134 @@ class SaleReceivableService
             throw new HttpException(422, 'Payment method is invalid.');
         }
 
-        return DB::transaction(function () use ($tenantId, $userId, $receivableId, $amount, $paymentMethod, $reference) {
-            $receivable = DB::table('sale_receivables')
-                ->where('tenant_id', $tenantId)
-                ->where('id', $receivableId)
-                ->lockForUpdate()
-                ->first(['id', 'sale_id', 'total_amount', 'paid_amount', 'outstanding_amount', 'status']);
+        $reference = trim($reference);
 
-            if ($receivable === null) {
-                throw new HttpException(404, 'Sale receivable not found.');
-            }
+        if ($reference === '') {
+            throw new HttpException(422, 'Payment reference is required.');
+        }
 
-            if ($receivable->status === 'paid') {
-                throw new HttpException(422, 'Sale receivable is already fully paid.');
-            }
-
-            if ($amount > (float) $receivable->outstanding_amount) {
-                throw new HttpException(422, 'Payment amount exceeds outstanding amount.');
-            }
-
-            $cashSessionId = null;
-
-            if ($paymentMethod === 'cash') {
-                $cashSessionId = DB::table('cash_sessions')
+        try {
+            return DB::transaction(function () use ($tenantId, $userId, $receivableId, $amount, $paymentMethod, $reference) {
+                $receivable = DB::table('sale_receivables')
                     ->where('tenant_id', $tenantId)
-                    ->where('status', 'open')
+                    ->where('id', $receivableId)
                     ->lockForUpdate()
-                    ->value('id');
+                    ->first(['id', 'sale_id', 'total_amount', 'paid_amount', 'outstanding_amount', 'status']);
 
-                if ($cashSessionId === null) {
-                    throw new HttpException(422, 'Cash receivable payment requires an open cash session.');
+                if ($receivable === null) {
+                    throw new HttpException(404, 'Sale receivable not found.');
                 }
-            }
 
-            $paymentId = DB::table('sale_receivable_payments')->insertGetId([
-                'sale_receivable_id' => $receivable->id,
-                'user_id' => $userId,
-                'amount' => $amount,
-                'payment_method' => $paymentMethod,
-                'reference' => $reference,
-                'paid_at' => now(),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+                if ($receivable->status === 'paid') {
+                    throw new HttpException(422, 'Sale receivable is already fully paid.');
+                }
 
-            $newPaidAmount = round((float) $receivable->paid_amount + $amount, 2);
-            $newOutstandingAmount = round((float) $receivable->total_amount - $newPaidAmount, 2);
-            $newStatus = $newOutstandingAmount <= 0 ? 'paid' : ($newPaidAmount > 0 ? 'partial_paid' : 'pending');
+                if ($amount > (float) $receivable->outstanding_amount) {
+                    throw new HttpException(422, 'Payment amount exceeds outstanding amount.');
+                }
 
-            DB::table('sale_receivables')
-                ->where('id', $receivable->id)
-                ->update([
-                    'paid_amount' => $newPaidAmount,
-                    'outstanding_amount' => $newOutstandingAmount,
-                    'status' => $newStatus,
-                    'updated_at' => now(),
-                ]);
+                $duplicateReference = DB::table('sale_receivable_payments')
+                    ->where('sale_receivable_id', $receivable->id)
+                    ->where('reference', $reference)
+                    ->exists();
 
-            $cashMovementId = null;
+                if ($duplicateReference) {
+                    throw new HttpException(409, 'Payment reference already exists for this receivable.');
+                }
 
-            if ($cashSessionId !== null) {
-                $cashMovementId = DB::table('cash_movements')->insertGetId([
-                    'tenant_id' => $tenantId,
-                    'cash_session_id' => $cashSessionId,
-                    'created_by_user_id' => $userId,
-                    'type' => 'receivable_in',
+                $cashSessionId = null;
+
+                if ($paymentMethod === 'cash') {
+                    $cashSessionId = DB::table('cash_sessions')
+                        ->where('tenant_id', $tenantId)
+                        ->where('status', 'open')
+                        ->lockForUpdate()
+                        ->value('id');
+
+                    if ($cashSessionId === null) {
+                        throw new HttpException(422, 'Cash receivable payment requires an open cash session.');
+                    }
+                }
+
+                $paymentId = DB::table('sale_receivable_payments')->insertGetId([
+                    'sale_receivable_id' => $receivable->id,
+                    'user_id' => $userId,
                     'amount' => $amount,
+                    'payment_method' => $paymentMethod,
                     'reference' => $reference,
-                    'notes' => 'Receivable payment for sale '.$receivable->sale_id,
+                    'paid_at' => now(),
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
-            }
 
-            app(TenantActivityLogService::class)->record(
-                $tenantId,
-                $userId,
-                'sales',
-                'sales.receivable.payment_registered',
-                'sale_receivable',
-                $receivable->id,
-                'Cobranza registrada para cuenta por cobrar '.$receivable->id,
-                [
+                $newPaidAmount = round((float) $receivable->paid_amount + $amount, 2);
+                $newOutstandingAmount = round((float) $receivable->total_amount - $newPaidAmount, 2);
+                $newStatus = $newOutstandingAmount <= 0 ? 'paid' : ($newPaidAmount > 0 ? 'partial_paid' : 'pending');
+
+                DB::table('sale_receivables')
+                    ->where('id', $receivable->id)
+                    ->update([
+                        'paid_amount' => $newPaidAmount,
+                        'outstanding_amount' => $newOutstandingAmount,
+                        'status' => $newStatus,
+                        'updated_at' => now(),
+                    ]);
+
+                $cashMovementId = null;
+
+                if ($cashSessionId !== null) {
+                    $cashMovementId = DB::table('cash_movements')->insertGetId([
+                        'tenant_id' => $tenantId,
+                        'cash_session_id' => $cashSessionId,
+                        'created_by_user_id' => $userId,
+                        'type' => 'receivable_in',
+                        'amount' => $amount,
+                        'reference' => $reference,
+                        'notes' => 'Receivable payment for sale '.$receivable->sale_id,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+
+                app(TenantActivityLogService::class)->record(
+                    $tenantId,
+                    $userId,
+                    'sales',
+                    'sales.receivable.payment_registered',
+                    'sale_receivable',
+                    $receivable->id,
+                    'Cobranza registrada para cuenta por cobrar '.$receivable->id,
+                    [
+                        'sale_receivable_id' => $receivable->id,
+                        'sale_id' => $receivable->sale_id,
+                        'amount' => round($amount, 2),
+                        'payment_method' => $paymentMethod,
+                        'reference' => $reference,
+                        'cash_movement_id' => $cashMovementId,
+                        'status' => $newStatus,
+                        'outstanding_amount' => $newOutstandingAmount,
+                    ],
+                );
+
+                return [
+                    'payment_id' => $paymentId,
                     'sale_receivable_id' => $receivable->id,
-                    'sale_id' => $receivable->sale_id,
                     'amount' => round($amount, 2),
                     'payment_method' => $paymentMethod,
                     'reference' => $reference,
                     'cash_movement_id' => $cashMovementId,
-                    'status' => $newStatus,
+                    'paid_amount' => $newPaidAmount,
                     'outstanding_amount' => $newOutstandingAmount,
-                ],
-            );
+                    'status' => $newStatus,
+                ];
+            });
+        } catch (QueryException $exception) {
+            if ($this->isDuplicatePaymentReferenceConstraint($exception)) {
+                throw new HttpException(409, 'Payment reference already exists for this receivable.');
+            }
 
-            return [
-                'payment_id' => $paymentId,
-                'sale_receivable_id' => $receivable->id,
-                'amount' => round($amount, 2),
-                'payment_method' => $paymentMethod,
-                'reference' => $reference,
-                'cash_movement_id' => $cashMovementId,
-                'paid_amount' => $newPaidAmount,
-                'outstanding_amount' => $newOutstandingAmount,
-                'status' => $newStatus,
-            ];
-        });
+            throw $exception;
+        }
     }
 
     public function addFollowUp(
@@ -367,6 +391,25 @@ class SaleReceivableService
         }
 
         return $receivable;
+    }
+
+    private function isDuplicatePaymentReferenceConstraint(QueryException $exception): bool
+    {
+        $message = strtolower($exception->getMessage());
+        $previous = strtolower($exception->getPrevious()?->getMessage() ?? '');
+
+        foreach ([
+            'sale_receivable_payments_receivable_reference_unique',
+            'sale_receivable_payments.sale_receivable_id, sale_receivable_payments.reference',
+            'unique constraint failed',
+            'duplicate entry',
+        ] as $needle) {
+            if (str_contains($message, $needle) || ($previous !== '' && str_contains($previous, $needle))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function followUpsForReceivable(int $tenantId, int $receivableId): array
