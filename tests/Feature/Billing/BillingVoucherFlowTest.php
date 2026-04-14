@@ -256,6 +256,65 @@ class BillingVoucherFlowTest extends TestCase
             ->assertStatus(404);
     }
 
+    public function test_allocates_next_voucher_number_from_existing_documents_without_reusing_numbers(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $admin = $this->createBillingUserForTenant(10, 'ADMIN');
+
+        $previousSaleId = DB::table('sales')->insertGetId([
+            'tenant_id' => 10,
+            'user_id' => $admin->id,
+            'reference' => 'SALE-VOUCHER-PREVIOUS',
+            'status' => 'completed',
+            'total_amount' => 40.00,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('electronic_vouchers')->insert([
+            'tenant_id' => 10,
+            'sale_id' => $previousSaleId,
+            'type' => 'boleta',
+            'series' => 'B001',
+            'number' => 41,
+            'status' => 'accepted',
+            'sunat_ticket' => 'SUNAT-PREV-41',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $saleId = DB::table('sales')->insertGetId([
+            'tenant_id' => 10,
+            'user_id' => $admin->id,
+            'reference' => 'SALE-VOUCHER-NEXT',
+            'status' => 'completed',
+            'total_amount' => 55.00,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/vouchers', [
+                'sale_id' => $saleId,
+                'type' => 'boleta',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.series', 'B001')
+            ->assertJsonPath('data.number', 42);
+
+        $this->assertDatabaseHas('billing_document_sequences', [
+            'tenant_id' => 10,
+            'document_type' => 'electronic_voucher',
+            'series' => 'B001',
+            'current_number' => 42,
+        ]);
+    }
+
     public function test_rejects_credit_note_creation_when_sale_has_no_voucher(): void
     {
         $saleId = $this->createSaleForTenant(10);

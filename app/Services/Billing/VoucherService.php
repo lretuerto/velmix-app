@@ -37,10 +37,7 @@ class VoucherService
             }
 
             $series = $type === 'boleta' ? 'B001' : 'F001';
-            $nextNumber = ((int) DB::table('electronic_vouchers')
-                ->where('tenant_id', $tenantId)
-                ->where('series', $series)
-                ->max('number')) + 1;
+            $nextNumber = app(BillingDocumentNumberService::class)->nextVoucherNumber($tenantId, $series);
 
             $voucherId = DB::table('electronic_vouchers')->insertGetId([
                 'tenant_id' => $tenantId,

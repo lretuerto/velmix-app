@@ -115,10 +115,7 @@ class CreditNoteService
             $cashSessionId = $this->resolveCashSessionId($tenantId, $userId, $refundAmount, $refundPaymentMethod);
 
             $series = 'NC01';
-            $nextNumber = ((int) DB::table('sale_credit_notes')
-                ->where('tenant_id', $tenantId)
-                ->where('series', $series)
-                ->max('number')) + 1;
+            $nextNumber = app(BillingDocumentNumberService::class)->nextCreditNoteNumber($tenantId, $series);
 
             $creditNoteId = DB::table('sale_credit_notes')->insertGetId([
                 'tenant_id' => $tenantId,

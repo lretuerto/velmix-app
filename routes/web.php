@@ -496,7 +496,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:pos.sale.approve');
+    })->middleware(['perm:pos.sale.approve', 'idempotent']);
 
     Route::post('/cash/sessions/open', function (CashSessionService $service) {
         $payload = request()->validate([
@@ -510,7 +510,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:cash.session.open');
+    })->middleware(['perm:cash.session.open', 'idempotent']);
 
     Route::get('/cash/sessions/current', function (CashSessionService $service) {
         $result = $service->current((int) request()->attributes->get('tenant_id'));
@@ -561,7 +561,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:cash.session.close');
+    })->middleware(['perm:cash.session.close', 'idempotent']);
 
     Route::post('/cash/movements', function (CashMovementService $service) {
         $payload = request()->validate([
@@ -1637,7 +1637,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:purchase.return.create');
+    })->middleware(['perm:purchase.return.create', 'idempotent']);
 
     Route::get('/purchases/orders', function (PurchaseOrderService $service) {
         $result = $service->list((int) request()->attributes->get('tenant_id'));
@@ -1675,7 +1675,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:purchase.order.create');
+    })->middleware(['perm:purchase.order.create', 'idempotent']);
 
     Route::post('/purchases/orders/from-replenishment', function (PurchaseOrderService $service) {
         $payload = request()->validate([
@@ -1700,7 +1700,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:purchase.order.create');
+    })->middleware(['perm:purchase.order.create', 'idempotent']);
 
     Route::get('/purchases/replenishment-suggestions', function (PurchaseReplenishmentService $service) {
         $payload = request()->validate([
@@ -1774,7 +1774,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:purchase.payable.pay');
+    })->middleware(['perm:purchase.payable.pay', 'idempotent']);
 
     Route::get('/purchases/payables/{payable}/follow-ups', function (int $payable, PurchasePayableService $service) {
         $result = $service->followUps(
@@ -1835,7 +1835,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:purchase.receipt.create');
+    })->middleware(['perm:purchase.receipt.create', 'idempotent']);
 
     Route::get('/stock/move', fn () => response()->json(['ok' => true, 'flow' => 'stock']))
         ->middleware('perm:stock.move.create');

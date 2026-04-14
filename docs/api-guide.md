@@ -300,6 +300,14 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `POST /billing/credit-notes`
 - `POST /sales/receivables/{receivable}/payments`
 - `POST /purchases/payables/{payable}/payments`
+- `POST /purchases/payables/{payable}/apply-credits`
+- `POST /purchases/orders`
+- `POST /purchases/orders/from-replenishment`
+- `POST /purchases/receipts`
+- `POST /purchases/receipts/{receipt}/returns`
+- `POST /pos/sales/{sale}/cancel`
+- `POST /cash/sessions/open`
+- `POST /cash/sessions/current/close`
 - `POST /cash/movements`
 - esos endpoints aceptan `Idempotency-Key`; si se repite con el mismo payload se devuelve la misma respuesta y se marca `X-Idempotency-Status: replayed`
 - las referencias de cobranza y pago a proveedor tambien quedan protegidas por unicidad por entidad; si se reutiliza la misma referencia para la misma cuenta, el backend responde `409`

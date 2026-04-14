@@ -351,7 +351,7 @@ class OperationsEscalationReportFlowTest extends TestCase
             'sale_id' => $saleId,
             'type' => 'boleta',
             'series' => 'B001',
-            'number' => random_int(1, 9999),
+            'number' => $this->nextVoucherNumber($tenantId, 'B001'),
             'status' => $voucherStatus,
             'sunat_ticket' => $attemptStatus === 'accepted' ? 'SUNAT-'.$reference : null,
             'rejection_reason' => $attemptStatus === 'failed' ? 'Provider timeout.' : null,
