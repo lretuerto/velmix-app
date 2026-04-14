@@ -2,9 +2,6 @@ name: Tests
 
 on:
   push:
-    branches:
-      - master
-      - '*.x'
   pull_request:
   schedule:
     - cron: '0 0 * * *'
@@ -43,5 +40,17 @@ jobs:
       - name: Generate app key
         run: php artisan key:generate
 
-      - name: Execute tests
-        run: php artisan test
+      - name: Validate Composer manifest
+        run: composer validate --no-check-publish
+
+      - name: Run Velmix QA
+        run: composer run velmix:qa
+
+      - name: Run readiness checks
+        run: composer run velmix:readiness
+
+      - name: Run outbox worker smoke
+        run: composer run velmix:outbox
+
+      - name: Run reconciliation smoke
+        run: composer run velmix:reconcile

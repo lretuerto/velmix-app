@@ -109,17 +109,24 @@ class OpenApiDocsTest extends TestCase
             ->get('/docs/openapi.yaml');
 
         $response->assertOk();
+        $this->assertStringContainsString('/health/live', $response->getContent());
+        $this->assertStringContainsString('/health/ready', $response->getContent());
         $this->assertStringContainsString('/pos/sales', $response->getContent());
+        $this->assertStringContainsString('/admin/team/roles', $response->getContent());
+        $this->assertStringContainsString('/admin/team/users', $response->getContent());
         $this->assertStringContainsString('/billing/vouchers', $response->getContent());
         $this->assertStringContainsString('/billing/vouchers/{voucher}/payloads', $response->getContent());
         $this->assertStringContainsString('/billing/vouchers/{voucher}/payloads/regenerate', $response->getContent());
         $this->assertStringContainsString('/billing/vouchers/{voucher}/replay', $response->getContent());
+        $this->assertStringContainsString('/billing/vouchers/{voucher}/reconcile', $response->getContent());
         $this->assertStringContainsString('/billing/provider-profile', $response->getContent());
         $this->assertStringContainsString('/billing/provider-profile/check', $response->getContent());
         $this->assertStringContainsString('/billing/provider-metrics', $response->getContent());
         $this->assertStringContainsString('/billing/credit-notes/{creditNote}/payloads', $response->getContent());
         $this->assertStringContainsString('/billing/credit-notes/{creditNote}/payloads/regenerate', $response->getContent());
         $this->assertStringContainsString('/billing/credit-notes/{creditNote}/replay', $response->getContent());
+        $this->assertStringContainsString('/billing/credit-notes/{creditNote}/reconcile', $response->getContent());
+        $this->assertStringContainsString('/billing/reconcile-pending', $response->getContent());
         $this->assertStringContainsString('/billing/outbox/{event}/lineage', $response->getContent());
         $this->assertStringContainsString('/billing/outbox/provider-trace', $response->getContent());
         $this->assertStringContainsString('/billing/outbox/summary', $response->getContent());
@@ -183,13 +190,20 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('security.docs.read', false)
             ->assertSee('security.api-token.manage', false)
             ->assertSee('no acepta bearer tokens', false)
+            ->assertSee('Idempotency-Key', false)
             ->assertSee('POST /pos/sales', false)
+            ->assertSee('GET /health/live', false)
+            ->assertSee('GET /health/ready', false)
+            ->assertSee('GET /admin/team/roles', false)
+            ->assertSee('POST /admin/team/users', false)
             ->assertSee('GET /billing/provider-profile', false)
             ->assertSee('POST /billing/provider-profile/check', false)
             ->assertSee('GET /billing/provider-metrics', false)
             ->assertSee('GET /billing/vouchers/{voucher}/payloads', false)
             ->assertSee('POST /billing/vouchers/{voucher}/payloads/regenerate', false)
             ->assertSee('POST /billing/vouchers/{voucher}/replay', false)
+            ->assertSee('POST /billing/vouchers/{voucher}/reconcile', false)
+            ->assertSee('POST /billing/reconcile-pending', false)
             ->assertSee('GET /billing/outbox/{event}/lineage', false)
             ->assertSee('GET /billing/outbox/provider-trace', false)
             ->assertSee('GET /reports/operations-control-tower', false)

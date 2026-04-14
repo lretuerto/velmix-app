@@ -58,10 +58,18 @@ php artisan test
   - `DELETE /auth/tokens/{token}`
 - La gestión de tokens requiere el permiso `security.api-token.manage` y hoy queda reservada a perfiles administrativos del tenant
 - Los API tokens ya no quedan permanentes por omisión: el backend asigna vencimiento por defecto a 30 días y no acepta expiraciones mayores a 90 días
+- La rotación administrativa ya permite intervenir tokens de otros usuarios del mismo tenant
 - Validación de contexto actual:
   - `GET /auth/me`
 - `GET /auth/me` y `GET /tenant/ping` requieren `security.context.read`; un bearer token con `abilities` limitadas debe incluirlo explícitamente
 - Si una request trae sesión y bearer token al mismo tiempo, el bearer token tiene prioridad
+- Operaciones críticas soportan `Idempotency-Key` para evitar duplicados accidentales:
+  - `POST /pos/sales`
+  - `POST /billing/vouchers`
+  - `POST /billing/credit-notes`
+  - `POST /sales/receivables/{receivable}/payments`
+  - `POST /purchases/payables/{payable}/payments`
+  - `POST /cash/movements`
 
 ## Documentación disponible
 
@@ -70,16 +78,29 @@ php artisan test
 - Guía operativa API autenticada por sesión web: `GET /docs/api-guide`
 - Checklist de release autenticado por sesión web: `GET /docs/release-readiness`
 - El portal de docs exige `X-Tenant-Id`, membresía al tenant y permiso `security.docs.read`
+- Health y readiness:
+  - `GET /health/live`
+  - `GET /health/ready`
+- Todas las respuestas ahora devuelven `X-Request-Id` para correlación operativa
 - Worker manual outbox: `php artisan billing:dispatch-outbox --limit=20`
+- Worker manual de reconciliación billing: `php artisan billing:reconcile-pending --limit=20`
+- Script de readiness: `composer run velmix:readiness`
 - Script de validación outbox: `composer run velmix:outbox` no falla si la base aún no fue migrada
 - Perfil/provider billing por tenant:
   - `GET /billing/provider-profile`
   - `PUT /billing/provider-profile`
   - `POST /billing/provider-profile/check`
+  - `POST /billing/vouchers/{voucher}/reconcile`
+  - `POST /billing/credit-notes/{creditNote}/reconcile`
+  - `POST /billing/reconcile-pending`
   - las lecturas redactan `credentials` y exponen solo metadata segura
   - `GET /billing/outbox/provider-trace`
   - `GET /billing/provider-metrics`
   - `GET /billing/outbox/{event}/lineage`
+  - `GET /admin/team/roles`
+  - `GET /admin/team/users`
+  - `POST /admin/team/users`
+  - `POST /admin/team/users/{user}/roles`
   - `GET /reports/finance-operations`
   - `GET /reports/finance-escalations`
   - `GET /reports/finance-escalations/history`
@@ -136,7 +157,10 @@ composer run test
 composer run velmix:reset
 composer run velmix:test
 composer run velmix:qa
+composer run velmix:readiness
 composer run velmix:outbox
+composer run velmix:reconcile
+composer run velmix:ci
 composer run velmix:routes
 ```
 
@@ -144,6 +168,14 @@ composer run velmix:routes
 
 1. `php artisan migrate:fresh --seed`
 2. `php artisan test`
+
+`velmix:ci` encadena la validación completa orientada a pipeline:
+
+1. `composer validate --no-check-publish`
+2. `composer run velmix:qa`
+3. `composer run velmix:readiness`
+4. `composer run velmix:outbox`
+5. `composer run velmix:reconcile`
 
 ## Módulos principales
 

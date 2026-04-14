@@ -68,6 +68,13 @@ class BillingProviderProfileFlowTest extends TestCase
             ->assertJsonPath('data.provider_code', 'fake_sunat')
             ->assertJsonPath('data.provider_environment', 'sandbox');
 
+        $storedCredentials = DB::table('billing_provider_profiles')
+            ->where('tenant_id', 10)
+            ->value('credentials');
+
+        $this->assertIsString($storedCredentials);
+        $this->assertStringNotContainsString('sandbox', $storedCredentials);
+
         $this->assertDatabaseHas('electronic_vouchers', [
             'id' => $voucherId,
             'status' => 'rejected',
@@ -87,6 +94,53 @@ class BillingProviderProfileFlowTest extends TestCase
             'event_type' => 'billing.provider_profile.updated',
             'aggregate_type' => 'billing_provider_profile',
         ]);
+    }
+
+    public function test_user_with_provider_read_permission_can_read_but_not_update_profile(): void
+    {
+        $this->seedBaseCatalog();
+        $roleId = DB::table('roles')->insertGetId([
+            'code' => 'BILLING_AUDITOR',
+            'name' => 'Billing Auditor',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $readPermId = DB::table('permissions')->where('code', 'billing.provider.read')->value('id');
+
+        DB::table('role_permission')->insert([
+            'role_id' => $roleId,
+            'permission_id' => $readPermId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $user = User::factory()->create();
+        DB::table('tenant_user')->insert([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('tenant_user_role')->insert([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'role_id' => $roleId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/billing/provider-profile')
+            ->assertOk()
+            ->assertJsonPath('data.provider_code', 'fake_sunat');
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->putJson('/billing/provider-profile', [
+                'default_outcome' => 'rejected',
+            ])
+            ->assertStatus(403);
     }
 
     public function test_cashier_cannot_manage_provider_profile(): void

@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\Audit\TenantActivityLogService;
+use App\Services\Admin\TenantTeamService;
 use App\Services\Billing\OutboxDispatchService;
 use App\Services\Billing\VoucherService;
 use App\Services\Billing\CreditNoteService;
@@ -8,6 +9,7 @@ use App\Services\Billing\BillingDocumentPayloadService;
 use App\Services\Billing\BillingProviderHealthService;
 use App\Services\Billing\BillingProviderMetricsService;
 use App\Services\Billing\BillingProviderProfileService;
+use App\Services\Billing\BillingReconciliationService;
 use App\Services\Billing\BillingReplayService;
 use App\Services\Billing\BillingOutboxLineageService;
 use App\Services\Cash\CashMovementService;
@@ -45,6 +47,7 @@ use App\Services\Reports\OperationsEscalationMetricsService;
 use App\Services\Reports\PromiseComplianceReportService;
 use App\Services\Reports\ReceivableRiskReportService;
 use App\Services\Reports\OperationsEscalationReportService;
+use App\Services\Platform\SystemHealthService;
 use App\Services\Security\ApiTokenService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
@@ -60,12 +63,23 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+Route::get('/health/live', function (SystemHealthService $service) {
+    return response()->json(['data' => $service->live()]);
+});
+
+Route::get('/health/ready', function (SystemHealthService $service) {
+    $result = $service->ready();
+    $status = $result['status'] === 'ready' ? 200 : 503;
+
+    return response()->json(['data' => $result], $status);
+});
+
 Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:security.docs.read'])->group(function () {
     Route::get('/docs', function () {
         return response()->json([
             'data' => [
                 'project' => 'VELMiX ERP',
-                'version' => 'sprint1-day176',
+                'version' => 'sprint1-day183',
                 'documents' => [
                     ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
                     ['name' => 'API Guide', 'path' => '/docs/api-guide'],
@@ -105,7 +119,7 @@ Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:secu
     });
 });
 
-Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:security.api-token.manage'])->group(function () {
+Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:security.api-token.manage', 'throttle:security-api-tokens'])->group(function () {
     Route::get('/auth/tokens', function (ApiTokenService $service) {
         $payload = request()->validate([
             'user_id' => ['nullable', 'integer'],
@@ -195,6 +209,50 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         ]);
     })->middleware('perm:security.context.read');
 
+    Route::get('/admin/team/roles', function (TenantTeamService $service) {
+        return response()->json(['data' => $service->listRoles()]);
+    })->middleware('perm:team.user.read');
+
+    Route::get('/admin/team/users', function (TenantTeamService $service) {
+        return response()->json([
+            'data' => $service->listUsers((int) request()->attributes->get('tenant_id')),
+        ]);
+    })->middleware('perm:team.user.read');
+
+    Route::post('/admin/team/users', function (TenantTeamService $service) {
+        $payload = request()->validate([
+            'name' => ['required', 'string'],
+            'email' => ['required', 'email'],
+            'password' => ['nullable', 'string', 'min:8'],
+            'roles' => ['nullable', 'array'],
+            'roles.*' => ['string'],
+        ]);
+
+        $result = $service->createOrAttachUser(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            $payload,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:team.user.manage');
+
+    Route::post('/admin/team/users/{user}/roles', function (int $user, TenantTeamService $service) {
+        $payload = request()->validate([
+            'roles' => ['required', 'array'],
+            'roles.*' => ['string'],
+        ]);
+
+        $result = $service->syncRoles(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            $user,
+            $payload['roles'],
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware(['perm:team.user.manage', 'perm:rbac.role.assign']);
+
     Route::get('/pos/sale', fn () => response()->json(['ok' => true, 'flow' => 'sale']))
         ->middleware('perm:pos.sale.execute');
 
@@ -255,7 +313,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:pos.sale.execute');
+    })->middleware(['perm:pos.sale.execute', 'idempotent']);
 
     Route::get('/sales/customers', function (CustomerService $service) {
         $result = $service->list((int) request()->attributes->get('tenant_id'));
@@ -359,7 +417,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:sales.receivable.pay');
+    })->middleware(['perm:sales.receivable.pay', 'idempotent']);
 
     Route::get('/sales/receivables/{receivable}/follow-ups', function (int $receivable, SaleReceivableService $service) {
         $result = $service->followUps(
@@ -523,7 +581,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:cash.movement.create');
+    })->middleware(['perm:cash.movement.create', 'idempotent']);
 
     Route::get('/audit/timeline', function (TenantActivityLogService $service) {
         $payload = request()->validate([
@@ -1701,7 +1759,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:purchase.payable.pay');
+    })->middleware(['perm:purchase.payable.pay', 'idempotent']);
 
     Route::post('/purchases/payables/{payable}/apply-credits', function (int $payable, PurchasePayableService $service) {
         $payload = request()->validate([
@@ -1917,7 +1975,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:billing.voucher.issue');
+    })->middleware(['perm:billing.voucher.issue', 'idempotent']);
 
     Route::get('/billing/vouchers/{voucher}', function (int $voucher) {
         $tenantId = (int) request()->attributes->get('tenant_id');
@@ -1976,7 +2034,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:billing.provider.manage');
+    })->middleware('perm:billing.provider.update');
 
     Route::post('/billing/vouchers/{voucher}/replay', function (int $voucher, BillingReplayService $service) {
         $result = $service->replayVoucher(
@@ -1986,7 +2044,22 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:billing.outbox.dispatch');
+    })->middleware(['perm:billing.outbox.dispatch', 'throttle:billing-outbox-write']);
+
+    Route::post('/billing/vouchers/{voucher}/reconcile', function (int $voucher, BillingReconciliationService $service) {
+        $payload = request()->validate([
+            'simulate_result' => ['nullable', 'in:accepted,rejected,pending'],
+        ]);
+
+        $result = $service->reconcileVoucher(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            $voucher,
+            $payload['simulate_result'] ?? null,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware(['perm:billing.outbox.dispatch', 'throttle:billing-outbox-write']);
 
     Route::post('/billing/credit-notes', function (CreditNoteService $service) {
         $payload = request()->validate([
@@ -2009,7 +2082,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:billing.credit-note.issue');
+    })->middleware(['perm:billing.credit-note.issue', 'idempotent']);
 
     Route::get('/billing/credit-notes/{creditNote}', function (int $creditNote, CreditNoteService $service) {
         $result = $service->detail(
@@ -2045,7 +2118,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:billing.provider.manage');
+    })->middleware('perm:billing.provider.update');
 
     Route::post('/billing/credit-notes/{creditNote}/replay', function (int $creditNote, BillingReplayService $service) {
         $result = $service->replayCreditNote(
@@ -2055,7 +2128,22 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:billing.outbox.dispatch');
+    })->middleware(['perm:billing.outbox.dispatch', 'throttle:billing-outbox-write']);
+
+    Route::post('/billing/credit-notes/{creditNote}/reconcile', function (int $creditNote, BillingReconciliationService $service) {
+        $payload = request()->validate([
+            'simulate_result' => ['nullable', 'in:accepted,rejected,pending'],
+        ]);
+
+        $result = $service->reconcileCreditNote(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            $creditNote,
+            $payload['simulate_result'] ?? null,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware(['perm:billing.outbox.dispatch', 'throttle:billing-outbox-write']);
 
     Route::post('/billing/outbox/dispatch', function (OutboxDispatchService $service) {
         $payload = request()->validate([
@@ -2079,7 +2167,23 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         unset($result['http_status']);
 
         return response()->json(['data' => $result], $status);
-    })->middleware('perm:billing.outbox.dispatch');
+    })->middleware(['perm:billing.outbox.dispatch', 'throttle:billing-outbox-write']);
+
+    Route::post('/billing/reconcile-pending', function (BillingReconciliationService $service) {
+        $payload = request()->validate([
+            'simulate_result' => ['nullable', 'in:accepted,rejected,pending'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $result = $service->reconcilePending(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            (int) ($payload['limit'] ?? 20),
+            $payload['simulate_result'] ?? null,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware(['perm:billing.outbox.dispatch', 'throttle:billing-outbox-write']);
 
     Route::get('/billing/outbox/summary', function (OutboxDispatchService $service) {
         $result = $service->queueSummary((int) request()->attributes->get('tenant_id'));
@@ -2091,7 +2195,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         $result = $service->publicCurrent((int) request()->attributes->get('tenant_id'));
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:billing.provider.manage');
+    })->middleware('perm:billing.provider.read');
 
     Route::post('/billing/provider-profile/check', function (BillingProviderHealthService $service) {
         $result = $service->check(
@@ -2100,7 +2204,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:billing.provider.manage');
+    })->middleware(['perm:billing.provider.update', 'throttle:billing-provider-management']);
 
     Route::put('/billing/provider-profile', function (BillingProviderProfileService $service) {
         $payload = request()->validate([
@@ -2117,7 +2221,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:billing.provider.manage');
+    })->middleware(['perm:billing.provider.update', 'throttle:billing-provider-management']);
 
     Route::get('/billing/outbox/provider-trace', function (BillingProviderHealthService $service) {
         $payload = request()->validate([
@@ -2156,7 +2260,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:billing.outbox.dispatch');
+    })->middleware(['perm:billing.outbox.dispatch', 'throttle:billing-outbox-write']);
 
     Route::get('/billing/outbox/{event}/lineage', function (int $event, BillingOutboxLineageService $service) {
         $result = $service->detail(

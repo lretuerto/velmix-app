@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VELMiX ERP API
-  version: sprint1-day176
+  version: sprint1-day183
   description: |
     Contrato OpenAPI de endpoints prioritarios de VELMiX ERP.
     Cubre la convencion multi-tenant y los flujos criticos ya implementados.
@@ -28,7 +28,9 @@ paths:
   /docs:
     get:
       tags: [Reports]
-      security: []
+      security:
+        - laravelSession: []
+          tenantHeader: []
       summary: Portal interno de documentacion
       responses:
         '200':
@@ -40,7 +42,9 @@ paths:
   /docs/openapi.yaml:
     get:
       tags: [Reports]
-      security: []
+      security:
+        - laravelSession: []
+          tenantHeader: []
       summary: Especificacion OpenAPI en YAML
       responses:
         '200':
@@ -144,6 +148,85 @@ paths:
       responses:
         '200':
           description: Token rotado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /admin/team/roles:
+    get:
+      tags: [Tenant]
+      summary: Lista roles disponibles para bootstrap del tenant
+      responses:
+        '200':
+          description: Catalogo de roles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /admin/team/users:
+    get:
+      tags: [Tenant]
+      summary: Lista usuarios miembros del tenant
+      responses:
+        '200':
+          description: Miembros del tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+    post:
+      tags: [Tenant]
+      summary: Crea o adjunta un usuario al tenant actual
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email]
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                password:
+                  type: string
+                roles:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Usuario del equipo creado o adjuntado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /admin/team/users/{user}/roles:
+    post:
+      tags: [Tenant]
+      summary: Sincroniza roles RBAC del usuario dentro del tenant
+      parameters:
+        - in: path
+          name: user
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roles]
+              properties:
+                roles:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Roles sincronizados
           content:
             application/json:
               schema:
@@ -825,6 +908,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataEnvelope'
+  /billing/vouchers/{voucher}/reconcile:
+    post:
+      tags: [Billing]
+      summary: Reconciliacion puntual de un voucher pendiente o fallido
+      parameters:
+        - $ref: '#/components/parameters/VoucherId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                simulate_result:
+                  type: string
+                  enum: [accepted, rejected, pending]
+      responses:
+        '200':
+          description: Resultado de reconciliacion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
   /billing/credit-notes:
     post:
       tags: [Billing]
@@ -894,6 +1000,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataEnvelope'
+  /billing/credit-notes/{creditNote}/reconcile:
+    post:
+      tags: [Billing]
+      summary: Reconciliacion puntual de una nota de credito pendiente o fallida
+      parameters:
+        - $ref: '#/components/parameters/CreditNoteId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                simulate_result:
+                  type: string
+                  enum: [accepted, rejected, pending]
+      responses:
+        '200':
+          description: Resultado de reconciliacion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
   /billing/outbox/dispatch:
     post:
       tags: [Billing]
@@ -915,6 +1044,31 @@ paths:
       responses:
         '200':
           description: Evento procesado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/reconcile-pending:
+    post:
+      tags: [Billing]
+      summary: Reconciliacion en lote de documentos billing pending o failed
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                simulate_result:
+                  type: string
+                  enum: [accepted, rejected, pending]
+                limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+      responses:
+        '200':
+          description: Resultado de reconciliacion por lote
           content:
             application/json:
               schema:
@@ -2935,3 +3089,33 @@ components:
             type: string
             format: date
             description: Fecha de expiracion inclusiva para el token nuevo. Si no se envia, se aplica la expiracion por defecto.
+  /health/live:
+    get:
+      tags: [Tenant]
+      security: []
+      summary: Liveness probe del backend
+      responses:
+        '200':
+          description: Backend vivo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /health/ready:
+    get:
+      tags: [Tenant]
+      security: []
+      summary: Readiness probe del backend
+      responses:
+        '200':
+          description: Backend listo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '503':
+          description: Backend degradado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'

@@ -15,6 +15,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - La emision, listado, rotacion y revocacion de `API tokens` requiere el permiso `security.api-token.manage`
 - Los tokens ya no quedan permanentes por omision: si no se manda `expires_at`, el backend asigna una expiracion por defecto a 30 dias
 - `expires_at` se normaliza al fin del dia solicitado y no puede exceder 90 dias desde la fecha actual
+- Las respuestas agregan `X-Request-Id` para correlacion operativa. Puede enviarse uno propio o el backend genera uno
+- Los POST criticos soportan `Idempotency-Key`; si se reutiliza con el mismo payload, el backend replaya la respuesta previa
 - El portal interno `/docs` es solo para sesion web autenticada; no acepta bearer tokens
 - Contexto tenant: enviar `X-Tenant-Id`
 - Formato de salida: casi todos responden `{"data": ...}`
@@ -28,6 +30,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 
 ### Tenant y seguridad
 
+- `GET /health/live`
+- `GET /health/ready`
 - `GET /auth/me`
 - `GET /auth/tokens`
 - `POST /auth/tokens`
@@ -35,6 +39,10 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `DELETE /auth/tokens/{token}`
 - `GET /tenant/ping`
 - `GET /rbac/permissions`
+- `GET /admin/team/roles`
+- `GET /admin/team/users`
+- `POST /admin/team/users`
+- `POST /admin/team/users/{user}/roles`
 
 ### Inventario
 
@@ -94,15 +102,18 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /billing/vouchers/{voucher}/payloads`
 - `POST /billing/vouchers/{voucher}/payloads/regenerate`
 - `POST /billing/vouchers/{voucher}/replay`
+- `POST /billing/vouchers/{voucher}/reconcile`
 - `POST /billing/credit-notes`
 - `GET /billing/credit-notes/{creditNote}`
 - `GET /billing/credit-notes/{creditNote}/payloads`
 - `POST /billing/credit-notes/{creditNote}/payloads/regenerate`
 - `POST /billing/credit-notes/{creditNote}/replay`
+- `POST /billing/credit-notes/{creditNote}/reconcile`
 - `GET /billing/provider-profile`
 - `PUT /billing/provider-profile`
 - `POST /billing/provider-profile/check`
 - `POST /billing/outbox/dispatch`
+- `POST /billing/reconcile-pending`
 - `GET /billing/outbox/summary`
 - `GET /billing/outbox/provider-trace`
 - `GET /billing/provider-metrics`
@@ -231,6 +242,17 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - devuelve el nuevo `plain_text_token` una sola vez
 - `DELETE /auth/tokens/{token}` revoca el token indicado dentro del tenant, aunque pertenezca a otro usuario administrado por el mismo tenant
 
+## Team bootstrap por tenant
+
+- `GET /admin/team/roles` lista roles disponibles del catalogo RBAC
+- `GET /admin/team/users` devuelve usuarios miembros del tenant con sus roles
+- `POST /admin/team/users` crea un usuario nuevo o lo adjunta al tenant actual
+- `POST /admin/team/users/{user}/roles` sincroniza roles del usuario en el tenant
+- permisos:
+  - `team.user.read`
+  - `team.user.manage`
+  - `rbac.role.assign` para sincronizacion de roles
+
 ## Provider profile de billing
 
 - `GET /billing/provider-profile` devuelve el perfil activo del tenant con `credentials` redactadas
@@ -239,6 +261,9 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - `environment`
   - `default_outcome`
   - `credentials`
+- permisos:
+  - `billing.provider.read` para lectura
+  - `billing.provider.update` para update/health check/regeneracion de payloads
 - Las respuestas de lectura exponen `credentials_configured` y `credential_keys`, no los secretos completos
 - `POST /billing/provider-profile/check` ejecuta un health check y persiste:
   - `health_status`
@@ -251,6 +276,20 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - salud vigente/stale del provider
   - backlog actual de outbox
   - tasa de aceptacion/rechazo/fallo en la ventana consultada
+- `POST /billing/vouchers/{voucher}/reconcile` y `POST /billing/credit-notes/{creditNote}/reconcile` ejecutan reconciliacion puntual usando el payload snapshot mas reciente
+- `POST /billing/reconcile-pending` procesa documentos `pending/failed` del tenant en lote
+
+## Observabilidad e integridad
+
+- `GET /health/live` valida liveness y devuelve `request_id`
+- `GET /health/ready` valida conectividad DB y tablas base
+- `POST /pos/sales`
+- `POST /billing/vouchers`
+- `POST /billing/credit-notes`
+- `POST /sales/receivables/{receivable}/payments`
+- `POST /purchases/payables/{payable}/payments`
+- `POST /cash/movements`
+- esos endpoints aceptan `Idempotency-Key`; si se repite con el mismo payload se devuelve la misma respuesta y se marca `X-Idempotency-Status: replayed`
   - replay backlog y fallos recientes
 
 ## Dashboard ejecutivo de billing

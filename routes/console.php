@@ -1,10 +1,13 @@
 <?php
 
+use App\Services\Billing\BillingReconciliationService;
 use App\Services\Billing\OutboxDispatchService;
+use App\Services\Platform\SystemHealthService;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\SQLiteDatabaseDoesNotExistException;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -86,3 +89,61 @@ Artisan::command('billing:dispatch-outbox {--tenant=} {--limit=20} {--simulate-r
         return 1;
     }
 })->purpose('Process pending billing outbox events by tenant.');
+
+Artisan::command('billing:reconcile-pending {--tenant=} {--limit=20} {--simulate-result=} {--graceful-if-unmigrated}', function (BillingReconciliationService $service) {
+    $tenantOption = $this->option('tenant');
+    $limit = max(1, (int) $this->option('limit'));
+    $outcome = $this->option('simulate-result');
+    $outcome = $outcome !== null && $outcome !== '' ? (string) $outcome : null;
+    $gracefulIfUnmigrated = (bool) $this->option('graceful-if-unmigrated');
+    $missingStorageMessage = 'Billing reconciliation storage is not ready. Run php artisan migrate first.';
+
+    try {
+        $tenantIds = $tenantOption !== null
+            ? [(int) $tenantOption]
+            : DB::table('tenants')->orderBy('id')->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+        if ($tenantIds === []) {
+            $this->comment('No tenants available for reconciliation.');
+
+            return 0;
+        }
+
+        $items = [];
+
+        foreach ($tenantIds as $tenantId) {
+            $items[] = $service->reconcilePending($tenantId, null, $limit, $outcome);
+        }
+
+        $this->line(json_encode([
+            'tenant_count' => count($tenantIds),
+            'items' => $items,
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
+        return 0;
+    } catch (QueryException|SQLiteDatabaseDoesNotExistException $exception) {
+        if ($gracefulIfUnmigrated) {
+            $this->comment($missingStorageMessage);
+
+            return 0;
+        }
+
+        $this->error($exception->getMessage());
+
+        return 1;
+    }
+})->purpose('Reconcile pending billing documents by tenant.');
+
+Artisan::command('system:readiness {--json}', function (SystemHealthService $service) {
+    $result = $service->ready();
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf('System status: %s', $result['status']));
+        $this->line(sprintf('Database ok: %s', $result['checks']['database']['ok'] ? 'yes' : 'no'));
+        $this->line(sprintf('Schema ok: %s', $result['checks']['schema']['ok'] ? 'yes' : 'no'));
+    }
+
+    return $result['status'] === 'ready' ? 0 : 1;
+})->purpose('Check application readiness.');

@@ -9,4 +9,6 @@ interface BillingDispatchProvider
     public function checkHealth(array $profile): array;
 
     public function dispatch(object $event, array $payload, array $profile, array $options = []): array;
+
+    public function reconcile(object $document, array $payload, array $profile, array $options = []): array;
 }

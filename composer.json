@@ -58,8 +58,21 @@
             "@velmix:reset",
             "@velmix:test"
         ],
+        "velmix:readiness": [
+            "@php artisan system:readiness --json"
+        ],
         "velmix:outbox": [
             "@php artisan billing:dispatch-outbox --limit=20 --graceful-if-unmigrated"
+        ],
+        "velmix:reconcile": [
+            "@php artisan billing:reconcile-pending --limit=20 --graceful-if-unmigrated"
+        ],
+        "velmix:ci": [
+            "composer validate --no-check-publish",
+            "@velmix:qa",
+            "@velmix:readiness",
+            "@velmix:outbox",
+            "@velmix:reconcile"
         ],
         "velmix:routes": [
             "@php artisan route:list --except-vendor"
