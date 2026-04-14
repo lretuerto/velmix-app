@@ -79,7 +79,7 @@ Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:secu
         return response()->json([
             'data' => [
                 'project' => 'VELMiX ERP',
-                'version' => 'sprint1-day183',
+                'version' => 'sprint1-day186',
                 'documents' => [
                     ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
                     ['name' => 'API Guide', 'path' => '/docs/api-guide'],

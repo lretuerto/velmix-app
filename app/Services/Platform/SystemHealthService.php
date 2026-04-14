@@ -25,7 +25,7 @@ class SystemHealthService
         ];
     }
 
-    public function ready(): array
+    public function ready(bool $detailed = false): array
     {
         $databaseOk = false;
         $databaseMessage = null;
@@ -51,21 +51,28 @@ class SystemHealthService
 
         $ready = $databaseOk && $missingTables === [];
 
-        return [
+        $summary = [
             'status' => $ready ? 'ready' : 'degraded',
             'checked_at' => now()->toIso8601String(),
             'request_id' => app()->bound('request_id') ? app('request_id') : null,
             'checks' => [
                 'database' => [
                     'ok' => $databaseOk,
-                    'message' => $databaseMessage,
                 ],
                 'schema' => [
                     'ok' => $missingTables === [],
-                    'required_tables' => $tables,
-                    'missing_tables' => $missingTables,
                 ],
             ],
         ];
+
+        if (! $detailed) {
+            return $summary;
+        }
+
+        $summary['checks']['database']['message'] = $databaseMessage;
+        $summary['checks']['schema']['required_tables'] = $tables;
+        $summary['checks']['schema']['missing_tables'] = $missingTables;
+
+        return $summary;
     }
 }

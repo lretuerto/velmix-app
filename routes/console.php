@@ -135,7 +135,7 @@ Artisan::command('billing:reconcile-pending {--tenant=} {--limit=20} {--simulate
 })->purpose('Reconcile pending billing documents by tenant.');
 
 Artisan::command('system:readiness {--json}', function (SystemHealthService $service) {
-    $result = $service->ready();
+    $result = $service->ready(detailed: true);
 
     if ((bool) $this->option('json')) {
         $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));

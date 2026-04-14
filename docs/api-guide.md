@@ -247,6 +247,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /admin/team/roles` lista roles disponibles del catalogo RBAC
 - `GET /admin/team/users` devuelve usuarios miembros del tenant con sus roles
 - `POST /admin/team/users` crea un usuario nuevo o lo adjunta al tenant actual
+- si el email ya pertenece a un usuario de otro tenant, el bootstrap lo rechaza para evitar adjuntos cruzados no intencionales
 - `POST /admin/team/users/{user}/roles` sincroniza roles del usuario en el tenant
 - permisos:
   - `team.user.read`
@@ -282,7 +283,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 ## Observabilidad e integridad
 
 - `GET /health/live` valida liveness y devuelve `request_id`
-- `GET /health/ready` valida conectividad DB y tablas base
+- `GET /health/ready` valida conectividad y readiness en modo resumido publico
+- `php artisan system:readiness --json` entrega el detalle completo de base y esquema para operacion
 - `POST /pos/sales`
 - `POST /billing/vouchers`
 - `POST /billing/credit-notes`

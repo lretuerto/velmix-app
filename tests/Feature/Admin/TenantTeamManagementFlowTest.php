@@ -98,6 +98,85 @@ class TenantTeamManagementFlowTest extends TestCase
             ->assertStatus(403);
     }
 
+    public function test_admin_cannot_attach_existing_user_from_other_tenant_or_mutate_global_identity(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $admin = $this->seedUserWithRole(10, 'ADMIN');
+        $existing = User::factory()->create([
+            'name' => 'Identidad Compartida',
+            'email' => 'shared@velmix.test',
+        ]);
+
+        DB::table('tenant_user')->insert([
+            'tenant_id' => 20,
+            'user_id' => $existing->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/admin/team/users', [
+                'name' => 'Nombre Intentado',
+                'email' => 'shared@velmix.test',
+                'roles' => ['CAJERO'],
+            ])
+            ->assertStatus(409);
+
+        $this->assertDatabaseMissing('tenant_user', [
+            'tenant_id' => 10,
+            'user_id' => $existing->id,
+        ]);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $existing->id,
+            'name' => 'Identidad Compartida',
+            'email' => 'shared@velmix.test',
+        ]);
+    }
+
+    public function test_bootstrap_does_not_rename_existing_user_in_same_tenant(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $admin = $this->seedUserWithRole(10, 'ADMIN');
+        $existing = User::factory()->create([
+            'name' => 'Nombre Original',
+            'email' => 'same-tenant@velmix.test',
+        ]);
+
+        DB::table('tenant_user')->insert([
+            'tenant_id' => 10,
+            'user_id' => $existing->id,
+            'created_at' => now()->subDay(),
+            'updated_at' => now()->subDay(),
+        ]);
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/admin/team/users', [
+                'name' => 'Nombre Nuevo',
+                'email' => 'same-tenant@velmix.test',
+                'roles' => ['CAJERO'],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Nombre Original')
+            ->assertJsonPath('data.roles.0.code', 'CAJERO');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $existing->id,
+            'name' => 'Nombre Original',
+            'email' => 'same-tenant@velmix.test',
+        ]);
+    }
+
     private function seedUserWithRole(int $tenantId, string $roleCode): User
     {
         $user = User::factory()->create();

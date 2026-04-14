@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VELMiX ERP API
-  version: sprint1-day183
+  version: sprint1-day186
   description: |
     Contrato OpenAPI de endpoints prioritarios de VELMiX ERP.
     Cubre la convencion multi-tenant y los flujos criticos ya implementados.
@@ -176,7 +176,8 @@ paths:
                 $ref: '#/components/schemas/DataEnvelope'
     post:
       tags: [Tenant]
-      summary: Crea o adjunta un usuario al tenant actual
+      summary: Crea un usuario nuevo o reutiliza uno ya miembro del tenant actual
+      description: Rechaza adjuntar directamente usuarios existentes de otros tenants para evitar asociaciones cruzadas no intencionales.
       requestBody:
         required: true
         content:
@@ -3105,16 +3106,16 @@ components:
     get:
       tags: [Tenant]
       security: []
-      summary: Readiness probe del backend
+      summary: Readiness probe resumido del backend
       responses:
         '200':
-          description: Backend listo
+          description: Backend listo con resumen publico de readiness
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataEnvelope'
         '503':
-          description: Backend degradado
+          description: Backend degradado con resumen publico de readiness
           content:
             application/json:
               schema:

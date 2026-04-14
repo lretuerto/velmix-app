@@ -100,13 +100,11 @@ class TenantTeamService
                 'email_verified_at' => now(),
             ]);
             $wasCreated = true;
-        } else {
-            DB::table('users')
-                ->where('id', $user->id)
-                ->update([
-                    'name' => $name,
-                    'updated_at' => now(),
-                ]);
+        } elseif ($this->belongsToOtherTenant($tenantId, $user->id)) {
+            throw new HttpException(
+                409,
+                'Existing users from another tenant cannot be attached directly. Use a new email or an invitation flow.',
+            );
         }
 
         $membershipExists = DB::table('tenant_user')
@@ -237,5 +235,13 @@ class TenantTeamService
         if (! $exists) {
             throw new HttpException(404, 'Team user not found for tenant.');
         }
+    }
+
+    private function belongsToOtherTenant(int $tenantId, int $userId): bool
+    {
+        return DB::table('tenant_user')
+            ->where('user_id', $userId)
+            ->where('tenant_id', '!=', $tenantId)
+            ->exists();
     }
 }

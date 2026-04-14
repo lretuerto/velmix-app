@@ -22,6 +22,9 @@ class HealthReadinessFlowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.status', 'ready')
             ->assertJsonPath('data.checks.database.ok', true)
-            ->assertJsonPath('data.checks.schema.ok', true);
+            ->assertJsonPath('data.checks.schema.ok', true)
+            ->assertJsonMissingPath('data.checks.database.message')
+            ->assertJsonMissingPath('data.checks.schema.required_tables')
+            ->assertJsonMissingPath('data.checks.schema.missing_tables');
     }
 }

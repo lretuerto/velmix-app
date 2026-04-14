@@ -81,6 +81,7 @@ php artisan test
 - Health y readiness:
   - `GET /health/live`
   - `GET /health/ready`
+- `GET /health/ready` es publico pero resumido; el detalle completo queda para `php artisan system:readiness --json`
 - Todas las respuestas ahora devuelven `X-Request-Id` para correlación operativa
 - Worker manual outbox: `php artisan billing:dispatch-outbox --limit=20`
 - Worker manual de reconciliación billing: `php artisan billing:reconcile-pending --limit=20`
@@ -101,6 +102,7 @@ php artisan test
   - `GET /admin/team/users`
   - `POST /admin/team/users`
   - `POST /admin/team/users/{user}/roles`
+  - el bootstrap no adjunta directamente usuarios existentes de otros tenants ni altera su identidad global por email
   - `GET /reports/finance-operations`
   - `GET /reports/finance-escalations`
   - `GET /reports/finance-escalations/history`
