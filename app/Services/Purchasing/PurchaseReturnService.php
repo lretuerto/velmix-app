@@ -3,6 +3,7 @@
 namespace App\Services\Purchasing;
 
 use App\Services\Audit\TenantActivityLogService;
+use App\Support\ReferenceCode;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -82,7 +83,7 @@ class PurchaseReturnService
                 'purchase_receipt_id' => $receiptId,
                 'purchase_payable_id' => null,
                 'user_id' => $userId,
-                'reference' => 'PENDING',
+                'reference' => ReferenceCode::temporary('PRT'),
                 'status' => 'processed',
                 'reason' => $reason,
                 'total_amount' => $returnTotal,
@@ -91,7 +92,7 @@ class PurchaseReturnService
                 'updated_at' => now(),
             ]);
 
-            $reference = 'PRT-'.str_pad((string) $returnId, 6, '0', STR_PAD_LEFT);
+            $reference = ReferenceCode::fromId('PRT', $returnId);
 
             DB::table('purchase_returns')
                 ->where('id', $returnId)

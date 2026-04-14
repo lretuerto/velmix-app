@@ -191,6 +191,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 }
 ```
 
+- Las ventas ya emiten `reference` deterministica basada en `sale_id` con formato `SALE-000001`
+
 ### Cobranza de cuenta por cobrar
 
 ```json
@@ -219,6 +221,11 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   ]
 }
 ```
+
+- Las ordenes, recepciones y devoluciones de compra ya emiten referencias deterministicas por `id`:
+  - `PO-000001`
+  - `PUR-000001`
+  - `PRT-000001`
 
 ## Worker operativo
 

@@ -52,13 +52,19 @@ class PurchaseReturnFlowTest extends TestCase
             ->assertJsonPath('data.supplier_credit_amount', 0)
             ->assertJsonPath('data.items.0.purchase_receipt_item_id', $receiptItemId);
 
+        $returnId = $returnResponse->json('data.id');
         $returnReference = $returnResponse->json('data.reference');
+        $expectedReference = 'PRT-'.str_pad((string) $returnId, 6, '0', STR_PAD_LEFT);
         $productId = DB::table('lots')->where('id', $lotId)->value('product_id');
 
+        $returnResponse->assertJsonPath('data.reference', $expectedReference);
+
         $this->assertDatabaseHas('purchase_returns', [
+            'id' => $returnId,
             'tenant_id' => 10,
             'purchase_receipt_id' => $receiptId,
             'purchase_payable_id' => $payableId,
+            'reference' => $expectedReference,
             'status' => 'processed',
             'total_amount' => 10.00,
         ]);
@@ -80,7 +86,7 @@ class PurchaseReturnFlowTest extends TestCase
             'lot_id' => $lotId,
             'type' => 'purchase_return',
             'quantity' => -5,
-            'reference' => $returnReference,
+            'reference' => $expectedReference,
         ]);
 
         $this->assertDatabaseHas('purchase_receipts', [

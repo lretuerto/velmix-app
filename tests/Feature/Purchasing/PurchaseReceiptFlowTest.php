@@ -18,7 +18,7 @@ class PurchaseReceiptFlowTest extends TestCase
         $supplierId = $this->seedSupplier(10, '20155555555', 'Laboratorios Andinos');
         $lotId = DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
 
-        $this->actingAs($warehouseUser)
+        $response = $this->actingAs($warehouseUser)
             ->withHeader('X-Tenant-Id', '10')
             ->postJson('/purchases/receipts', [
                 'supplier_id' => $supplierId,
@@ -33,11 +33,16 @@ class PurchaseReceiptFlowTest extends TestCase
             ->assertJsonPath('data.total_amount', 21)
             ->assertJsonPath('data.items.0.resulting_stock', 72);
 
-        $reference = DB::table('purchase_receipts')->where('supplier_id', $supplierId)->value('reference');
+        $receiptId = $response->json('data.id');
+        $reference = 'PUR-'.str_pad((string) $receiptId, 6, '0', STR_PAD_LEFT);
+
+        $response->assertJsonPath('data.reference', $reference);
 
         $this->assertDatabaseHas('purchase_receipts', [
+            'id' => $receiptId,
             'tenant_id' => 10,
             'supplier_id' => $supplierId,
+            'reference' => $reference,
             'status' => 'received',
             'total_amount' => 21.00,
         ]);
@@ -59,7 +64,7 @@ class PurchaseReceiptFlowTest extends TestCase
         $this->assertDatabaseHas('purchase_payables', [
             'tenant_id' => 10,
             'supplier_id' => $supplierId,
-            'purchase_receipt_id' => DB::table('purchase_receipts')->where('reference', $reference)->value('id'),
+            'purchase_receipt_id' => $receiptId,
             'total_amount' => 21.00,
             'paid_amount' => 0.00,
             'outstanding_amount' => 21.00,
@@ -73,8 +78,6 @@ class PurchaseReceiptFlowTest extends TestCase
             'last_cost' => 1.75,
             'average_cost' => 1.75,
         ]);
-
-        $receiptId = DB::table('purchase_receipts')->where('reference', $reference)->value('id');
 
         $this->assertDatabaseHas('tenant_activity_logs', [
             'tenant_id' => 10,

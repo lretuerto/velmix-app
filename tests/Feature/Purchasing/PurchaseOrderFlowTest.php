@@ -18,7 +18,7 @@ class PurchaseOrderFlowTest extends TestCase
         $supplierId = $this->seedSupplier(10, '20112312312', 'Proveedor OC');
         $productId = DB::table('products')->where('tenant_id', 10)->where('sku', 'PARA-500')->value('id');
 
-        $this->actingAs($admin)
+        $response = $this->actingAs($admin)
             ->withHeader('X-Tenant-Id', '10')
             ->postJson('/purchases/orders', [
                 'supplier_id' => $supplierId,
@@ -33,9 +33,16 @@ class PurchaseOrderFlowTest extends TestCase
             ->assertJsonPath('data.total_amount', 47.5)
             ->assertJsonPath('data.items.0.received_quantity', 0);
 
+        $orderId = $response->json('data.id');
+        $expectedReference = 'PO-'.str_pad((string) $orderId, 6, '0', STR_PAD_LEFT);
+
+        $response->assertJsonPath('data.reference', $expectedReference);
+
         $this->assertDatabaseHas('purchase_orders', [
+            'id' => $orderId,
             'tenant_id' => 10,
             'supplier_id' => $supplierId,
+            'reference' => $expectedReference,
             'status' => 'open',
             'total_amount' => 47.50,
         ]);

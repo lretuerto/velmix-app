@@ -3,6 +3,7 @@
 namespace App\Services\Sales;
 
 use App\Services\Audit\TenantActivityLogService;
+use App\Support\ReferenceCode;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -36,7 +37,6 @@ class PosSaleService
                 throw new HttpException(422, 'Credit sale requires customer_id.');
             }
 
-            $reference = 'SALE-'.str_pad((string) random_int(1, 999999), 6, '0', STR_PAD_LEFT);
             $resolvedItems = collect($items)
                 ->map(fn (array $item) => $this->resolveItem($tenantId, $item));
 
@@ -84,7 +84,7 @@ class PosSaleService
                 'tenant_id' => $tenantId,
                 'user_id' => $userId,
                 'customer_id' => $customer?->id,
-                'reference' => $reference,
+                'reference' => ReferenceCode::temporary('SALE'),
                 'status' => 'completed',
                 'payment_method' => $paymentMethod,
                 'total_amount' => $totalAmount,
@@ -93,6 +93,15 @@ class PosSaleService
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+
+            $reference = ReferenceCode::fromId('SALE', $saleId);
+
+            DB::table('sales')
+                ->where('id', $saleId)
+                ->update([
+                    'reference' => $reference,
+                    'updated_at' => now(),
+                ]);
 
             foreach ($resolvedItems as $item) {
                 foreach ($item['allocations'] as $allocation) {

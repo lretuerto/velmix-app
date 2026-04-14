@@ -3,6 +3,7 @@
 namespace App\Services\Purchasing;
 
 use App\Services\Audit\TenantActivityLogService;
+use App\Support\ReferenceCode;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -55,7 +56,7 @@ class PurchaseReceiptService
                 'supplier_id' => $supplierId,
                 'purchase_order_id' => $purchaseOrderId,
                 'user_id' => $userId,
-                'reference' => 'PENDING',
+                'reference' => ReferenceCode::temporary('PUR'),
                 'status' => 'received',
                 'total_amount' => 0,
                 'received_at' => now(),
@@ -63,7 +64,7 @@ class PurchaseReceiptService
                 'updated_at' => now(),
             ]);
 
-            $reference = 'PUR-'.str_pad((string) $receiptId, 6, '0', STR_PAD_LEFT);
+            $reference = ReferenceCode::fromId('PUR', $receiptId);
             $totalAmount = 0.0;
             $lineItems = [];
             $receivedProductIds = [];
@@ -150,8 +151,8 @@ class PurchaseReceiptService
                 ->update([
                     'reference' => $reference,
                     'total_amount' => round($totalAmount, 2),
-                'updated_at' => now(),
-            ]);
+                    'updated_at' => now(),
+                ]);
 
             foreach (array_keys($receivedProductIds) as $productId) {
                 $this->recalculateProductCosts($tenantId, (int) $productId);

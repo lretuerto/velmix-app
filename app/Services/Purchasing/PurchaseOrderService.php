@@ -2,6 +2,7 @@
 
 namespace App\Services\Purchasing;
 
+use App\Support\ReferenceCode;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -52,7 +53,7 @@ class PurchaseOrderService
                 'tenant_id' => $tenantId,
                 'supplier_id' => $supplierId,
                 'user_id' => $userId,
-                'reference' => 'PENDING',
+                'reference' => ReferenceCode::temporary('PO'),
                 'status' => 'open',
                 'total_amount' => 0,
                 'ordered_at' => now(),
@@ -61,7 +62,7 @@ class PurchaseOrderService
                 'updated_at' => now(),
             ]);
 
-            $reference = 'PO-'.str_pad((string) $orderId, 6, '0', STR_PAD_LEFT);
+            $reference = ReferenceCode::fromId('PO', $orderId);
             $totalAmount = 0.0;
             $responseItems = [];
 

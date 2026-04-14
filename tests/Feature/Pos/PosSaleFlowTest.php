@@ -54,7 +54,12 @@ class PosSaleFlowTest extends TestCase
                 'unit_price' => 3.50,
             ]);
 
+        $saleId = $response->json('data.sale_id');
+        $expectedReference = 'SALE-'.str_pad((string) $saleId, 6, '0', STR_PAD_LEFT);
+
         $response->assertOk()
+            ->assertJsonPath('data.sale_id', $saleId)
+            ->assertJsonPath('data.reference', $expectedReference)
             ->assertJsonPath('data.payment_method', 'cash')
             ->assertJsonPath('data.items.0.quantity', 5)
             ->assertJsonPath('data.items.0.allocations.0.remaining_stock', 55)
@@ -75,6 +80,7 @@ class PosSaleFlowTest extends TestCase
             'lot_id' => $lotId,
             'type' => 'sale',
             'quantity' => -5,
+            'reference' => $expectedReference,
         ]);
 
         $this->assertDatabaseHas('lots', [
@@ -94,8 +100,6 @@ class PosSaleFlowTest extends TestCase
             'gross_cost' => 6.00,
             'gross_margin' => 11.50,
         ]);
-
-        $saleId = DB::table('sales')->where('tenant_id', 10)->value('id');
 
         $this->assertDatabaseHas('tenant_activity_logs', [
             'tenant_id' => 10,
