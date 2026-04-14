@@ -32,13 +32,16 @@ class PosSaleService
 
         return DB::transaction(function () use ($tenantId, $userId, $items, $paymentMethod, $customerId, $dueAt) {
             $customer = $this->resolveCustomer($tenantId, $customerId);
+            $lotReservations = [];
 
             if ($paymentMethod === 'credit' && $customer === null) {
                 throw new HttpException(422, 'Credit sale requires customer_id.');
             }
 
             $resolvedItems = collect($items)
-                ->map(fn (array $item) => $this->resolveItem($tenantId, $item));
+                ->map(function (array $item) use ($tenantId, &$lotReservations) {
+                    return $this->resolveItem($tenantId, $item, $lotReservations);
+                });
 
             $totalAmount = round($resolvedItems->sum('line_total'), 2);
             $grossCost = round($resolvedItems->sum('cost_amount'), 2);
@@ -261,7 +264,7 @@ class PosSaleService
         return $customer;
     }
 
-    private function resolveItem(int $tenantId, array $item): array
+    private function resolveItem(int $tenantId, array $item, array &$lotReservations): array
     {
         $quantity = (int) ($item['quantity'] ?? 0);
         $unitPrice = (float) ($item['unit_price'] ?? -1);
@@ -273,11 +276,27 @@ class PosSaleService
         }
 
         if (array_key_exists('lot_id', $item) && $item['lot_id'] !== null) {
-            return $this->resolveDirectLotItem($tenantId, (int) $item['lot_id'], $quantity, $unitPrice, $prescriptionCode, $approvalCode);
+            return $this->resolveDirectLotItem(
+                $tenantId,
+                (int) $item['lot_id'],
+                $quantity,
+                $unitPrice,
+                $prescriptionCode,
+                $approvalCode,
+                $lotReservations,
+            );
         }
 
         if (array_key_exists('product_id', $item) && $item['product_id'] !== null) {
-            return $this->resolveFifoProductItem($tenantId, (int) $item['product_id'], $quantity, $unitPrice, $prescriptionCode, $approvalCode);
+            return $this->resolveFifoProductItem(
+                $tenantId,
+                (int) $item['product_id'],
+                $quantity,
+                $unitPrice,
+                $prescriptionCode,
+                $approvalCode,
+                $lotReservations,
+            );
         }
 
         throw new HttpException(422, 'Each item must include lot_id or product_id.');
@@ -289,7 +308,8 @@ class PosSaleService
         int $quantity,
         float $unitPrice,
         ?string $prescriptionCode,
-        ?string $approvalCode
+        ?string $approvalCode,
+        array &$lotReservations,
     ): array {
         $lot = DB::table('lots')
             ->join('products', 'products.id', '=', 'lots.product_id')
@@ -312,7 +332,9 @@ class PosSaleService
             throw new HttpException(404, 'Lot not found.');
         }
 
-        if ($lot->stock_quantity < $quantity) {
+        $effectiveStock = $this->effectiveLotStock((int) $lot->id, (int) $lot->stock_quantity, $lotReservations);
+
+        if ($effectiveStock < $quantity) {
             throw new HttpException(422, 'Insufficient stock for lot.');
         }
 
@@ -325,6 +347,9 @@ class PosSaleService
             $prescriptionCode,
             $approvalCode,
         );
+
+        $remainingStock = $effectiveStock - $quantity;
+        $lotReservations[(int) $lot->id] = ($lotReservations[(int) $lot->id] ?? 0) + $quantity;
 
         return [
             'product_id' => $lot->product_id,
@@ -342,7 +367,7 @@ class PosSaleService
                 'lot_id' => $lot->id,
                 'lot_code' => $lot->code,
                 'quantity' => $quantity,
-                'remaining_stock' => $lot->stock_quantity - $quantity,
+                'remaining_stock' => $remainingStock,
             ]],
         ];
     }
@@ -353,7 +378,8 @@ class PosSaleService
         int $quantity,
         float $unitPrice,
         ?string $prescriptionCode,
-        ?string $approvalCode
+        ?string $approvalCode,
+        array &$lotReservations,
     ): array {
         $product = DB::table('products')
             ->where('id', $productId)
@@ -395,7 +421,7 @@ class PosSaleService
             'prescription_code' => $prescriptionCode,
             'approval_code' => $approval['approval_code'],
             'approval_id' => $approval['approval_id'],
-            'allocations' => $this->allocateFifoLots($lots, $quantity),
+            'allocations' => $this->allocateFifoLots($lots, $quantity, $lotReservations),
         ];
     }
 
@@ -442,7 +468,7 @@ class PosSaleService
         ];
     }
 
-    private function allocateFifoLots(Collection $lots, int $quantity): array
+    private function allocateFifoLots(Collection $lots, int $quantity, array &$lotReservations): array
     {
         $remaining = $quantity;
         $allocations = [];
@@ -452,18 +478,20 @@ class PosSaleService
                 break;
             }
 
-            $taken = min($remaining, (int) $lot->stock_quantity);
+            $effectiveStock = $this->effectiveLotStock((int) $lot->id, (int) $lot->stock_quantity, $lotReservations);
+            $taken = min($remaining, $effectiveStock);
 
             if ($taken <= 0) {
                 continue;
             }
 
             $remaining -= $taken;
+            $lotReservations[(int) $lot->id] = ($lotReservations[(int) $lot->id] ?? 0) + $taken;
             $allocations[] = [
                 'lot_id' => $lot->id,
                 'lot_code' => $lot->code,
                 'quantity' => $taken,
-                'remaining_stock' => (int) $lot->stock_quantity - $taken,
+                'remaining_stock' => $effectiveStock - $taken,
             ];
         }
 
@@ -472,6 +500,11 @@ class PosSaleService
         }
 
         return $allocations;
+    }
+
+    private function effectiveLotStock(int $lotId, int $databaseStock, array $lotReservations): int
+    {
+        return max($databaseStock - (int) ($lotReservations[$lotId] ?? 0), 0);
     }
 
     private function assertLotAvailableForSale(string $status, string $expiresAt): void

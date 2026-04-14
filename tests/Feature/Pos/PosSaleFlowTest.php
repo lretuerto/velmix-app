@@ -254,6 +254,156 @@ class PosSaleFlowTest extends TestCase
         ]);
     }
 
+    public function test_reserves_stock_across_repeated_direct_lot_lines_in_same_sale(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+            \Database\Seeders\InventoryCatalogSeeder::class,
+        ]);
+
+        $cashier = $this->seedCashierUser();
+        $lotId = (int) DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
+
+        DB::table('lots')->where('id', $lotId)->update([
+            'stock_quantity' => 10,
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/pos/sales', [
+                'items' => [
+                    [
+                        'lot_id' => $lotId,
+                        'quantity' => 4,
+                        'unit_price' => 3.50,
+                    ],
+                    [
+                        'lot_id' => $lotId,
+                        'quantity' => 3,
+                        'unit_price' => 3.50,
+                    ],
+                ],
+            ]);
+
+        $saleId = (int) $response->json('data.sale_id');
+
+        $response->assertOk()
+            ->assertJsonPath('data.items.0.allocations.0.remaining_stock', 6)
+            ->assertJsonPath('data.items.1.allocations.0.remaining_stock', 3);
+
+        $this->assertDatabaseHas('lots', [
+            'id' => $lotId,
+            'stock_quantity' => 3,
+        ]);
+
+        $this->assertSame(7, (int) DB::table('sale_items')->where('sale_id', $saleId)->sum('quantity'));
+        $this->assertSame(-7, (int) DB::table('stock_movements')->where('sale_id', $saleId)->sum('quantity'));
+    }
+
+    public function test_rejects_repeated_direct_lot_lines_when_combined_quantity_exceeds_stock(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+            \Database\Seeders\InventoryCatalogSeeder::class,
+        ]);
+
+        $cashier = $this->seedCashierUser();
+        $lotId = (int) DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
+
+        DB::table('lots')->where('id', $lotId)->update([
+            'stock_quantity' => 10,
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/pos/sales', [
+                'items' => [
+                    [
+                        'lot_id' => $lotId,
+                        'quantity' => 7,
+                        'unit_price' => 3.50,
+                    ],
+                    [
+                        'lot_id' => $lotId,
+                        'quantity' => 7,
+                        'unit_price' => 3.50,
+                    ],
+                ],
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Insufficient stock for lot.');
+
+        $this->assertDatabaseHas('lots', [
+            'id' => $lotId,
+            'stock_quantity' => 10,
+        ]);
+
+        $this->assertSame(0, DB::table('sales')->count());
+    }
+
+    public function test_reserves_fifo_stock_across_repeated_product_lines_in_same_sale(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+            \Database\Seeders\InventoryCatalogSeeder::class,
+        ]);
+
+        $cashier = $this->seedCashierUser();
+        $firstLotId = (int) DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
+        $secondLotId = (int) DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-002')->value('id');
+        $productId = (int) DB::table('lots')->where('id', $firstLotId)->value('product_id');
+
+        DB::table('lots')->where('id', $firstLotId)->update([
+            'stock_quantity' => 5,
+            'updated_at' => now(),
+        ]);
+
+        DB::table('lots')->where('id', $secondLotId)->update([
+            'stock_quantity' => 4,
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/pos/sales', [
+                'items' => [
+                    [
+                        'product_id' => $productId,
+                        'quantity' => 4,
+                        'unit_price' => 3.50,
+                    ],
+                    [
+                        'product_id' => $productId,
+                        'quantity' => 3,
+                        'unit_price' => 3.50,
+                    ],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.items.0.allocations.0.lot_id', $firstLotId)
+            ->assertJsonPath('data.items.0.allocations.0.remaining_stock', 1)
+            ->assertJsonPath('data.items.1.allocations.0.lot_id', $firstLotId)
+            ->assertJsonPath('data.items.1.allocations.0.quantity', 1)
+            ->assertJsonPath('data.items.1.allocations.0.remaining_stock', 0)
+            ->assertJsonPath('data.items.1.allocations.1.lot_id', $secondLotId)
+            ->assertJsonPath('data.items.1.allocations.1.remaining_stock', 2);
+
+        $this->assertDatabaseHas('lots', [
+            'id' => $firstLotId,
+            'stock_quantity' => 0,
+        ]);
+
+        $this->assertDatabaseHas('lots', [
+            'id' => $secondLotId,
+            'stock_quantity' => 2,
+        ]);
+    }
+
     public function test_executes_multi_item_sale(): void
     {
         $this->seed([
