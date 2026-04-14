@@ -80,6 +80,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `POST /cash/sessions/current/close`
 - `POST /cash/movements`
 - `GET /cash/sessions/{session}/movements`
+- el backend ya fuerza una sola sesion de caja abierta por tenant tambien a nivel de BD
 
 ### Compras
 

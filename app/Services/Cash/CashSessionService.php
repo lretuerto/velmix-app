@@ -3,6 +3,7 @@
 namespace App\Services\Cash;
 
 use App\Services\Audit\TenantActivityLogService;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -18,57 +19,66 @@ class CashSessionService
             throw new HttpException(422, 'Opening amount must be valid.');
         }
 
-        return DB::transaction(function () use ($tenantId, $userId, $openingAmount) {
-            $existing = DB::table('cash_sessions')
-                ->where('tenant_id', $tenantId)
-                ->where('status', 'open')
-                ->lockForUpdate()
-                ->exists();
+        try {
+            return DB::transaction(function () use ($tenantId, $userId, $openingAmount) {
+                $existing = DB::table('cash_sessions')
+                    ->where('tenant_id', $tenantId)
+                    ->where('status', 'open')
+                    ->lockForUpdate()
+                    ->exists();
 
-            if ($existing) {
+                if ($existing) {
+                    throw new HttpException(422, 'There is already an open cash session.');
+                }
+
+                $openedAt = now();
+
+                $sessionId = DB::table('cash_sessions')->insertGetId([
+                    'tenant_id' => $tenantId,
+                    'opened_by_user_id' => $userId,
+                    'closed_by_user_id' => null,
+                    'opening_amount' => $openingAmount,
+                    'expected_amount' => $openingAmount,
+                    'counted_amount' => null,
+                    'discrepancy_amount' => null,
+                    'status' => 'open',
+                    'open_guard' => $this->openGuardForTenant($tenantId),
+                    'opened_at' => $openedAt,
+                    'closed_at' => null,
+                    'created_at' => $openedAt,
+                    'updated_at' => $openedAt,
+                ]);
+
+                app(TenantActivityLogService::class)->record(
+                    $tenantId,
+                    $userId,
+                    'cash',
+                    'cash.session.opened',
+                    'cash_session',
+                    $sessionId,
+                    'Caja abierta',
+                    [
+                        'cash_session_id' => $sessionId,
+                        'opening_amount' => round($openingAmount, 2),
+                    ],
+                    $openedAt->toISOString(),
+                );
+
+                return [
+                    'id' => $sessionId,
+                    'tenant_id' => $tenantId,
+                    'status' => 'open',
+                    'opening_amount' => round($openingAmount, 2),
+                    'opened_at' => $openedAt->toISOString(),
+                ];
+            });
+        } catch (QueryException $exception) {
+            if ($this->isOpenGuardConflict($exception)) {
                 throw new HttpException(422, 'There is already an open cash session.');
             }
 
-            $openedAt = now();
-
-            $sessionId = DB::table('cash_sessions')->insertGetId([
-                'tenant_id' => $tenantId,
-                'opened_by_user_id' => $userId,
-                'closed_by_user_id' => null,
-                'opening_amount' => $openingAmount,
-                'expected_amount' => $openingAmount,
-                'counted_amount' => null,
-                'discrepancy_amount' => null,
-                'status' => 'open',
-                'opened_at' => $openedAt,
-                'closed_at' => null,
-                'created_at' => $openedAt,
-                'updated_at' => $openedAt,
-            ]);
-
-            app(TenantActivityLogService::class)->record(
-                $tenantId,
-                $userId,
-                'cash',
-                'cash.session.opened',
-                'cash_session',
-                $sessionId,
-                'Caja abierta',
-                [
-                    'cash_session_id' => $sessionId,
-                    'opening_amount' => round($openingAmount, 2),
-                ],
-                $openedAt->toISOString(),
-            );
-
-            return [
-                'id' => $sessionId,
-                'tenant_id' => $tenantId,
-                'status' => 'open',
-                'opening_amount' => round($openingAmount, 2),
-                'opened_at' => $openedAt->toISOString(),
-            ];
-        });
+            throw $exception;
+        }
     }
 
     public function current(int $tenantId): array
@@ -151,6 +161,7 @@ class CashSessionService
                     'counted_amount' => $countedAmount,
                     'discrepancy_amount' => $discrepancy,
                     'status' => 'closed',
+                    'open_guard' => null,
                     'closed_at' => $closedAt,
                     'updated_at' => $closedAt,
                 ]);
@@ -398,6 +409,31 @@ class CashSessionService
         }
 
         return $payload;
+    }
+
+    private function openGuardForTenant(int $tenantId): string
+    {
+        return sprintf('tenant:%d', $tenantId);
+    }
+
+    private function isOpenGuardConflict(QueryException $exception): bool
+    {
+        $message = strtolower($exception->getMessage());
+        $previous = strtolower($exception->getPrevious()?->getMessage() ?? '');
+
+        foreach ([
+            'cash_sessions_open_guard_unique',
+            'cash_sessions.open_guard',
+            'open_guard',
+            'unique constraint failed',
+            'duplicate entry',
+        ] as $needle) {
+            if (str_contains($message, $needle) || ($previous !== '' && str_contains($previous, $needle))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function getDenominations(int $tenantId, int $sessionId): array

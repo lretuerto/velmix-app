@@ -10,6 +10,7 @@ Backend SaaS multi-tenant para operaciones farmacéuticas, construido sobre Lara
 - POS con ventas contado/crédito, aprobaciones y notas de crédito
 - Compras con órdenes, recepciones, devoluciones, créditos y cuentas por pagar
 - Caja con aperturas, cierres, arqueo por denominaciones y movimientos manuales
+- Caja con guard de una sola sesion abierta por tenant, reforzado tambien a nivel BD
 - Reportes operativos, riesgo, vencimientos, promesas y auditoría transversal
 - Dashboard financiero unificado para cobranza y pagos con prioridad operativa
 - Workflow operativo para prioridades financieras con acknowledge y resolve

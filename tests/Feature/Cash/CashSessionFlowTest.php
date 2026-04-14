@@ -3,6 +3,7 @@
 namespace Tests\Feature\Cash;
 
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -59,6 +60,83 @@ class CashSessionFlowTest extends TestCase
                 'opening_amount' => 50,
             ])
             ->assertStatus(422);
+    }
+
+    public function test_open_cash_session_sets_and_releases_open_guard(): void
+    {
+        $user = $this->seedCashierUser();
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/cash/sessions/open', [
+                'opening_amount' => 100,
+            ])
+            ->assertOk();
+
+        $sessionId = (int) DB::table('cash_sessions')
+            ->where('tenant_id', 10)
+            ->value('id');
+
+        $this->assertDatabaseHas('cash_sessions', [
+            'id' => $sessionId,
+            'tenant_id' => 10,
+            'status' => 'open',
+            'open_guard' => 'tenant:10',
+        ]);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/cash/sessions/current/close', [
+                'counted_amount' => 100,
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('cash_sessions', [
+            'id' => $sessionId,
+            'tenant_id' => 10,
+            'status' => 'closed',
+            'open_guard' => null,
+        ]);
+    }
+
+    public function test_database_guard_rejects_two_open_cash_sessions_for_same_tenant(): void
+    {
+        $user = $this->seedCashierUser();
+        $openedAt = now();
+
+        DB::table('cash_sessions')->insert([
+            'tenant_id' => 10,
+            'opened_by_user_id' => $user->id,
+            'closed_by_user_id' => null,
+            'opening_amount' => 100,
+            'expected_amount' => 100,
+            'counted_amount' => null,
+            'discrepancy_amount' => null,
+            'status' => 'open',
+            'open_guard' => 'tenant:10',
+            'opened_at' => $openedAt,
+            'closed_at' => null,
+            'created_at' => $openedAt,
+            'updated_at' => $openedAt,
+        ]);
+
+        $this->expectException(QueryException::class);
+
+        DB::table('cash_sessions')->insert([
+            'tenant_id' => 10,
+            'opened_by_user_id' => $user->id,
+            'closed_by_user_id' => null,
+            'opening_amount' => 50,
+            'expected_amount' => 50,
+            'counted_amount' => null,
+            'discrepancy_amount' => null,
+            'status' => 'open',
+            'open_guard' => 'tenant:10',
+            'opened_at' => $openedAt->copy()->addMinute(),
+            'closed_at' => null,
+            'created_at' => $openedAt->copy()->addMinute(),
+            'updated_at' => $openedAt->copy()->addMinute(),
+        ]);
     }
 
     public function test_can_read_current_cash_session_summary(): void
