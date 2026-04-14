@@ -12,7 +12,9 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - Si el token define `abilities`, solo puede usar rutas protegidas por permisos incluidos en esa lista; soporta `*` y prefijos `modulo.*`
 - `GET /auth/me` y `GET /tenant/ping` requieren el permiso `security.context.read`; los bearer tokens limitados deben declararlo en `abilities` para usarlos
 - El portal interno `/docs` requiere sesion web, `X-Tenant-Id`, membresia al tenant y permiso `security.docs.read`
-- La emision, listado y revocacion de `API tokens` requiere el permiso `security.api-token.manage`
+- La emision, listado, rotacion y revocacion de `API tokens` requiere el permiso `security.api-token.manage`
+- Los tokens ya no quedan permanentes por omision: si no se manda `expires_at`, el backend asigna una expiracion por defecto a 30 dias
+- `expires_at` se normaliza al fin del dia solicitado y no puede exceder 90 dias desde la fecha actual
 - El portal interno `/docs` es solo para sesion web autenticada; no acepta bearer tokens
 - Contexto tenant: enviar `X-Tenant-Id`
 - Formato de salida: casi todos responden `{"data": ...}`
@@ -29,6 +31,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /auth/me`
 - `GET /auth/tokens`
 - `POST /auth/tokens`
+- `POST /auth/tokens/{token}/rotate`
 - `DELETE /auth/tokens/{token}`
 - `GET /tenant/ping`
 - `GET /rbac/permissions`
@@ -209,6 +212,24 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - Si no se pasa `--tenant`, procesa tenants con eventos pendientes
 - Para pruebas controladas: `--simulate-result=accepted|rejected|transient_fail`
 - Para QA reproducible existe `composer run velmix:outbox`, que sale en verde si la base todavía no está migrada
+
+## Gobernanza de API tokens
+
+- `GET /auth/tokens` lista tokens del tenant para perfiles con `security.api-token.manage`
+- acepta `user_id` opcional para filtrar por propietario
+- cada item expone:
+  - `owner`
+  - `status` (`active`, `expired`, `revoked`)
+  - `expires_at`
+  - `last_used_at`
+- `POST /auth/tokens` crea tokens para el usuario autenticado por sesion
+- si `expires_at` no se manda, el backend asigna una expiracion a 30 dias
+- `POST /auth/tokens/{token}/rotate`:
+  - revoca el token anterior
+  - emite un bearer nuevo para el mismo owner dentro del tenant
+  - permite sobrescribir `abilities`, `name` o `expires_at`
+  - devuelve el nuevo `plain_text_token` una sola vez
+- `DELETE /auth/tokens/{token}` revoca el token indicado dentro del tenant, aunque pertenezca a otro usuario administrado por el mismo tenant
 
 ## Provider profile de billing
 

@@ -54,8 +54,10 @@ php artisan test
 - Emisión y revocación por sesión en:
   - `GET /auth/tokens`
   - `POST /auth/tokens`
+  - `POST /auth/tokens/{token}/rotate`
   - `DELETE /auth/tokens/{token}`
 - La gestión de tokens requiere el permiso `security.api-token.manage` y hoy queda reservada a perfiles administrativos del tenant
+- Los API tokens ya no quedan permanentes por omisión: el backend asigna vencimiento por defecto a 30 días y no acepta expiraciones mayores a 90 días
 - Validación de contexto actual:
   - `GET /auth/me`
 - `GET /auth/me` y `GET /tenant/ping` requieren `security.context.read`; un bearer token con `abilities` limitadas debe incluirlo explícitamente
@@ -182,6 +184,7 @@ composer run velmix:routes
 - Operations control tower snapshot index: conteo total real y filtros por estado, fecha y etiqueta
 - Operations control tower snapshot compare: drift entre snapshots guardados y estado live
 - API tokens: bearer tokens con `abilities` limitan rutas protegidas por permiso; soportan `*` y prefijos `modulo.*`
+- API tokens: los administradores del tenant pueden listar, revocar y rotar tokens del tenant; las respuestas exponen `owner`, `status`, `expires_at` y `last_used_at`
 - Auditoría: timeline transversal por tenant
 
 ## Validación recomendada antes de publicar cambios

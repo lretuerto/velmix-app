@@ -65,7 +65,7 @@ Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:secu
         return response()->json([
             'data' => [
                 'project' => 'VELMiX ERP',
-                'version' => 'sprint1-day175',
+                'version' => 'sprint1-day176',
                 'documents' => [
                     ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
                     ['name' => 'API Guide', 'path' => '/docs/api-guide'],
@@ -107,9 +107,13 @@ Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:secu
 
 Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:security.api-token.manage'])->group(function () {
     Route::get('/auth/tokens', function (ApiTokenService $service) {
-        $result = $service->listForUser(
+        $payload = request()->validate([
+            'user_id' => ['nullable', 'integer'],
+        ]);
+
+        $result = $service->list(
             (int) request()->attributes->get('tenant_id'),
-            (int) optional(request()->user())->id,
+            isset($payload['user_id']) ? (int) $payload['user_id'] : null,
         );
 
         return response()->json(['data' => $result]);
@@ -139,6 +143,26 @@ Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:secu
             (int) request()->attributes->get('tenant_id'),
             (int) optional(request()->user())->id,
             $token,
+        );
+
+        return response()->json(['data' => $result]);
+    });
+
+    Route::post('/auth/tokens/{token}/rotate', function (int $token, ApiTokenService $service) {
+        $payload = request()->validate([
+            'name' => ['nullable', 'string'],
+            'abilities' => ['nullable', 'array'],
+            'abilities.*' => ['string'],
+            'expires_at' => ['nullable', 'date'],
+        ]);
+
+        $result = $service->rotate(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            $token,
+            $payload['name'] ?? null,
+            $payload['abilities'] ?? null,
+            $payload['expires_at'] ?? null,
         );
 
         return response()->json(['data' => $result]);

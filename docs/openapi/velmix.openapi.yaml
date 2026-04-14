@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VELMiX ERP API
-  version: sprint1-day172
+  version: sprint1-day176
   description: |
     Contrato OpenAPI de endpoints prioritarios de VELMiX ERP.
     Cubre la convencion multi-tenant y los flujos criticos ya implementados.
@@ -69,14 +69,21 @@ paths:
   /auth/tokens:
     get:
       tags: [Tenant]
-      summary: Lista tokens del usuario actual en el tenant
-      description: Requiere usuario autenticado por sesion con permiso `security.api-token.manage`.
+      summary: Lista tokens del tenant
+      description: Requiere usuario autenticado por sesion con permiso `security.api-token.manage`. Puede filtrar por `user_id`.
       security:
         - laravelSession: []
           tenantHeader: []
+      parameters:
+        - in: query
+          name: user_id
+          schema:
+            type: integer
+          required: false
+          description: Filtra tokens por propietario dentro del tenant.
       responses:
         '200':
-          description: Tokens del usuario
+          description: Tokens del tenant
           content:
             application/json:
               schema:
@@ -84,7 +91,7 @@ paths:
     post:
       tags: [Tenant]
       summary: Emite token API para el usuario actual
-      description: Requiere usuario autenticado por sesion con permiso `security.api-token.manage`. Si se envian abilities, el bearer token queda limitado a rutas protegidas por esos permisos. Soporta `*` y prefijos `modulo.*`.
+      description: Requiere usuario autenticado por sesion con permiso `security.api-token.manage`. Si se envian abilities, el bearer token queda limitado a rutas protegidas por esos permisos. Soporta `*` y prefijos `modulo.*`. Si no se envia `expires_at`, se asigna expiracion a 30 dias. No se aceptan expiraciones mayores a 90 dias.
       security:
         - laravelSession: []
           tenantHeader: []
@@ -104,7 +111,7 @@ paths:
   /auth/tokens/{token}:
     delete:
       tags: [Tenant]
-      summary: Revoca token API propio
+      summary: Revoca token API del tenant
       description: Requiere usuario autenticado por sesion con permiso `security.api-token.manage`.
       security:
         - laravelSession: []
@@ -118,6 +125,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataEnvelope'
+  /auth/tokens/{token}/rotate:
+    post:
+      tags: [Tenant]
+      summary: Rota token API del tenant
+      description: Requiere usuario autenticado por sesion con permiso `security.api-token.manage`. Revoca el token anterior y emite un bearer nuevo para el mismo owner dentro del tenant.
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      parameters:
+        - $ref: '#/components/parameters/TokenId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiTokenRotateRequest'
+      responses:
+        '200':
+          description: Token rotado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /tenant/ping:
     get:
       tags: [Tenant]
@@ -2888,3 +2920,18 @@ components:
           expires_at:
             type: string
             format: date
+            description: Fecha de expiracion inclusiva. El backend la normaliza al fin del dia y limita la vida maxima a 90 dias.
+    ApiTokenRotateRequest:
+        type: object
+        properties:
+          name:
+            type: string
+          abilities:
+            type: array
+            description: Si se envia, reemplaza las abilities del token anterior.
+            items:
+              type: string
+          expires_at:
+            type: string
+            format: date
+            description: Fecha de expiracion inclusiva para el token nuevo. Si no se envia, se aplica la expiracion por defecto.
