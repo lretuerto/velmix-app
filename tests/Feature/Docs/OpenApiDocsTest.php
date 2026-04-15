@@ -114,6 +114,9 @@ class OpenApiDocsTest extends TestCase
         $this->assertStringContainsString('/pos/sales', $response->getContent());
         $this->assertStringContainsString('/admin/team/roles', $response->getContent());
         $this->assertStringContainsString('/admin/team/users', $response->getContent());
+        $this->assertStringContainsString('/admin/team/invitations', $response->getContent());
+        $this->assertStringContainsString('/admin/team/invitations/{invitation}/revoke', $response->getContent());
+        $this->assertStringContainsString('/team/invitations/accept', $response->getContent());
         $this->assertStringContainsString('/billing/vouchers', $response->getContent());
         $this->assertStringContainsString('/billing/vouchers/{voucher}/payloads', $response->getContent());
         $this->assertStringContainsString('/billing/vouchers/{voucher}/payloads/regenerate', $response->getContent());
@@ -196,6 +199,10 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('GET /health/ready', false)
             ->assertSee('GET /admin/team/roles', false)
             ->assertSee('POST /admin/team/users', false)
+            ->assertSee('GET /admin/team/invitations', false)
+            ->assertSee('POST /admin/team/invitations', false)
+            ->assertSee('POST /admin/team/invitations/{invitation}/revoke', false)
+            ->assertSee('POST /team/invitations/accept', false)
             ->assertSee('GET /billing/provider-profile', false)
             ->assertSee('POST /billing/provider-profile/check', false)
             ->assertSee('GET /billing/provider-metrics', false)

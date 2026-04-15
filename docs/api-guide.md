@@ -43,6 +43,10 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /admin/team/users`
 - `POST /admin/team/users`
 - `POST /admin/team/users/{user}/roles`
+- `GET /admin/team/invitations`
+- `POST /admin/team/invitations`
+- `POST /admin/team/invitations/{invitation}/revoke`
+- `POST /team/invitations/accept`
 
 ### Inventario
 
@@ -254,16 +258,25 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - devuelve el nuevo `plain_text_token` una sola vez
 - `DELETE /auth/tokens/{token}` revoca el token indicado dentro del tenant, aunque pertenezca a otro usuario administrado por el mismo tenant
 
-## Team bootstrap por tenant
+## Team bootstrap e invitaciones por tenant
 
 - `GET /admin/team/roles` lista roles disponibles del catalogo RBAC
 - `GET /admin/team/users` devuelve usuarios miembros del tenant con sus roles
 - `POST /admin/team/users` crea un usuario nuevo o lo adjunta al tenant actual
 - si el email ya pertenece a un usuario de otro tenant, el bootstrap lo rechaza para evitar adjuntos cruzados no intencionales
 - `POST /admin/team/users/{user}/roles` sincroniza roles del usuario en el tenant
+- `GET /admin/team/invitations` lista invitaciones del tenant
+- `POST /admin/team/invitations` crea una invitacion pendiente con roles proyectados y devuelve `plain_text_token` una sola vez
+- solo puede existir una invitacion `pending` por email dentro del tenant; si vence, el backend la materializa como `expired`
+- `POST /admin/team/invitations/{invitation}/revoke` revoca una invitacion pendiente con motivo obligatorio
+- `POST /team/invitations/accept` acepta la invitacion:
+  - si el email no existe, crea la identidad con `name` y `password`
+  - si el email ya existe, exige sesion autenticada del mismo usuario invitado antes de adjuntarlo al tenant
 - permisos:
   - `team.user.read`
   - `team.user.manage`
+  - `team.invitation.read`
+  - `team.invitation.manage`
   - `rbac.role.assign` para sincronizacion de roles
 
 ## Provider profile de billing

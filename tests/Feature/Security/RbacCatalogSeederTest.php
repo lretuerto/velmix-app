@@ -45,6 +45,8 @@ class RbacCatalogSeederTest extends TestCase
         $this->assertDatabaseHas('permissions', ['code' => 'security.api-token.manage']);
         $this->assertDatabaseHas('permissions', ['code' => 'team.user.read']);
         $this->assertDatabaseHas('permissions', ['code' => 'team.user.manage']);
+        $this->assertDatabaseHas('permissions', ['code' => 'team.invitation.read']);
+        $this->assertDatabaseHas('permissions', ['code' => 'team.invitation.manage']);
         $this->assertDatabaseHas('permissions', ['code' => 'cash.session.open']);
         $this->assertDatabaseHas('permissions', ['code' => 'cash.session.close']);
         $this->assertDatabaseHas('permissions', ['code' => 'cash.session.read']);
@@ -102,6 +104,8 @@ class RbacCatalogSeederTest extends TestCase
         $providerUpdatePermId = DB::table('permissions')->where('code', 'billing.provider.update')->value('id');
         $teamReadPermId = DB::table('permissions')->where('code', 'team.user.read')->value('id');
         $teamManagePermId = DB::table('permissions')->where('code', 'team.user.manage')->value('id');
+        $teamInvitationReadPermId = DB::table('permissions')->where('code', 'team.invitation.read')->value('id');
+        $teamInvitationManagePermId = DB::table('permissions')->where('code', 'team.invitation.manage')->value('id');
         $cashierId = DB::table('roles')->where('code', 'CAJERO')->value('id');
         $warehouseId = DB::table('roles')->where('code', 'ALMACENERO')->value('id');
 
@@ -133,6 +137,16 @@ class RbacCatalogSeederTest extends TestCase
         $this->assertDatabaseHas('role_permission', [
             'role_id' => $adminId,
             'permission_id' => $teamManagePermId,
+        ]);
+
+        $this->assertDatabaseHas('role_permission', [
+            'role_id' => $adminId,
+            'permission_id' => $teamInvitationReadPermId,
+        ]);
+
+        $this->assertDatabaseHas('role_permission', [
+            'role_id' => $adminId,
+            'permission_id' => $teamInvitationManagePermId,
         ]);
 
         $this->assertDatabaseHas('role_permission', [

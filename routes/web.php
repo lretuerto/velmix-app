@@ -74,6 +74,21 @@ Route::get('/health/ready', function (SystemHealthService $service) {
     return response()->json(['data' => $result], $status);
 });
 
+Route::post('/team/invitations/accept', function (TenantTeamService $service) {
+    $payload = request()->validate([
+        'token' => ['required', 'string'],
+        'name' => ['nullable', 'string'],
+        'password' => ['nullable', 'string', 'min:8'],
+    ]);
+
+    $result = $service->acceptInvitation(
+        auth()->id() !== null ? (int) auth()->id() : null,
+        $payload,
+    );
+
+    return response()->json(['data' => $result]);
+});
+
 Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:security.docs.read'])->group(function () {
     Route::get('/docs', function () {
         return response()->json([
@@ -218,6 +233,45 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
             'data' => $service->listUsers((int) request()->attributes->get('tenant_id')),
         ]);
     })->middleware('perm:team.user.read');
+
+    Route::get('/admin/team/invitations', function (TenantTeamService $service) {
+        return response()->json([
+            'data' => $service->listInvitations((int) request()->attributes->get('tenant_id')),
+        ]);
+    })->middleware('perm:team.invitation.read');
+
+    Route::post('/admin/team/invitations', function (TenantTeamService $service) {
+        $payload = request()->validate([
+            'email' => ['required', 'email'],
+            'name' => ['nullable', 'string'],
+            'roles' => ['nullable', 'array'],
+            'roles.*' => ['string'],
+            'expires_at' => ['nullable', 'date'],
+        ]);
+
+        $result = $service->inviteUser(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            $payload,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:team.invitation.manage');
+
+    Route::post('/admin/team/invitations/{invitation}/revoke', function (int $invitation, TenantTeamService $service) {
+        $payload = request()->validate([
+            'reason' => ['required', 'string'],
+        ]);
+
+        $result = $service->revokeInvitation(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            $invitation,
+            (string) $payload['reason'],
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:team.invitation.manage');
 
     Route::post('/admin/team/users', function (TenantTeamService $service) {
         $payload = request()->validate([

@@ -203,6 +203,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataEnvelope'
+  /admin/team/invitations:
+    get:
+      tags: [Tenant]
+      summary: Lista invitaciones del tenant
+      responses:
+        '200':
+          description: Invitaciones
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+    post:
+      tags: [Tenant]
+      summary: Crea invitacion de equipo del tenant
+      description: Devuelve `plain_text_token` una sola vez y permite proyectar roles para la aceptacion.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                name:
+                  type: string
+                expires_at:
+                  type: string
+                  format: date
+                roles:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Invitacion creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /admin/team/users/{user}/roles:
     post:
       tags: [Tenant]
@@ -232,6 +275,61 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataEnvelope'
+  /admin/team/invitations/{invitation}/revoke:
+    post:
+      tags: [Tenant]
+      summary: Revoca invitacion pendiente del tenant
+      parameters:
+        - in: path
+          name: invitation
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Invitacion revocada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /team/invitations/accept:
+    post:
+      tags: [Tenant]
+      summary: Acepta invitacion de equipo
+      description: Si el email ya existe, la aceptacion requiere sesion autenticada del mismo usuario invitado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                name:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Invitacion aceptada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/ValidationError'
   /tenant/ping:

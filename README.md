@@ -99,10 +99,16 @@ php artisan test
   - `GET /billing/outbox/provider-trace`
   - `GET /billing/provider-metrics`
   - `GET /billing/outbox/{event}/lineage`
-  - `GET /admin/team/roles`
-  - `GET /admin/team/users`
-  - `POST /admin/team/users`
-  - `POST /admin/team/users/{user}/roles`
+- `GET /admin/team/roles`
+- `GET /admin/team/users`
+- `POST /admin/team/users`
+- `POST /admin/team/users/{user}/roles`
+- `GET /admin/team/invitations`
+- `POST /admin/team/invitations`
+- `POST /admin/team/invitations/{invitation}/revoke`
+- `POST /team/invitations/accept`
+- el bootstrap directo sigue restringido a usuarios nuevos o ya miembros del tenant actual
+- el attach formal de usuarios existentes de otros tenants ahora pasa por invitacion aceptada por el propio usuario
   - el bootstrap no adjunta directamente usuarios existentes de otros tenants ni altera su identidad global por email
   - `GET /reports/finance-operations`
   - `GET /reports/finance-escalations`
