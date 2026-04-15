@@ -3,8 +3,11 @@
 ## Validacion base
 
 - Ejecutar `composer run velmix:qa`
+- Ejecutar `composer run velmix:ci`
+- Ejecutar `composer run velmix:ci:mysql` cuando el entorno soporte MySQL
 - Revisar `php artisan route:list --except-vendor`
 - Confirmar que `X-Tenant-Id` siga documentado en OpenAPI y guia API
+- Confirmar que `/docs/operations-runbook` y `/docs/deployment-rollback` sean accesibles con sesion y permiso
 
 ## Cobertura funcional minima
 
@@ -33,5 +36,7 @@
 - `migrate:fresh --seed` en verde
 - suite completa en verde
 - docs internas accesibles desde `/docs`
+- runbooks internos accesibles desde `/docs/operations-runbook` y `/docs/deployment-rollback`
 - contrato OpenAPI actualizado
 - README ya no depende del boilerplate de Laravel
+- `system:alerts --json` sin criticos inesperados

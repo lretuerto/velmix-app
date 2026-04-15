@@ -79,6 +79,8 @@ php artisan test
 - OpenAPI YAML autenticado por sesión web: `GET /docs/openapi.yaml`
 - Guía operativa API autenticada por sesión web: `GET /docs/api-guide`
 - Checklist de release autenticado por sesión web: `GET /docs/release-readiness`
+- Runbook de operacion autenticado por sesión web: `GET /docs/operations-runbook`
+- Runbook de despliegue y rollback autenticado por sesión web: `GET /docs/deployment-rollback`
 - El portal de docs exige `X-Tenant-Id`, membresía al tenant y permiso `security.docs.read`
 - Health y readiness:
   - `GET /health/live`

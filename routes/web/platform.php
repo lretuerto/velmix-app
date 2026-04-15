@@ -40,11 +40,13 @@ Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:secu
         return response()->json([
             'data' => [
                 'project' => 'VELMiX ERP',
-                'version' => 'sprint1-day186',
+                'version' => 'sprint1-day187',
                 'documents' => [
                     ['name' => 'OpenAPI YAML', 'path' => '/docs/openapi.yaml'],
                     ['name' => 'API Guide', 'path' => '/docs/api-guide'],
                     ['name' => 'Release Readiness', 'path' => '/docs/release-readiness'],
+                    ['name' => 'Backend Operations Runbook', 'path' => '/docs/operations-runbook'],
+                    ['name' => 'Deployment And Rollback Runbook', 'path' => '/docs/deployment-rollback'],
                 ],
                 'conventions' => [
                     'Business endpoints support Laravel session auth or Bearer token auth.',
@@ -74,6 +76,22 @@ Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:secu
     Route::get('/docs/release-readiness', function () {
         return response(
             file_get_contents(base_path('docs/sprint1/day90-release-readiness-checklist.md')),
+            200,
+            ['Content-Type' => 'text/markdown; charset=UTF-8'],
+        );
+    });
+
+    Route::get('/docs/operations-runbook', function () {
+        return response(
+            file_get_contents(base_path('docs/operations/backend-operations-runbook.md')),
+            200,
+            ['Content-Type' => 'text/markdown; charset=UTF-8'],
+        );
+    });
+
+    Route::get('/docs/deployment-rollback', function () {
+        return response(
+            file_get_contents(base_path('docs/operations/deployment-and-rollback-runbook.md')),
             200,
             ['Content-Type' => 'text/markdown; charset=UTF-8'],
         );

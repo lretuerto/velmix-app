@@ -18,6 +18,9 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - Las respuestas agregan `X-Request-Id` para correlacion operativa. Puede enviarse uno propio o el backend genera uno
 - Los POST criticos soportan `Idempotency-Key`; si se reutiliza con el mismo payload, el backend replaya la respuesta previa
 - El portal interno `/docs` es solo para sesion web autenticada; no acepta bearer tokens
+- El portal de docs ahora expone tambien runbooks internos de operacion y rollback:
+  - `GET /docs/operations-runbook`
+  - `GET /docs/deployment-rollback`
 - Contexto tenant: enviar `X-Tenant-Id`
 - Formato de salida: casi todos responden `{"data": ...}`
 - La aceptacion publica `POST /team/invitations/accept` esta protegida por rate limit sensible
@@ -360,6 +363,11 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - mutacion de stock por lote
   - progreso de recepcion en ordenes de compra
   - reserva de claves de idempotencia
+
+## Runbooks internos
+
+- `GET /docs/operations-runbook` concentra scheduler, alertas, retencion y respuesta operativa
+- `GET /docs/deployment-rollback` concentra pre-deploy, smoke post-deploy, rollback de aplicacion y rollback de esquema
 
 ## Dashboard ejecutivo de billing
 

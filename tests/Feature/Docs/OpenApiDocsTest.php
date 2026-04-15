@@ -20,6 +20,8 @@ class OpenApiDocsTest extends TestCase
         $this->get('/docs/openapi.yaml', ['Accept' => 'application/json'])->assertStatus(401);
         $this->get('/docs/api-guide', ['Accept' => 'application/json'])->assertStatus(401);
         $this->get('/docs/release-readiness', ['Accept' => 'application/json'])->assertStatus(401);
+        $this->get('/docs/operations-runbook', ['Accept' => 'application/json'])->assertStatus(401);
+        $this->get('/docs/deployment-rollback', ['Accept' => 'application/json'])->assertStatus(401);
     }
 
     public function test_docs_endpoints_require_tenant_context_for_authenticated_session(): void
@@ -93,7 +95,9 @@ class OpenApiDocsTest extends TestCase
             ->assertJsonPath('data.project', 'VELMiX ERP')
             ->assertJsonFragment(['path' => '/docs/openapi.yaml'])
             ->assertJsonFragment(['path' => '/docs/api-guide'])
-            ->assertJsonFragment(['path' => '/docs/release-readiness']);
+            ->assertJsonFragment(['path' => '/docs/release-readiness'])
+            ->assertJsonFragment(['path' => '/docs/operations-runbook'])
+            ->assertJsonFragment(['path' => '/docs/deployment-rollback']);
     }
 
     public function test_serves_openapi_yaml_for_priority_endpoints(): void
@@ -171,6 +175,8 @@ class OpenApiDocsTest extends TestCase
         $this->assertStringContainsString('/reports/billing-escalations/{code}/resolve', $response->getContent());
         $this->assertStringContainsString('/audit/timeline', $response->getContent());
         $this->assertStringContainsString('/auth/tokens', $response->getContent());
+        $this->assertStringContainsString('/docs/operations-runbook', $response->getContent());
+        $this->assertStringContainsString('/docs/deployment-rollback', $response->getContent());
         $this->assertStringContainsString('security.api-token.manage', $response->getContent());
         $this->assertStringContainsString('bearerAuth', $response->getContent());
         $this->assertStringContainsString('X-Tenant-Id', $response->getContent());
@@ -257,6 +263,22 @@ class OpenApiDocsTest extends TestCase
             ->assertOk()
             ->assertSee('composer run velmix:qa', false)
             ->assertSee('docs internas accesibles desde `/docs`', false);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->get('/docs/operations-runbook')
+            ->assertOk()
+            ->assertSee('billing:dispatch-outbox --limit=20 --graceful-if-unmigrated', false)
+            ->assertSee('platform:prune-operational-data', false)
+            ->assertSee('system:alerts --fail-on-critical', false);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->get('/docs/deployment-rollback')
+            ->assertOk()
+            ->assertSee('composer run velmix:ci:mysql', false)
+            ->assertSee('Rollback de aplicacion', false)
+            ->assertSee('Rollback de esquema', false);
     }
 
     private function seedTenantUser(int $tenantId): User

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VELMiX ERP API
-  version: sprint1-day186
+  version: sprint1-day187
   description: |
     Contrato OpenAPI de endpoints prioritarios de VELMiX ERP.
     Cubre la convencion multi-tenant y los flujos criticos ya implementados.
@@ -51,6 +51,62 @@ paths:
           description: YAML bruto
           content:
             application/yaml:
+              schema:
+                type: string
+  /docs/api-guide:
+    get:
+      tags: [Reports]
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      summary: Guia operativa de la API
+      responses:
+        '200':
+          description: Markdown bruto
+          content:
+            text/markdown:
+              schema:
+                type: string
+  /docs/release-readiness:
+    get:
+      tags: [Reports]
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      summary: Checklist interno de release readiness
+      responses:
+        '200':
+          description: Markdown bruto
+          content:
+            text/markdown:
+              schema:
+                type: string
+  /docs/operations-runbook:
+    get:
+      tags: [Reports]
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      summary: Runbook interno de operacion backend
+      responses:
+        '200':
+          description: Markdown bruto
+          content:
+            text/markdown:
+              schema:
+                type: string
+  /docs/deployment-rollback:
+    get:
+      tags: [Reports]
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      summary: Runbook interno de despliegue y rollback
+      responses:
+        '200':
+          description: Markdown bruto
+          content:
+            text/markdown:
               schema:
                 type: string
   /auth/me:
