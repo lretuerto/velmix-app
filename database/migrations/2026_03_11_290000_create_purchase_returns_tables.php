@@ -22,8 +22,8 @@ return new class extends Migration
             $table->timestamp('returned_at');
             $table->timestamps();
 
-            $table->unique(['tenant_id', 'reference']);
-            $table->index(['tenant_id', 'purchase_receipt_id', 'id']);
+            $table->unique(['tenant_id', 'reference'], 'purchase_returns_tenant_reference_unique');
+            $table->index(['tenant_id', 'purchase_receipt_id', 'id'], 'purchase_returns_tenant_receipt_idx');
         });
 
         Schema::create('purchase_return_items', function (Blueprint $table) {
@@ -37,7 +37,7 @@ return new class extends Migration
             $table->decimal('line_total', 12, 2);
             $table->timestamps();
 
-            $table->index(['purchase_return_id', 'purchase_receipt_item_id']);
+            $table->index(['purchase_return_id', 'purchase_receipt_item_id'], 'purchase_return_items_return_receipt_item_idx');
         });
 
         Schema::create('supplier_credits', function (Blueprint $table) {
@@ -52,7 +52,7 @@ return new class extends Migration
             $table->string('reference');
             $table->timestamps();
 
-            $table->index(['tenant_id', 'supplier_id', 'status']);
+            $table->index(['tenant_id', 'supplier_id', 'status'], 'supplier_credits_tenant_supplier_status_idx');
         });
     }
 
