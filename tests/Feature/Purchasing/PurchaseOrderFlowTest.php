@@ -4,6 +4,7 @@ namespace Tests\Feature\Purchasing;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -136,6 +137,34 @@ class PurchaseOrderFlowTest extends TestCase
             ->assertJsonPath('message', 'Purchase order cannot repeat the same product in multiple lines.');
 
         $this->assertDatabaseCount('purchase_orders', 0);
+    }
+
+    public function test_purchase_order_item_schema_rejects_duplicate_product_within_same_order(): void
+    {
+        $this->seedBaseCatalog();
+        $supplierId = $this->seedSupplier(10, '20114444444', 'Proveedor Constraint');
+        $productId = DB::table('products')->where('tenant_id', 10)->where('sku', 'PARA-500')->value('id');
+        $orderId = $this->seedPurchaseOrder(10, User::factory()->create()->id, $supplierId, $productId, 'PO-000099');
+
+        try {
+            DB::table('purchase_order_items')->insert([
+                'purchase_order_id' => $orderId,
+                'product_id' => $productId,
+                'ordered_quantity' => 3,
+                'received_quantity' => 0,
+                'unit_cost' => 1.75,
+                'line_total' => 5.25,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $this->fail('Expected duplicate purchase order product insert to fail at schema level.');
+        } catch (QueryException) {
+            $this->assertSame(1, DB::table('purchase_order_items')
+                ->where('purchase_order_id', $orderId)
+                ->where('product_id', $productId)
+                ->count());
+        }
     }
 
     public function test_can_list_and_detail_purchase_orders_for_current_tenant_only(): void
