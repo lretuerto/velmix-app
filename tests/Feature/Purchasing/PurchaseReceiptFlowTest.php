@@ -289,6 +289,69 @@ class PurchaseReceiptFlowTest extends TestCase
             ->assertStatus(404);
     }
 
+    public function test_rejects_inline_receipt_when_lot_code_already_exists_for_tenant(): void
+    {
+        $this->seedBaseCatalog();
+        $warehouseUser = $this->seedUserWithRole(10, 'ALMACENERO');
+        $supplierId = $this->seedSupplier(10, '20112121212', 'Proveedor Lote Duplicado');
+        $productId = DB::table('products')->where('tenant_id', 10)->where('sku', 'PARA-500')->value('id');
+
+        $this->actingAs($warehouseUser)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/purchases/receipts', [
+                'supplier_id' => $supplierId,
+                'items' => [[
+                    'product_id' => $productId,
+                    'lot_code' => 'L-PARA-001',
+                    'expires_at' => '2028-12-31',
+                    'quantity' => 10,
+                    'unit_cost' => 1.20,
+                ]],
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Lot code already exists for tenant.');
+    }
+
+    public function test_rolls_back_receipt_when_same_inline_lot_code_is_repeated_in_request(): void
+    {
+        $this->seedBaseCatalog();
+        $warehouseUser = $this->seedUserWithRole(10, 'ALMACENERO');
+        $supplierId = $this->seedSupplier(10, '20134343434', 'Proveedor Rollback');
+        $productId = DB::table('products')->where('tenant_id', 10)->where('sku', 'PARA-500')->value('id');
+
+        $this->actingAs($warehouseUser)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/purchases/receipts', [
+                'supplier_id' => $supplierId,
+                'items' => [
+                    [
+                        'product_id' => $productId,
+                        'lot_code' => 'L-PARA-TX-001',
+                        'expires_at' => '2028-12-31',
+                        'quantity' => 5,
+                        'unit_cost' => 1.20,
+                    ],
+                    [
+                        'product_id' => $productId,
+                        'lot_code' => 'L-PARA-TX-001',
+                        'expires_at' => '2028-12-31',
+                        'quantity' => 4,
+                        'unit_cost' => 1.30,
+                    ],
+                ],
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Lot code already exists for tenant.');
+
+        $this->assertDatabaseMissing('lots', [
+            'tenant_id' => 10,
+            'code' => 'L-PARA-TX-001',
+        ]);
+
+        $this->assertSame(0, DB::table('purchase_receipts')->count());
+        $this->assertSame(0, DB::table('purchase_payables')->count());
+    }
+
     private function seedBaseCatalog(): void
     {
         $this->seed([

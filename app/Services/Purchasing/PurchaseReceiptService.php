@@ -4,6 +4,7 @@ namespace App\Services\Purchasing;
 
 use App\Services\Audit\TenantActivityLogService;
 use App\Support\ReferenceCode;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -400,16 +401,20 @@ class PurchaseReceiptService
             throw new HttpException(422, 'Lot code already exists for tenant.');
         }
 
-        $lotId = DB::table('lots')->insertGetId([
-            'tenant_id' => $tenantId,
-            'product_id' => $productId,
-            'code' => $lotCode,
-            'expires_at' => $expiresAt,
-            'stock_quantity' => 0,
-            'status' => 'available',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        try {
+            $lotId = DB::table('lots')->insertGetId([
+                'tenant_id' => $tenantId,
+                'product_id' => $productId,
+                'code' => $lotCode,
+                'expires_at' => $expiresAt,
+                'stock_quantity' => 0,
+                'status' => 'available',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            throw new HttpException(422, 'Lot code already exists for tenant.');
+        }
 
         return (object) [
             'id' => $lotId,

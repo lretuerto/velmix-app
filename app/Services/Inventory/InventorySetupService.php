@@ -2,6 +2,7 @@
 
 namespace App\Services\Inventory;
 
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -22,17 +23,21 @@ class InventorySetupService
             throw new HttpException(422, 'SKU already exists for tenant.');
         }
 
-        $productId = DB::table('products')->insertGetId([
-            'tenant_id' => $tenantId,
-            'sku' => $sku,
-            'name' => $name,
-            'status' => 'active',
-            'is_controlled' => $isControlled,
-            'last_cost' => 0,
-            'average_cost' => 0,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        try {
+            $productId = DB::table('products')->insertGetId([
+                'tenant_id' => $tenantId,
+                'sku' => $sku,
+                'name' => $name,
+                'status' => 'active',
+                'is_controlled' => $isControlled,
+                'last_cost' => 0,
+                'average_cost' => 0,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            throw new HttpException(422, 'SKU already exists for tenant.');
+        }
 
         return [
             'id' => $productId,
@@ -70,16 +75,20 @@ class InventorySetupService
             throw new HttpException(422, 'Lot code already exists for tenant.');
         }
 
-        $lotId = DB::table('lots')->insertGetId([
-            'tenant_id' => $tenantId,
-            'product_id' => $productId,
-            'code' => $code,
-            'expires_at' => $expiresAt,
-            'stock_quantity' => $stockQuantity,
-            'status' => 'available',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        try {
+            $lotId = DB::table('lots')->insertGetId([
+                'tenant_id' => $tenantId,
+                'product_id' => $productId,
+                'code' => $code,
+                'expires_at' => $expiresAt,
+                'stock_quantity' => $stockQuantity,
+                'status' => 'available',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            throw new HttpException(422, 'Lot code already exists for tenant.');
+        }
 
         return [
             'id' => $lotId,

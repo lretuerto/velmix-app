@@ -170,4 +170,43 @@ class InventorySetupFlowTest extends TestCase
             ])
             ->assertStatus(404);
     }
+
+    public function test_rejects_duplicate_lot_code_in_same_tenant(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+            \Database\Seeders\InventoryCatalogSeeder::class,
+        ]);
+
+        $user = User::factory()->create();
+        $roleId = DB::table('roles')->where('code', 'ALMACENERO')->value('id');
+        $productId = DB::table('products')->where('tenant_id', 10)->where('sku', 'PARA-500')->value('id');
+
+        DB::table('tenant_user')->insert([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('tenant_user_role')->insert([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'role_id' => $roleId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/inventory/lots', [
+                'product_id' => $productId,
+                'code' => 'L-PARA-001',
+                'expires_at' => '2028-01-31',
+                'stock_quantity' => 20,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Lot code already exists for tenant.');
+    }
 }
