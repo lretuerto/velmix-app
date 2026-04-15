@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -15,6 +16,9 @@ class AddRequestContext
 
         $request->attributes->set('request_id', $requestId);
         app()->instance('request_id', $requestId);
+        Log::withContext([
+            'request_id' => $requestId,
+        ]);
 
         $response = $next($request);
         $response->headers->set('X-Request-Id', $requestId);

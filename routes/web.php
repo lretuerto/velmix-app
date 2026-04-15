@@ -87,7 +87,7 @@ Route::post('/team/invitations/accept', function (TenantTeamService $service) {
     );
 
     return response()->json(['data' => $result]);
-});
+})->middleware('throttle:team-invitations-accept');
 
 Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:security.docs.read'])->group(function () {
     Route::get('/docs', function () {

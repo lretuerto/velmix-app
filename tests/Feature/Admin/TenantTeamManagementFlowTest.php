@@ -398,6 +398,29 @@ class TenantTeamManagementFlowTest extends TestCase
             ->assertStatus(403);
     }
 
+    public function test_public_invitation_accept_is_throttled_after_repeated_attempts(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
+                ->postJson('/team/invitations/accept', [
+                    'token' => 'invalid-public-token',
+                ])
+                ->assertStatus(404);
+        }
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
+            ->postJson('/team/invitations/accept', [
+                'token' => 'invalid-public-token',
+            ])
+            ->assertStatus(429)
+            ->assertJsonPath('message', 'Too many requests for this sensitive operation.');
+    }
+
     private function seedUserWithRole(int $tenantId, string $roleCode): User
     {
         $user = User::factory()->create();
