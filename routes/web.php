@@ -1693,7 +1693,18 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         $products = DB::table('products')
             ->where('tenant_id', $tenantId)
             ->orderBy('sku')
-            ->get(['id', 'tenant_id', 'sku', 'name', 'status', 'is_controlled', 'last_cost', 'average_cost']);
+            ->get(['id', 'tenant_id', 'sku', 'name', 'status', 'is_controlled', 'last_cost', 'average_cost'])
+            ->map(fn (object $product) => [
+                'id' => (int) $product->id,
+                'tenant_id' => (int) $product->tenant_id,
+                'sku' => (string) $product->sku,
+                'name' => (string) $product->name,
+                'status' => (string) $product->status,
+                'is_controlled' => (bool) $product->is_controlled,
+                'last_cost' => round((float) $product->last_cost, 2),
+                'average_cost' => round((float) $product->average_cost, 2),
+            ])
+            ->values();
 
         return response()->json(['data' => $products]);
     })->middleware('perm:inventory.product.read');

@@ -73,6 +73,8 @@ class BillingProviderProfileFlowTest extends TestCase
             ->value('credentials');
 
         $this->assertIsString($storedCredentials);
+        $this->assertIsArray(json_decode($storedCredentials, true));
+        $this->assertArrayHasKey('payload', json_decode($storedCredentials, true));
         $this->assertStringNotContainsString('sandbox', $storedCredentials);
 
         $this->assertDatabaseHas('electronic_vouchers', [

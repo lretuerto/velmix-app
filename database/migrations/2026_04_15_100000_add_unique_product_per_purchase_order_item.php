@@ -29,6 +29,12 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::getDriverName() === 'mysql') {
+            Schema::table('purchase_order_items', function (Blueprint $table) {
+                $table->index('purchase_order_id', 'purchase_order_items_order_fk_idx');
+            });
+        }
+
         Schema::table('purchase_order_items', function (Blueprint $table) {
             $table->dropUnique('purchase_order_items_order_product_unique');
         });

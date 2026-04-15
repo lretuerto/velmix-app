@@ -70,7 +70,7 @@ class SaleReceivableFlowTest extends TestCase
             ->assertJsonPath('data.customer.id', $customerId)
             ->assertJsonPath('data.outstanding_amount', 18);
 
-        $this->actingAs($cashier)
+        $paymentResponse = $this->actingAs($cashier)
             ->withHeader('X-Tenant-Id', '10')
             ->postJson("/sales/receivables/{$receivableId}/payments", [
                 'amount' => 8,
@@ -78,11 +78,16 @@ class SaleReceivableFlowTest extends TestCase
                 'reference' => 'COBRO-001',
             ])
             ->assertOk()
-            ->assertJsonPath('data.cash_movement_id', 1)
             ->assertJsonPath('data.status', 'partial_paid')
             ->assertJsonPath('data.outstanding_amount', 10);
 
+        $cashMovementId = $paymentResponse->json('data.cash_movement_id');
+
+        $this->assertIsInt($cashMovementId);
+        $this->assertGreaterThan(0, $cashMovementId);
+
         $this->assertDatabaseHas('cash_movements', [
+            'id' => $cashMovementId,
             'tenant_id' => 10,
             'type' => 'receivable_in',
             'amount' => 8.00,

@@ -617,7 +617,7 @@ class OperationsControlTowerSnapshotService
 
         if ($label !== null) {
             $query->whereRaw(
-                "operations_control_tower_snapshots.label like ? escape '\\'",
+                "operations_control_tower_snapshots.label like ? escape '!'",
                 ['%'.$this->escapeLikePattern($label).'%'],
             );
         }
@@ -678,7 +678,11 @@ class OperationsControlTowerSnapshotService
 
     private function escapeLikePattern(string $value): string
     {
-        return addcslashes($value, '\\%_');
+        return strtr($value, [
+            '!' => '!!',
+            '%' => '!%',
+            '_' => '!_',
+        ]);
     }
 
     private function assertComparisonTarget(?int $againstSnapshotId, ?string $date): void

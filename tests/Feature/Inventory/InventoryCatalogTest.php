@@ -43,12 +43,10 @@ class InventoryCatalogTest extends TestCase
 
         $response->assertOk()
             ->assertJsonCount(1, 'data')
-            ->assertJsonFragment([
-                'tenant_id' => 10,
-                'sku' => 'PARA-500',
-                'last_cost' => 0,
-                'average_cost' => 0,
-            ])
+            ->assertJsonPath('data.0.tenant_id', 10)
+            ->assertJsonPath('data.0.sku', 'PARA-500')
+            ->assertJsonPath('data.0.last_cost', fn (mixed $value) => round((float) $value, 2) === 0.0)
+            ->assertJsonPath('data.0.average_cost', fn (mixed $value) => round((float) $value, 2) === 0.0)
             ->assertJsonMissing([
                 'tenant_id' => 20,
                 'sku' => 'AMOX-500',
