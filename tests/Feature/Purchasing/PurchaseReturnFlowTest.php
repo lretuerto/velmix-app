@@ -249,6 +249,75 @@ class PurchaseReturnFlowTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_rejects_purchase_return_when_purchase_order_progress_is_drifted_below_return_quantity(): void
+    {
+        $this->seedBaseCatalog();
+        $admin = $this->seedUserWithRole(10, 'ADMIN');
+        $warehouseUser = $this->seedUserWithRole(10, 'ALMACENERO');
+        $supplierId = $this->seedSupplier(10, '20124242424', 'Proveedor Drift');
+        $productId = DB::table('products')->where('tenant_id', 10)->where('sku', 'PARA-500')->value('id');
+        $lotId = DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
+
+        $orderResponse = $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/purchases/orders', [
+                'supplier_id' => $supplierId,
+                'items' => [[
+                    'product_id' => $productId,
+                    'ordered_quantity' => 5,
+                    'unit_cost' => 2.10,
+                ]],
+            ])
+            ->assertOk();
+
+        $orderId = $orderResponse->json('data.id');
+
+        $receiptResponse = $this->actingAs($warehouseUser)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/purchases/receipts', [
+                'supplier_id' => $supplierId,
+                'purchase_order_id' => $orderId,
+                'items' => [[
+                    'lot_id' => $lotId,
+                    'quantity' => 5,
+                    'unit_cost' => 2.10,
+                ]],
+            ])
+            ->assertOk();
+
+        $receiptId = $receiptResponse->json('data.id');
+        $receiptItemId = (int) DB::table('purchase_receipt_items')
+            ->where('purchase_receipt_id', $receiptId)
+            ->value('id');
+
+        DB::table('purchase_order_items')
+            ->where('purchase_order_id', $orderId)
+            ->where('product_id', $productId)
+            ->update([
+                'received_quantity' => 1,
+                'updated_at' => now(),
+            ]);
+
+        $this->actingAs($warehouseUser)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson("/purchases/receipts/{$receiptId}/returns", [
+                'reason' => 'Drift defensivo',
+                'items' => [[
+                    'purchase_receipt_item_id' => $receiptItemId,
+                    'quantity' => 2,
+                ]],
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Purchase return would make purchase order progress negative.');
+
+        $this->assertDatabaseCount('purchase_returns', 0);
+        $this->assertSame(65, (int) DB::table('lots')->where('id', $lotId)->value('stock_quantity'));
+        $this->assertSame(1, (int) DB::table('purchase_order_items')
+            ->where('purchase_order_id', $orderId)
+            ->where('product_id', $productId)
+            ->value('received_quantity'));
+    }
+
     public function test_lists_and_reads_purchase_returns_for_current_tenant_only(): void
     {
         $this->seedBaseCatalog();

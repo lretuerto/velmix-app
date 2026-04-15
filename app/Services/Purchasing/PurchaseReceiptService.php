@@ -32,7 +32,6 @@ class PurchaseReceiptService
             }
 
             $purchaseOrder = null;
-            $orderedItemMap = [];
 
             if ($purchaseOrderId !== null) {
                 $purchaseOrder = DB::table('purchase_orders')
@@ -46,11 +45,6 @@ class PurchaseReceiptService
                     throw new HttpException(404, 'Purchase order not found.');
                 }
 
-                $orderedItemMap = DB::table('purchase_order_items')
-                    ->where('purchase_order_id', $purchaseOrderId)
-                    ->get(['id', 'product_id', 'ordered_quantity', 'received_quantity'])
-                    ->keyBy('product_id')
-                    ->all();
             }
 
             $receiptId = DB::table('purchase_receipts')->insertGetId([
@@ -85,27 +79,11 @@ class PurchaseReceiptService
                 $totalAmount += $lineTotal;
 
                 if ($purchaseOrder !== null) {
-                    $orderedItem = $orderedItemMap[$lot->product_id] ?? null;
-
-                    if ($orderedItem === null) {
-                        throw new HttpException(422, 'Received product is not part of the purchase order.');
-                    }
-
-                    $newReceivedQuantity = (int) $orderedItem->received_quantity + $quantity;
-
-                    if ($newReceivedQuantity > (int) $orderedItem->ordered_quantity) {
-                        throw new HttpException(422, 'Received quantity exceeds ordered quantity.');
-                    }
-
-                    DB::table('purchase_order_items')
-                        ->where('id', $orderedItem->id)
-                        ->update([
-                            'received_quantity' => $newReceivedQuantity,
-                            'updated_at' => now(),
-                        ]);
-
-                    $orderedItem->received_quantity = $newReceivedQuantity;
-                    $orderedItemMap[$lot->product_id] = $orderedItem;
+                    app(PurchaseOrderProgressService::class)->addReceivedQuantity(
+                        $purchaseOrderId,
+                        (int) $lot->product_id,
+                        $quantity,
+                    );
                 }
 
                 DB::table('purchase_receipt_items')->insert([
@@ -192,24 +170,7 @@ class PurchaseReceiptService
             }
 
             if ($purchaseOrder !== null) {
-                $totals = DB::table('purchase_order_items')
-                    ->where('purchase_order_id', $purchaseOrderId)
-                    ->selectRaw('SUM(ordered_quantity) as ordered_total, SUM(received_quantity) as received_total')
-                    ->first();
-
-                $orderedTotal = (int) ($totals->ordered_total ?? 0);
-                $receivedTotal = (int) ($totals->received_total ?? 0);
-                $orderStatus = $receivedTotal <= 0
-                    ? 'open'
-                    : ($receivedTotal < $orderedTotal ? 'partially_received' : 'received');
-
-                DB::table('purchase_orders')
-                    ->where('id', $purchaseOrderId)
-                    ->update([
-                        'status' => $orderStatus,
-                        'received_at' => $orderStatus === 'received' ? now() : null,
-                        'updated_at' => now(),
-                    ]);
+                app(PurchaseOrderProgressService::class)->refreshStatus($purchaseOrderId);
             }
 
             app(TenantActivityLogService::class)->record(

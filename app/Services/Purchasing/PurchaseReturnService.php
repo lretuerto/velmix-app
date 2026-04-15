@@ -436,42 +436,14 @@ class PurchaseReturnService
             ->map(fn (Collection $group) => $group->sum('quantity'));
 
         foreach ($returnedByProduct as $productId => $quantity) {
-            $orderItem = DB::table('purchase_order_items')
-                ->where('purchase_order_id', $purchaseOrderId)
-                ->where('product_id', $productId)
-                ->lockForUpdate()
-                ->first(['id', 'received_quantity']);
-
-            if ($orderItem === null) {
-                continue;
-            }
-
-            DB::table('purchase_order_items')
-                ->where('id', $orderItem->id)
-                ->update([
-                    'received_quantity' => max((int) $orderItem->received_quantity - (int) $quantity, 0),
-                    'updated_at' => now(),
-                ]);
+            app(PurchaseOrderProgressService::class)->subtractReceivedQuantity(
+                $purchaseOrderId,
+                (int) $productId,
+                (int) $quantity,
+            );
         }
 
-        $totals = DB::table('purchase_order_items')
-            ->where('purchase_order_id', $purchaseOrderId)
-            ->selectRaw('SUM(ordered_quantity) as ordered_total, SUM(received_quantity) as received_total')
-            ->first();
-
-        $orderedTotal = (int) ($totals->ordered_total ?? 0);
-        $receivedTotal = (int) ($totals->received_total ?? 0);
-        $orderStatus = $receivedTotal <= 0
-            ? 'open'
-            : ($receivedTotal < $orderedTotal ? 'partially_received' : 'received');
-
-        DB::table('purchase_orders')
-            ->where('id', $purchaseOrderId)
-            ->update([
-                'status' => $orderStatus,
-                'received_at' => $orderStatus === 'received' ? now() : null,
-                'updated_at' => now(),
-            ]);
+        app(PurchaseOrderProgressService::class)->refreshStatus($purchaseOrderId);
     }
 
     private function recalculateProductCosts(int $tenantId, int $productId): void
