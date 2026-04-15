@@ -2,14 +2,23 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() === 'mysql') {
+            Schema::table('sale_credit_notes', function (Blueprint $table) {
+                // MySQL may reuse the unique sale_id index to support the FK.
+                // Add a plain helper index first so dropping the unique constraint stays valid.
+                $table->index('sale_id', 'sale_credit_notes_sale_id_fk_index');
+            });
+        }
+
         Schema::table('sale_credit_notes', function (Blueprint $table) {
-            $table->dropUnique(['sale_id']);
+            $table->dropUnique('sale_credit_notes_sale_id_unique');
             $table->index(['sale_id', 'id']);
         });
 
@@ -33,8 +42,14 @@ return new class extends Migration
         Schema::dropIfExists('sale_credit_note_items');
 
         Schema::table('sale_credit_notes', function (Blueprint $table) {
-            $table->dropIndex(['sale_id', 'id']);
+            $table->dropIndex('sale_credit_notes_sale_id_id_index');
             $table->unique('sale_id');
         });
+
+        if (DB::getDriverName() === 'mysql') {
+            Schema::table('sale_credit_notes', function (Blueprint $table) {
+                $table->dropIndex('sale_credit_notes_sale_id_fk_index');
+            });
+        }
     }
 };
