@@ -53,6 +53,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `POST /inventory/lots/{lot}/immobilize`
 - `GET /inventory/movements`
 - `POST /stock/movements`
+- las altas de producto y lote aceptan `Idempotency-Key` para evitar dobles submits administrativos
 
 ### POS y ventas
 
@@ -95,6 +96,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /purchases/payables`
 - `POST /purchases/payables/{payable}/payments`
 - `POST /purchases/payables/{payable}/apply-credits`
+- una orden de compra no puede repetir el mismo `product_id` en multiples lineas; el backend responde `422`
 
 ### Billing
 
@@ -303,6 +305,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `POST /purchases/payables/{payable}/apply-credits`
 - `POST /purchases/orders`
 - `POST /purchases/orders/from-replenishment`
+- `POST /inventory/products`
+- `POST /inventory/lots`
 - `POST /purchases/receipts`
 - `POST /purchases/receipts/{receipt}/returns`
 - `POST /pos/sales/{sale}/cancel`

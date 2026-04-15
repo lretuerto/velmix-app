@@ -103,6 +103,81 @@ class IdempotencyFlowTest extends TestCase
         $this->assertSame(1, DB::table('purchase_order_items')->where('purchase_order_id', $orderId)->count());
     }
 
+    public function test_replays_same_inventory_product_creation_for_same_idempotency_key(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $warehouse = $this->seedTenantUserWithRole(10, 'ALMACENERO');
+
+        $payload = [
+            'sku' => 'DICLO-050',
+            'name' => 'Diclofenaco 50mg',
+            'is_controlled' => false,
+        ];
+
+        $first = $this->actingAs($warehouse)
+            ->withHeader('X-Tenant-Id', '10')
+            ->withHeader('Idempotency-Key', 'inventory-product-001')
+            ->postJson('/inventory/products', $payload);
+
+        $first->assertOk()
+            ->assertHeader('X-Idempotency-Status', 'stored');
+
+        $productId = (int) $first->json('data.id');
+
+        $this->actingAs($warehouse)
+            ->withHeader('X-Tenant-Id', '10')
+            ->withHeader('Idempotency-Key', 'inventory-product-001')
+            ->postJson('/inventory/products', $payload)
+            ->assertOk()
+            ->assertHeader('X-Idempotency-Status', 'replayed')
+            ->assertJsonPath('data.id', $productId);
+
+        $this->assertSame(1, DB::table('products')->where('tenant_id', 10)->where('sku', 'DICLO-050')->count());
+    }
+
+    public function test_replays_same_inventory_lot_creation_for_same_idempotency_key(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+            \Database\Seeders\InventoryCatalogSeeder::class,
+        ]);
+
+        $warehouse = $this->seedTenantUserWithRole(10, 'ALMACENERO');
+        $productId = (int) DB::table('products')->where('tenant_id', 10)->where('sku', 'PARA-500')->value('id');
+
+        $payload = [
+            'product_id' => $productId,
+            'code' => 'L-PARA-777',
+            'expires_at' => '2029-06-30',
+            'stock_quantity' => 45,
+        ];
+
+        $first = $this->actingAs($warehouse)
+            ->withHeader('X-Tenant-Id', '10')
+            ->withHeader('Idempotency-Key', 'inventory-lot-001')
+            ->postJson('/inventory/lots', $payload);
+
+        $first->assertOk()
+            ->assertHeader('X-Idempotency-Status', 'stored');
+
+        $lotId = (int) $first->json('data.id');
+
+        $this->actingAs($warehouse)
+            ->withHeader('X-Tenant-Id', '10')
+            ->withHeader('Idempotency-Key', 'inventory-lot-001')
+            ->postJson('/inventory/lots', $payload)
+            ->assertOk()
+            ->assertHeader('X-Idempotency-Status', 'replayed')
+            ->assertJsonPath('data.id', $lotId);
+
+        $this->assertSame(1, DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-777')->count());
+    }
+
     public function test_replays_same_purchase_receipt_for_same_idempotency_key(): void
     {
         $this->seed([

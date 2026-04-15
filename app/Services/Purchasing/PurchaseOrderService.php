@@ -39,6 +39,8 @@ class PurchaseOrderService
             throw new HttpException(422, 'Purchase order items are required.');
         }
 
+        $this->assertUniqueProducts($items);
+
         return DB::transaction(function () use ($tenantId, $userId, $supplierId, $items) {
             $supplier = DB::table('suppliers')
                 ->where('tenant_id', $tenantId)
@@ -220,5 +222,17 @@ class PurchaseOrderService
             ],
             'items' => $items,
         ];
+    }
+
+    private function assertUniqueProducts(array $items): void
+    {
+        $productIds = array_map(
+            static fn (array $item): int => (int) ($item['product_id'] ?? 0),
+            $items,
+        );
+
+        if (count($productIds) !== count(array_unique($productIds))) {
+            throw new HttpException(422, 'Purchase order cannot repeat the same product in multiple lines.');
+        }
     }
 }

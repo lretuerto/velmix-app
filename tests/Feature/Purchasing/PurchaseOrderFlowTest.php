@@ -78,6 +78,66 @@ class PurchaseOrderFlowTest extends TestCase
         ]);
     }
 
+    public function test_rejects_purchase_order_with_repeated_product_lines(): void
+    {
+        $this->seedBaseCatalog();
+        $admin = $this->seedUserWithRole(10, 'ADMIN');
+        $supplierId = $this->seedSupplier(10, '20118888888', 'Proveedor Duplicado');
+        $productId = DB::table('products')->where('tenant_id', 10)->where('sku', 'PARA-500')->value('id');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/purchases/orders', [
+                'supplier_id' => $supplierId,
+                'items' => [
+                    [
+                        'product_id' => $productId,
+                        'ordered_quantity' => 5,
+                        'unit_cost' => 2.10,
+                    ],
+                    [
+                        'product_id' => $productId,
+                        'ordered_quantity' => 7,
+                        'unit_cost' => 2.15,
+                    ],
+                ],
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Purchase order cannot repeat the same product in multiple lines.');
+
+        $this->assertDatabaseCount('purchase_orders', 0);
+    }
+
+    public function test_rejects_replenishment_order_with_repeated_product_lines(): void
+    {
+        $this->seedBaseCatalog();
+        $admin = $this->seedUserWithRole(10, 'ADMIN');
+        $supplierId = $this->seedSupplier(10, '20119999999', 'Proveedor Replenishment Duplicado');
+        $productId = DB::table('products')->where('tenant_id', 10)->where('sku', 'PARA-500')->value('id');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/purchases/orders/from-replenishment', [
+                'supplier_id' => $supplierId,
+                'items' => [
+                    [
+                        'product_id' => $productId,
+                        'unit_cost' => 2.25,
+                        'suggested_order_quantity' => 8,
+                    ],
+                    [
+                        'product_id' => $productId,
+                        'unit_cost' => 2.25,
+                        'order_quantity' => 6,
+                    ],
+                ],
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Purchase order cannot repeat the same product in multiple lines.');
+
+        $this->assertDatabaseCount('purchase_orders', 0);
+    }
+
     public function test_can_list_and_detail_purchase_orders_for_current_tenant_only(): void
     {
         $this->seedBaseCatalog();

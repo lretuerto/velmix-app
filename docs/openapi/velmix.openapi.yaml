@@ -274,6 +274,7 @@ paths:
     post:
       tags: [Inventory]
       summary: Crea producto
+      description: Acepta `Idempotency-Key` para evitar doble submit administrativo del mismo payload.
       requestBody:
         required: true
         content:
@@ -289,10 +290,13 @@ paths:
                 $ref: '#/components/schemas/DataEnvelope'
         '422':
           $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /inventory/lots:
     post:
       tags: [Inventory]
       summary: Crea lote
+      description: Acepta `Idempotency-Key` para evitar doble submit administrativo del mismo payload.
       requestBody:
         required: true
         content:
@@ -306,6 +310,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /inventory/lots/{lot}:
     get:
       tags: [Inventory]
@@ -704,6 +712,7 @@ paths:
     post:
       tags: [Purchasing]
       summary: Crea orden de compra
+      description: Acepta `Idempotency-Key` y no permite repetir el mismo `product_id` en multiples lineas.
       requestBody:
         required: true
         content:
@@ -717,10 +726,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /purchases/orders/from-replenishment:
     post:
       tags: [Purchasing]
       summary: Crea orden desde sugerencias de reposicion
+      description: Acepta `Idempotency-Key` y no permite repetir el mismo `product_id` en multiples lineas.
       requestBody:
         required: true
         content:
@@ -734,6 +748,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /purchases/receipts:
     get:
       tags: [Purchasing]

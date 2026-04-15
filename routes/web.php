@@ -1903,7 +1903,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:inventory.product.create');
+    })->middleware(['perm:inventory.product.create', 'idempotent']);
 
     Route::get('/inventory/lots/{lot}', function (int $lot) {
         $tenantId = (int) request()->attributes->get('tenant_id');
@@ -1945,7 +1945,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:inventory.lot.create');
+    })->middleware(['perm:inventory.lot.create', 'idempotent']);
 
     Route::post('/inventory/lots/{lot}/immobilize', function (int $lot, LotControlService $service) {
         $payload = request()->validate([
