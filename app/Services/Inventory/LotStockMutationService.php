@@ -24,7 +24,7 @@ class LotStockMutationService
             throw new HttpException(404, $notFoundMessage);
         }
 
-        return (int) $lot->stock_quantity + $quantity;
+        return $this->currentStockOrFail((int) $lot->id, $notFoundMessage);
     }
 
     public function decrementLockedLot(
@@ -35,23 +35,26 @@ class LotStockMutationService
     ): int {
         $this->assertPositiveQuantity($quantity);
 
-        $currentStock = (int) ($lot->stock_quantity ?? 0);
-
-        if ($currentStock < $quantity) {
-            throw new HttpException(422, $insufficientMessage);
-        }
-
         $affected = DB::table('lots')
             ->where('id', $lot->id)
+            ->where('stock_quantity', '>=', $quantity)
             ->decrement('stock_quantity', $quantity, [
                 'updated_at' => now(),
             ]);
 
-        if ($affected !== 1) {
+        if ($affected === 1) {
+            return $this->currentStockOrFail((int) $lot->id, $notFoundMessage);
+        }
+
+        $exists = DB::table('lots')
+            ->where('id', $lot->id)
+            ->exists();
+
+        if (! $exists) {
             throw new HttpException(404, $notFoundMessage);
         }
 
-        return $currentStock - $quantity;
+        throw new HttpException(422, $insufficientMessage);
     }
 
     public function decrementById(
@@ -81,5 +84,18 @@ class LotStockMutationService
         if ($quantity <= 0) {
             throw new HttpException(422, 'Quantity must be greater than zero.');
         }
+    }
+
+    private function currentStockOrFail(int $lotId, string $notFoundMessage): int
+    {
+        $currentStock = DB::table('lots')
+            ->where('id', $lotId)
+            ->value('stock_quantity');
+
+        if ($currentStock === null) {
+            throw new HttpException(404, $notFoundMessage);
+        }
+
+        return (int) $currentStock;
     }
 }
