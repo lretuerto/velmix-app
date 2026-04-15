@@ -3,6 +3,7 @@
 namespace App\Services\Purchasing;
 
 use App\Services\Audit\TenantActivityLogService;
+use App\Services\Inventory\LotStockMutationService;
 use App\Support\ReferenceCode;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -76,7 +77,11 @@ class PurchaseReceiptService
                 $quantity = (int) $item['quantity'];
                 $unitCost = (float) $item['unit_cost'];
                 $lineTotal = round($quantity * $unitCost, 2);
-                $resultingStock = $lot->stock_quantity + $quantity;
+                $resultingStock = app(LotStockMutationService::class)->incrementLockedLot(
+                    $lot,
+                    $quantity,
+                    'Lot not found during purchase receipt.',
+                );
                 $totalAmount += $lineTotal;
 
                 if ($purchaseOrder !== null) {
@@ -102,13 +107,6 @@ class PurchaseReceiptService
                     $orderedItem->received_quantity = $newReceivedQuantity;
                     $orderedItemMap[$lot->product_id] = $orderedItem;
                 }
-
-                DB::table('lots')
-                    ->where('id', $lot->id)
-                    ->update([
-                        'stock_quantity' => $resultingStock,
-                        'updated_at' => now(),
-                    ]);
 
                 DB::table('purchase_receipt_items')->insert([
                     'purchase_receipt_id' => $receiptId,

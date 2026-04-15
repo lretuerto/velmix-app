@@ -143,6 +143,60 @@ class PosSaleCancellationFlowTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_cancellation_restores_stock_for_sale_with_repeated_same_lot_lines(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+            \Database\Seeders\InventoryCatalogSeeder::class,
+        ]);
+
+        $cashier = $this->seedUserWithRole(10, 'CAJERO');
+        $admin = $this->seedUserWithRole(10, 'ADMIN');
+        $lotId = DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
+
+        $saleResponse = $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/pos/sales', [
+                'items' => [
+                    [
+                        'lot_id' => $lotId,
+                        'quantity' => 2,
+                        'unit_price' => 3.50,
+                    ],
+                    [
+                        'lot_id' => $lotId,
+                        'quantity' => 3,
+                        'unit_price' => 3.50,
+                    ],
+                ],
+            ])
+            ->assertOk();
+
+        $saleId = $saleResponse->json('data.sale_id');
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson("/pos/sales/{$saleId}/cancel", [
+                'reason' => 'Rollback completo del mismo lote',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'cancelled');
+
+        $this->assertDatabaseHas('lots', [
+            'id' => $lotId,
+            'stock_quantity' => 60,
+        ]);
+
+        $this->assertSame(
+            2,
+            DB::table('stock_movements')
+                ->where('sale_id', $saleId)
+                ->where('type', 'sale_reversal')
+                ->count(),
+        );
+    }
+
     private function createCompletedSaleForTenant10(): array
     {
         $this->seed([

@@ -3,6 +3,7 @@
 namespace App\Services\Sales;
 
 use App\Services\Audit\TenantActivityLogService;
+use App\Services\Inventory\LotStockMutationService;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -65,12 +66,11 @@ class SaleCancellationService
                     throw new HttpException(404, 'Lot not found during cancellation.');
                 }
 
-                DB::table('lots')
-                    ->where('id', $lot->id)
-                    ->update([
-                        'stock_quantity' => (int) $lot->stock_quantity + (int) $item->quantity,
-                        'updated_at' => now(),
-                    ]);
+                app(LotStockMutationService::class)->incrementLockedLot(
+                    $lot,
+                    (int) $item->quantity,
+                    'Lot not found during cancellation.',
+                );
 
                 DB::table('stock_movements')->insert([
                     'tenant_id' => $tenantId,

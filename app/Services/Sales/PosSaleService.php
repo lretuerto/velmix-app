@@ -3,6 +3,7 @@
 namespace App\Services\Sales;
 
 use App\Services\Audit\TenantActivityLogService;
+use App\Services\Inventory\LotStockMutationService;
 use App\Support\ReferenceCode;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -127,12 +128,13 @@ class PosSaleService
                         'updated_at' => now(),
                     ]);
 
-                    DB::table('lots')
-                        ->where('id', $allocation['lot_id'])
-                        ->update([
-                            'stock_quantity' => $allocation['remaining_stock'],
-                            'updated_at' => now(),
-                        ]);
+                    app(LotStockMutationService::class)->decrementById(
+                        $tenantId,
+                        (int) $allocation['lot_id'],
+                        (int) $allocation['quantity'],
+                        'Lot not found during sale.',
+                        'Insufficient stock for lot.',
+                    );
 
                     DB::table('stock_movements')->insert([
                         'tenant_id' => $tenantId,

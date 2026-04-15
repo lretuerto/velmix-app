@@ -41,18 +41,9 @@ class StockMovementService
             }
 
             $signedQuantity = $type === 'manual_in' ? $quantity : -$quantity;
-            $resultingStock = $lot->stock_quantity + $signedQuantity;
-
-            if ($resultingStock < 0) {
-                throw new HttpException(422, 'Stock cannot become negative.');
-            }
-
-            DB::table('lots')
-                ->where('id', $lot->id)
-                ->update([
-                    'stock_quantity' => $resultingStock,
-                    'updated_at' => now(),
-                ]);
+            $resultingStock = $type === 'manual_in'
+                ? app(LotStockMutationService::class)->incrementLockedLot($lot, $quantity)
+                : app(LotStockMutationService::class)->decrementLockedLot($lot, $quantity);
 
             $movementId = DB::table('stock_movements')->insertGetId([
                 'tenant_id' => $tenantId,

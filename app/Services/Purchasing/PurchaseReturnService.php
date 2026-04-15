@@ -3,6 +3,7 @@
 namespace App\Services\Purchasing;
 
 use App\Services\Audit\TenantActivityLogService;
+use App\Services\Inventory\LotStockMutationService;
 use App\Support\ReferenceCode;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -112,16 +113,12 @@ class PurchaseReturnService
                     throw new HttpException(404, 'Lot not found during purchase return.');
                 }
 
-                if ((int) $lot->stock_quantity < $item['quantity']) {
-                    throw new HttpException(422, 'Purchase return exceeds current stock for lot.');
-                }
-
-                DB::table('lots')
-                    ->where('id', $lot->id)
-                    ->update([
-                        'stock_quantity' => (int) $lot->stock_quantity - $item['quantity'],
-                        'updated_at' => now(),
-                    ]);
+                app(LotStockMutationService::class)->decrementLockedLot(
+                    $lot,
+                    (int) $item['quantity'],
+                    'Purchase return exceeds current stock for lot.',
+                    'Lot not found during purchase return.',
+                );
 
                 DB::table('purchase_return_items')->insert([
                     'purchase_return_id' => $returnId,

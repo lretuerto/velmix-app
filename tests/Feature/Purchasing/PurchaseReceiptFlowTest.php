@@ -188,6 +188,48 @@ class PurchaseReceiptFlowTest extends TestCase
         ]);
     }
 
+    public function test_can_receive_existing_lot_across_repeated_lines_in_same_request(): void
+    {
+        $this->seedBaseCatalog();
+        $warehouseUser = $this->seedUserWithRole(10, 'ALMACENERO');
+        $supplierId = $this->seedSupplier(10, '20167676767', 'Proveedor Lote Repetido');
+        $lotId = DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
+
+        $this->actingAs($warehouseUser)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/purchases/receipts', [
+                'supplier_id' => $supplierId,
+                'items' => [
+                    [
+                        'lot_id' => $lotId,
+                        'quantity' => 4,
+                        'unit_cost' => 1.70,
+                    ],
+                    [
+                        'lot_id' => $lotId,
+                        'quantity' => 6,
+                        'unit_cost' => 1.80,
+                    ],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.items.0.resulting_stock', 64)
+            ->assertJsonPath('data.items.1.resulting_stock', 70)
+            ->assertJsonPath('data.total_amount', 17.6);
+
+        $this->assertDatabaseHas('lots', [
+            'id' => $lotId,
+            'stock_quantity' => 70,
+        ]);
+
+        $this->assertSame(
+            2,
+            DB::table('purchase_receipt_items')
+                ->where('lot_id', $lotId)
+                ->count(),
+        );
+    }
+
     public function test_can_list_purchase_receipts_for_current_tenant_only(): void
     {
         $this->seedBaseCatalog();
