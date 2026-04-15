@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureTenantAccess
@@ -42,6 +43,10 @@ class EnsureTenantAccess
         }
 
         app()->instance('currentTenant', $tenant);
+        Log::withContext([
+            'tenant_code' => (string) $tenant->code,
+            'route_uri' => $request->route()?->uri(),
+        ]);
 
         return $next($request);
     }

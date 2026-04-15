@@ -18,6 +18,9 @@ class AddRequestContext
         app()->instance('request_id', $requestId);
         Log::withContext([
             'request_id' => $requestId,
+            'request_method' => $request->method(),
+            'request_path' => '/'.$request->path(),
+            'request_ip' => $request->ip(),
         ]);
 
         $response = $next($request);

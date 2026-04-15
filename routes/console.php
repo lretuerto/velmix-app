@@ -2,12 +2,15 @@
 
 use App\Services\Billing\BillingReconciliationService;
 use App\Services\Billing\OutboxDispatchService;
+use App\Services\Platform\OperationalDataPruneService;
+use App\Services\Platform\SystemAlertService;
 use App\Services\Platform\SystemHealthService;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\SQLiteDatabaseDoesNotExistException;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -147,3 +150,50 @@ Artisan::command('system:readiness {--json}', function (SystemHealthService $ser
 
     return $result['status'] === 'ready' ? 0 : 1;
 })->purpose('Check application readiness.');
+
+Artisan::command('system:alerts {--date=} {--json} {--fail-on-critical}', function (SystemAlertService $service) {
+    $result = $service->summary($this->option('date') ?: null);
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf('Alert status: %s', $result['status']));
+        $this->line(sprintf('Critical: %d', $result['summary']['critical_count']));
+        $this->line(sprintf('Warning: %d', $result['summary']['warning_count']));
+        $this->line(sprintf('Info: %d', $result['summary']['info_count']));
+    }
+
+    if ((bool) $this->option('fail-on-critical') && $result['status'] === 'critical') {
+        return 1;
+    }
+
+    return 0;
+})->purpose('Summarize operational alerts across tenants.');
+
+Artisan::command('platform:prune-operational-data {--pretend} {--json}', function (OperationalDataPruneService $service) {
+    $result = $service->prune((bool) $this->option('pretend'));
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf('Operational data prune total: %d', $result['total_pruned_count']));
+    }
+
+    return 0;
+})->purpose('Prune operational data with conservative retention windows.');
+
+Schedule::command('billing:dispatch-outbox --limit=20 --graceful-if-unmigrated')
+    ->everyMinute()
+    ->withoutOverlapping();
+
+Schedule::command('billing:reconcile-pending --limit=20 --graceful-if-unmigrated')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+Schedule::command('system:alerts')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+Schedule::command('platform:prune-operational-data')
+    ->dailyAt('03:15')
+    ->withoutOverlapping();

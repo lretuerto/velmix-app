@@ -20,6 +20,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - El portal interno `/docs` es solo para sesion web autenticada; no acepta bearer tokens
 - Contexto tenant: enviar `X-Tenant-Id`
 - Formato de salida: casi todos responden `{"data": ...}`
+- La aceptacion publica `POST /team/invitations/accept` esta protegida por rate limit sensible
 - Errores esperados:
   - `400` si falta `X-Tenant-Id`
   - `403` si el usuario no pertenece al tenant o no tiene permiso
@@ -239,6 +240,15 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - Si no se pasa `--tenant`, procesa tenants con eventos pendientes
 - Para pruebas controladas: `--simulate-result=accepted|rejected|transient_fail`
 - Para QA reproducible existe `composer run velmix:outbox`, que sale en verde si la base todavía no está migrada
+- Reconciliacion manual: `php artisan billing:reconcile-pending --limit=20`
+- Alertas operativas agregadas: `php artisan system:alerts --json`
+- En CI o chequeos manuales puede usarse `php artisan system:alerts --fail-on-critical`
+- Pruning conservador: `php artisan platform:prune-operational-data --pretend --json`
+- Scheduler recomendado:
+  - `billing:dispatch-outbox --limit=20 --graceful-if-unmigrated` cada minuto
+  - `billing:reconcile-pending --limit=20 --graceful-if-unmigrated` cada cinco minutos
+  - `system:alerts` cada cinco minutos
+  - `platform:prune-operational-data` diario a las `03:15`
 
 ## Gobernanza de API tokens
 
@@ -310,6 +320,10 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /health/live` valida liveness y devuelve `request_id`
 - `GET /health/ready` valida conectividad y readiness en modo resumido publico
 - `php artisan system:readiness --json` entrega el detalle completo de base y esquema para operacion
+- `php artisan system:alerts --json` resume alertas cross-tenant sin degradar el scheduler
+- `php artisan platform:prune-operational-data --pretend --json` expone housekeeping conservador de datos operativos
+- El backend puede emitir logs estructurados via `stderr_json` o `daily_json`
+- El contexto minimo agregado al log incluye `request_id`, metodo, path, IP, `tenant_id`, `tenant_code`, `auth_mode`, `user_id` y `api_token_id` cuando aplica
 - `POST /pos/sales`
 - `POST /billing/vouchers`
 - `POST /billing/credit-notes`
@@ -329,6 +343,23 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - esos endpoints aceptan `Idempotency-Key`; si se repite con el mismo payload se devuelve la misma respuesta y se marca `X-Idempotency-Status: replayed`
 - las referencias de cobranza y pago a proveedor tambien quedan protegidas por unicidad por entidad; si se reutiliza la misma referencia para la misma cuenta, el backend responde `409`
   - replay backlog y fallos recientes
+
+## Pipeline y validacion
+
+- `composer run velmix:ci` ejecuta la secuencia completa sobre SQLite:
+  - `composer validate --no-check-publish`
+  - `composer run velmix:qa`
+  - `composer run velmix:routes`
+  - `composer run velmix:readiness`
+  - `composer run velmix:alerts`
+  - `composer run velmix:prune`
+  - `composer run velmix:outbox`
+  - `composer run velmix:reconcile`
+- `composer run velmix:ci:mysql` replica el flujo en MySQL y agrega `composer run velmix:concurrency`
+- La suite `concurrency` valida bloqueos y serializacion real de:
+  - mutacion de stock por lote
+  - progreso de recepcion en ordenes de compra
+  - reserva de claves de idempotencia
 
 ## Dashboard ejecutivo de billing
 

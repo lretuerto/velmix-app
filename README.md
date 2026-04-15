@@ -31,7 +31,8 @@ Backend SaaS multi-tenant para operaciones farmacéuticas, construido sobre Lara
 
 - PHP 8.2+
 - Composer
-- SQLite o motor compatible con Laravel
+- SQLite para desarrollo rapido
+- MySQL 8.0+ para la validacion transaccional de CI y entornos cercanos a produccion
 
 ## Inicio rápido
 
@@ -84,10 +85,14 @@ php artisan test
   - `GET /health/ready`
 - `GET /health/ready` es publico pero resumido; el detalle completo queda para `php artisan system:readiness --json`
 - Todas las respuestas ahora devuelven `X-Request-Id` para correlación operativa
+- Logs estructurados disponibles via canales `stderr_json` y `daily_json`
 - Worker manual outbox: `php artisan billing:dispatch-outbox --limit=20`
 - Worker manual de reconciliación billing: `php artisan billing:reconcile-pending --limit=20`
 - Script de readiness: `composer run velmix:readiness`
+- Script de alertas operativas: `composer run velmix:alerts`
+- Script de pruning conservador: `composer run velmix:prune`
 - Script de validación outbox: `composer run velmix:outbox` no falla si la base aún no fue migrada
+- `php artisan system:alerts --fail-on-critical` queda para CI o chequeos manuales; el scheduler solo observa y no degrada `schedule:run`
 - Perfil/provider billing por tenant:
   - `GET /billing/provider-profile`
   - `PUT /billing/provider-profile`
@@ -165,11 +170,15 @@ Archivos fuente:
 composer run test
 composer run velmix:reset
 composer run velmix:test
+composer run velmix:concurrency
 composer run velmix:qa
 composer run velmix:readiness
+composer run velmix:alerts
+composer run velmix:prune
 composer run velmix:outbox
 composer run velmix:reconcile
 composer run velmix:ci
+composer run velmix:ci:mysql
 composer run velmix:routes
 ```
 
@@ -182,9 +191,28 @@ composer run velmix:routes
 
 1. `composer validate --no-check-publish`
 2. `composer run velmix:qa`
-3. `composer run velmix:readiness`
-4. `composer run velmix:outbox`
-5. `composer run velmix:reconcile`
+3. `composer run velmix:routes`
+4. `composer run velmix:readiness`
+5. `composer run velmix:alerts`
+6. `composer run velmix:prune`
+7. `composer run velmix:outbox`
+8. `composer run velmix:reconcile`
+
+`velmix:ci:mysql` reutiliza la misma secuencia sobre MySQL y agrega la suite `concurrency`, para validar locks, unicidad e idempotencia en un engine mas parecido a produccion.
+
+## Operacion programada
+
+- `billing:dispatch-outbox --limit=20 --graceful-if-unmigrated` cada minuto
+- `billing:reconcile-pending --limit=20 --graceful-if-unmigrated` cada cinco minutos
+- `system:alerts` cada cinco minutos
+- `platform:prune-operational-data` diariamente a las `03:15`
+
+Para despliegues con logs estructurados se recomienda un stack como:
+
+```dotenv
+LOG_CHANNEL=stack
+LOG_STACK=single,stderr_json
+```
 
 ## Módulos principales
 

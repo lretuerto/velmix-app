@@ -12,7 +12,14 @@ class RequestContextMiddlewareTest extends TestCase
 {
     public function test_request_context_sets_header_and_log_context(): void
     {
-        Log::spy();
+        Log::shouldReceive('withContext')
+            ->once()
+            ->with([
+                'request_id' => 'trace-123',
+                'request_method' => 'GET',
+                'request_path' => '/health/live',
+                'request_ip' => '127.0.0.1',
+            ]);
 
         $request = Request::create('/health/live', 'GET', server: [
             'HTTP_X_REQUEST_ID' => 'trace-123',
@@ -22,10 +29,6 @@ class RequestContextMiddlewareTest extends TestCase
             $request,
             fn () => new Response('ok', 200),
         );
-
-        Log::shouldHaveReceived('withContext')->once()->with([
-            'request_id' => 'trace-123',
-        ]);
 
         $this->assertSame('trace-123', $request->attributes->get('request_id'));
         $this->assertSame('trace-123', app('request_id'));

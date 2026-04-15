@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Services\Security\ApiTokenService;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class AuthenticateSessionOrToken
@@ -36,6 +37,11 @@ class AuthenticateSessionOrToken
             $request->attributes->set('api_token_tenant_id', $token->tenant_id);
             app()->instance('currentApiToken', $token);
             $this->tokens->touch($token);
+            Log::withContext([
+                'auth_mode' => 'bearer',
+                'user_id' => (int) $user->id,
+                'api_token_id' => (int) $token->id,
+            ]);
 
             return $next($request);
         }
@@ -46,6 +52,11 @@ class AuthenticateSessionOrToken
             $request->attributes->set('auth_mode', 'session');
             $request->attributes->remove('api_token_id');
             $request->attributes->remove('api_token_tenant_id');
+            Log::withContext([
+                'auth_mode' => 'session',
+                'user_id' => (int) $user->id,
+                'api_token_id' => null,
+            ]);
 
             return $next($request);
         }
