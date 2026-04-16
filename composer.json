@@ -79,6 +79,7 @@
         "velmix:ci": [
             "composer validate --no-check-publish",
             "@velmix:qa",
+            "@velmix:reset",
             "@velmix:routes",
             "@velmix:readiness",
             "@velmix:alerts",
@@ -90,6 +91,7 @@
             "composer validate --no-check-publish",
             "@velmix:qa",
             "@velmix:concurrency",
+            "@velmix:reset",
             "@velmix:routes",
             "@velmix:readiness",
             "@velmix:alerts",
