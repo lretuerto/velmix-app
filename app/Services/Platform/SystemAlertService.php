@@ -10,8 +10,7 @@ class SystemAlertService
     public function __construct(
         private readonly SystemHealthService $health,
         private readonly OperationsControlTowerReportService $controlTower,
-    ) {
-    }
+    ) {}
 
     public function summary(?string $date = null): array
     {

@@ -93,6 +93,9 @@ php artisan test
 - Script de readiness: `composer run velmix:readiness`
 - Script de alertas operativas: `composer run velmix:alerts`
 - Script de pruning conservador: `composer run velmix:prune`
+- Script de lint de estilo: `composer run velmix:lint`
+- Script de lint completo del repo: `composer run velmix:lint:full`
+- Script de auditoria de dependencias: `composer run velmix:audit`
 - Script de validacion del scheduler: `composer run velmix:schedule`
 - Script de validación outbox: `composer run velmix:outbox` no falla si la base aún no fue migrada
 - `php artisan system:alerts --fail-on-critical` queda para CI o chequeos manuales; el scheduler solo observa y no degrada `schedule:run`
@@ -178,6 +181,9 @@ composer run velmix:qa
 composer run velmix:readiness
 composer run velmix:alerts
 composer run velmix:prune
+composer run velmix:lint
+composer run velmix:lint:full
+composer run velmix:audit
 composer run velmix:outbox
 composer run velmix:reconcile
 composer run velmix:ci
@@ -215,6 +221,7 @@ composer run velmix:routes
 - el scheduler usa `withoutOverlapping()` con TTL explicito para evitar locks huérfanos de 24 horas tras un crash
 - puede habilitarse `VELMIX_SCHEDULER_ON_ONE_SERVER=true` en despliegues multi-nodo con cache compartido y locks atomicos
 - el pruning conservador ahora incluye `outbox_attempts` ademas de claves de idempotencia, invitaciones y snapshots
+- artefactos operativos versionados en [`ops/README.md`](C:\Users\user\Desktop\velmix-app\ops\README.md), [`ops/systemd/velmix-scheduler.service`](C:\Users\user\Desktop\velmix-app\ops\systemd\velmix-scheduler.service) y [`ops/scripts/post-deploy.sh`](C:\Users\user\Desktop\velmix-app\ops\scripts\post-deploy.sh)
 
 Para despliegues con logs estructurados se recomienda un stack como:
 
@@ -268,9 +275,13 @@ LOG_STACK=single,stderr_json
 ## Validación recomendada antes de publicar cambios
 
 ```powershell
+composer run velmix:lint
 composer run velmix:qa
 php artisan route:list --except-vendor
 ```
+
+`velmix:lint` hoy endurece de forma incremental el slice operativo y de plataforma.  
+`velmix:lint:full` queda disponible para atacar la deuda historica de estilo de todo el repo en una iteracion dedicada.
 
 ## Notas
 

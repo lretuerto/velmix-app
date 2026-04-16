@@ -255,7 +255,12 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('GET /reports/billing-escalations/history', false)
             ->assertSee('GET /reports/billing-escalations/{code}', false)
             ->assertSee('POST /reports/billing-escalations/{code}/acknowledge', false)
-            ->assertSee('POST /reports/billing-escalations/{code}/resolve', false);
+            ->assertSee('POST /reports/billing-escalations/{code}/resolve', false)
+            ->assertSee('composer run velmix:lint', false)
+            ->assertSee('composer run velmix:lint:full', false)
+            ->assertSee('composer run velmix:audit', false)
+            ->assertSee('phpstan analyse --configuration=phpstan.neon.dist', false)
+            ->assertSee('ops/scripts/post-deploy.sh', false);
 
         $this->actingAs($user)
             ->withHeader('X-Tenant-Id', '10')

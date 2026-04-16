@@ -1,0 +1,18 @@
+[Unit]
+Description=VELMiX Laravel scheduler
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/velmix/current
+Environment=APP_ENV=production
+ExecStart=/usr/bin/php artisan schedule:work
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

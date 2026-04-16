@@ -152,24 +152,28 @@ class MysqlMigrationCompatibilityTest extends TestCase
             if ($char === '\'' || $char === '"') {
                 $quote = $char;
                 $buffer .= $char;
+
                 continue;
             }
 
             if ($char === '[' || $char === '(') {
                 $depth++;
                 $buffer .= $char;
+
                 continue;
             }
 
             if ($char === ']' || $char === ')') {
                 $depth--;
                 $buffer .= $char;
+
                 continue;
             }
 
             if ($char === ',' && $depth === 0) {
                 $parts[] = trim($buffer);
                 $buffer = '';
+
                 continue;
             }
 

@@ -370,11 +370,23 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - mutacion de stock por lote
   - progreso de recepcion en ordenes de compra
   - reserva de claves de idempotencia
+- El workflow de CI ahora agrega una lane `quality-gates` con:
+  - `composer validate --no-check-publish`
+  - `composer run velmix:lint`
+  - `phpstan analyse --configuration=phpstan.neon.dist`
+  - `composer run velmix:audit`
+- `composer run velmix:lint` endurece el slice de plataforma/operacion y `composer run velmix:lint:full` queda reservado para una futura normalizacion global del estilo
 
 ## Runbooks internos
 
 - `GET /docs/operations-runbook` concentra scheduler, alertas, retencion y respuesta operativa
 - `GET /docs/deployment-rollback` concentra pre-deploy, smoke post-deploy, rollback de aplicacion y rollback de esquema
+- Ademas, el repositorio versiona plantillas operativas en:
+  - `ops/systemd/velmix-scheduler.service`
+  - `ops/systemd/velmix-queue-restart.service`
+  - `ops/scripts/post-deploy.sh`
+  - `ops/scripts/post-rollback.sh`
+  - `ops/scripts/check-backend-health.sh`
 
 ## Dashboard ejecutivo de billing
 

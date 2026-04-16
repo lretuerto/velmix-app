@@ -13,8 +13,7 @@ class EnsureIdempotency
     public function __construct(
         private readonly IdempotencyService $service,
         private readonly ExceptionHandler $exceptions,
-    ) {
-    }
+    ) {}
 
     public function handle(Request $request, Closure $next): Response
     {

@@ -1,0 +1,8 @@
+parameters:
+    level: 0
+    paths:
+        - app/Services/Platform
+        - app/Http/Middleware
+        - routes/console.php
+    tmpDir: storage/phpstan
+    treatPhpDocTypesAsCertain: false

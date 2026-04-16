@@ -76,6 +76,15 @@
         "velmix:prune": [
             "@php artisan platform:prune-operational-data --pretend --json"
         ],
+        "velmix:lint": [
+            "@php vendor/bin/pint --test app/Services/Platform app/Http/Middleware routes/console.php config/velmix.php tests/Feature/Platform tests/Feature/Docs"
+        ],
+        "velmix:lint:full": [
+            "@php vendor/bin/pint --test"
+        ],
+        "velmix:audit": [
+            "composer audit --locked --no-dev --abandoned=report"
+        ],
         "velmix:schedule": [
             "@php artisan schedule:list"
         ],
