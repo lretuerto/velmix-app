@@ -6,3 +6,7 @@ parameters:
         - routes/console.php
     tmpDir: storage/phpstan
     treatPhpDocTypesAsCertain: false
+    ignoreErrors:
+        -
+            message: '#Undefined variable: \$this#'
+            path: routes/console.php
