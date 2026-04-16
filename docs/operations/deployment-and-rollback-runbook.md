@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Este documento define una secuencia segura de despliegue y reversa para el backend actual de VELMiX.
+Este documento define una secuencia segura de despliegue y reversa para el backend actual de VELMiX, incluyendo scheduler, workers, housekeeping y rollback controlado.
 
 ## Pre-deploy obligatorio
 
@@ -11,6 +11,7 @@ Ejecutar en CI o staging:
 ```powershell
 composer validate --no-check-publish
 composer run velmix:qa
+composer run velmix:schedule
 composer run velmix:routes
 composer run velmix:readiness
 composer run velmix:alerts
@@ -27,26 +28,44 @@ composer run velmix:ci:mysql
 
 ## Deploy recomendado
 
-1. Publicar artefacto o commit versionado.
-2. Activar mantenimiento solo si el cambio toca esquema o mutaciones criticas.
-3. Aplicar migraciones:
+### Secuencia controlada
+
+1. Publicar artefacto o commit versionado
+2. Si existe `schedule:work`, interrumpir scheduler antiguo:
+   - `php artisan schedule:interrupt`
+3. Si el cambio toca esquema o mutaciones criticas, activar mantenimiento controlado
+4. Desplegar codigo nuevo
+5. Instalar dependencias de produccion si aplica:
+   - `composer install --no-dev --prefer-dist --optimize-autoloader`
+6. Aplicar migraciones:
    - `php artisan migrate --force`
-4. Limpiar y recalentar caches:
+7. Limpiar y recalentar caches:
    - `php artisan optimize:clear`
    - `php artisan config:cache`
    - `php artisan route:cache`
-5. Reiniciar workers/procesos de aplicacion si aplica.
-6. Verificar:
+8. Reiniciar workers/procesos:
+   - `php artisan queue:restart`
+   - reiniciar servicio de `schedule:work` o supervisor equivalente
+9. Verificar:
    - `GET /health/live`
    - `GET /health/ready`
    - `php artisan system:readiness --json`
    - `php artisan system:alerts --json`
+   - `php artisan schedule:list`
+
+### Criterios de salida de deploy
+
+- readiness en `ready`
+- alertas criticas en cero o conocidas
+- scheduler visible y sin comandos faltantes
+- outbox y reconcile smoke sin errores
 
 ## Smoke post-deploy
 
 Validacion minima:
 
 - listar rutas: `php artisan route:list --except-vendor`
+- listar tareas: `php artisan schedule:list`
 - dispatch outbox smoke
 - reconcile smoke
 - lectura de docs internas `/docs`
@@ -65,13 +84,20 @@ Condiciones:
 Pasos:
 
 1. detener trafico de mutacion si el incidente es severo
-2. volver al artefacto o release anterior
-3. limpiar caches:
+2. interrumpir scheduler actual:
+   - `php artisan schedule:interrupt`
+3. volver al artefacto o release anterior
+4. limpiar caches:
    - `php artisan optimize:clear`
-4. revalidar:
+5. reiniciar workers:
+   - `php artisan queue:restart`
+   - reiniciar proceso `schedule:work` o supervisor equivalente
+6. revalidar:
    - `GET /health/live`
    - `GET /health/ready`
    - `php artisan system:readiness --json`
+   - `php artisan system:alerts --json`
+   - `php artisan schedule:list`
 
 ### Rollback de esquema
 
@@ -86,12 +112,14 @@ Antes de revertir esquema revisar:
 - tablas nuevas con datos ya escritos
 - constraints nuevas que ya hayan rechazado datos invalidos
 - comandos scheduler corriendo sobre el esquema nuevo
+- procesos `billing:dispatch-outbox` o `billing:reconcile-pending` usando columnas recien agregadas
 
 ## Continuidad operativa
 
 - `system:alerts --fail-on-critical` debe usarse como gate manual o de pipeline, no dentro del scheduler
 - el pruning debe comenzar en modo `--pretend` antes de activarse automatico en un entorno nuevo
 - conservar evidencia de `X-Request-Id` y logs JSON durante incidentes
+- en multi-nodo, habilitar `VELMIX_SCHEDULER_ON_ONE_SERVER=true` solo si existe cache compartido con locks atomicos
 
 ## Checklist de cierre
 
@@ -100,4 +128,5 @@ Antes de revertir esquema revisar:
 - readiness OK
 - alertas criticas en cero o conocidas
 - scheduler registrado
+- workers reiniciados despues del deploy
 - runbooks accesibles desde `/docs`

@@ -76,10 +76,14 @@
         "velmix:prune": [
             "@php artisan platform:prune-operational-data --pretend --json"
         ],
+        "velmix:schedule": [
+            "@php artisan schedule:list"
+        ],
         "velmix:ci": [
             "composer validate --no-check-publish",
             "@velmix:qa",
             "@velmix:reset",
+            "@velmix:schedule",
             "@velmix:routes",
             "@velmix:readiness",
             "@velmix:alerts",
@@ -92,6 +96,7 @@
             "@velmix:qa",
             "@velmix:concurrency",
             "@velmix:reset",
+            "@velmix:schedule",
             "@velmix:routes",
             "@velmix:readiness",
             "@velmix:alerts",

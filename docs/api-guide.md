@@ -252,6 +252,10 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - `billing:reconcile-pending --limit=20 --graceful-if-unmigrated` cada cinco minutos
   - `system:alerts` cada cinco minutos
   - `platform:prune-operational-data` diario a las `03:15`
+  - validar tareas registradas con `php artisan schedule:list`
+  - para proceso dedicado puede usarse `php artisan schedule:work`
+  - en multi-nodo, `VELMIX_SCHEDULER_ON_ONE_SERVER=true` requiere cache compartido con locks atomicos
+  - los candados `withoutOverlapping()` ya usan TTL explicito y no el default de 24 horas
 
 ## Gobernanza de API tokens
 
@@ -325,6 +329,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `php artisan system:readiness --json` entrega el detalle completo de base y esquema para operacion
 - `php artisan system:alerts --json` resume alertas cross-tenant sin degradar el scheduler
 - `php artisan platform:prune-operational-data --pretend --json` expone housekeeping conservador de datos operativos
+- el pruning conservador actual cubre `idempotency_keys`, `outbox_attempts`, `tenant_user_invitations` y `operations_control_tower_snapshots`
 - El backend puede emitir logs estructurados via `stderr_json` o `daily_json`
 - El contexto minimo agregado al log incluye `request_id`, metodo, path, IP, `tenant_id`, `tenant_code`, `auth_mode`, `user_id` y `api_token_id` cuando aplica
 - `POST /pos/sales`
@@ -352,13 +357,15 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `composer run velmix:ci` ejecuta la secuencia completa sobre SQLite:
   - `composer validate --no-check-publish`
   - `composer run velmix:qa`
+  - `composer run velmix:reset`
+  - `composer run velmix:schedule`
   - `composer run velmix:routes`
   - `composer run velmix:readiness`
   - `composer run velmix:alerts`
   - `composer run velmix:prune`
   - `composer run velmix:outbox`
   - `composer run velmix:reconcile`
-- `composer run velmix:ci:mysql` replica el flujo en MySQL y agrega `composer run velmix:concurrency`
+- `composer run velmix:ci:mysql` replica el flujo en MySQL, agrega `composer run velmix:concurrency` y rehidrata el esquema antes del bloque operativo
 - La suite `concurrency` valida bloqueos y serializacion real de:
   - mutacion de stock por lote
   - progreso de recepcion en ordenes de compra

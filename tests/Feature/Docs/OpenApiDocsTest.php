@@ -270,7 +270,10 @@ class OpenApiDocsTest extends TestCase
             ->assertOk()
             ->assertSee('billing:dispatch-outbox --limit=20 --graceful-if-unmigrated', false)
             ->assertSee('platform:prune-operational-data', false)
-            ->assertSee('system:alerts --fail-on-critical', false);
+            ->assertSee('system:alerts --fail-on-critical', false)
+            ->assertSee('VELMIX_SCHEDULER_ON_ONE_SERVER', false)
+            ->assertSee('outbox_attempts', false)
+            ->assertSee('php artisan schedule:work', false);
 
         $this->actingAs($user)
             ->withHeader('X-Tenant-Id', '10')
@@ -278,7 +281,9 @@ class OpenApiDocsTest extends TestCase
             ->assertOk()
             ->assertSee('composer run velmix:ci:mysql', false)
             ->assertSee('Rollback de aplicacion', false)
-            ->assertSee('Rollback de esquema', false);
+            ->assertSee('Rollback de esquema', false)
+            ->assertSee('schedule:interrupt', false)
+            ->assertSee('php artisan queue:restart', false);
     }
 
     private function seedTenantUser(int $tenantId): User

@@ -28,8 +28,9 @@ class OperationalDataPruneCommandTest extends TestCase
 
         $this->assertSame(0, $exitCode);
         $this->assertTrue($output['pretend']);
-        $this->assertSame(3, $output['total_pruned_count']);
+        $this->assertSame(4, $output['total_pruned_count']);
         $this->assertDatabaseCount('idempotency_keys', 1);
+        $this->assertDatabaseCount('outbox_attempts', 1);
         $this->assertDatabaseCount('tenant_user_invitations', 1);
         $this->assertDatabaseCount('operations_control_tower_snapshots', 1);
     }
@@ -48,8 +49,9 @@ class OperationalDataPruneCommandTest extends TestCase
         $output = json_decode(Artisan::output(), true, 512, JSON_THROW_ON_ERROR);
 
         $this->assertSame(0, $exitCode);
-        $this->assertSame(3, $output['total_pruned_count']);
+        $this->assertSame(4, $output['total_pruned_count']);
         $this->assertDatabaseCount('idempotency_keys', 0);
+        $this->assertDatabaseCount('outbox_attempts', 0);
         $this->assertDatabaseCount('tenant_user_invitations', 0);
         $this->assertDatabaseCount('operations_control_tower_snapshots', 0);
     }
@@ -69,6 +71,26 @@ class OperationalDataPruneCommandTest extends TestCase
             'response_body' => '{"ok":true}',
             'created_at' => now()->subDays(30),
             'updated_at' => now()->subDays(30),
+        ]);
+
+        $outboxEventId = DB::table('outbox_events')->insertGetId([
+            'tenant_id' => 10,
+            'aggregate_type' => 'electronic_voucher',
+            'aggregate_id' => 7001,
+            'event_type' => 'voucher_issued',
+            'payload' => json_encode(['document_number' => 'B001-007001'], JSON_THROW_ON_ERROR),
+            'status' => 'accepted',
+            'created_at' => now()->subDays(220),
+            'updated_at' => now()->subDays(220),
+        ]);
+
+        DB::table('outbox_attempts')->insert([
+            'outbox_event_id' => $outboxEventId,
+            'status' => 'accepted',
+            'sunat_ticket' => 'SUNAT-OLD-7001',
+            'error_message' => null,
+            'created_at' => now()->subDays(220),
+            'updated_at' => now()->subDays(220),
         ]);
 
         DB::table('tenant_user_invitations')->insert([

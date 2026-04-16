@@ -5,6 +5,7 @@ use App\Services\Billing\OutboxDispatchService;
 use App\Services\Platform\OperationalDataPruneService;
 use App\Services\Platform\SystemAlertService;
 use App\Services\Platform\SystemHealthService;
+use Illuminate\Console\Scheduling\Event;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\SQLiteDatabaseDoesNotExistException;
 use Illuminate\Foundation\Inspiring;
@@ -182,18 +183,48 @@ Artisan::command('platform:prune-operational-data {--pretend} {--json}', functio
     return 0;
 })->purpose('Prune operational data with conservative retention windows.');
 
-Schedule::command('billing:dispatch-outbox --limit=20 --graceful-if-unmigrated')
-    ->everyMinute()
-    ->withoutOverlapping();
+$schedulerConfig = config('velmix.scheduler', []);
+$schedulerTimezone = (string) ($schedulerConfig['timezone'] ?? config('app.timezone', 'UTC'));
+$schedulerOnOneServer = (bool) ($schedulerConfig['on_one_server'] ?? false);
 
-Schedule::command('billing:reconcile-pending --limit=20 --graceful-if-unmigrated')
-    ->everyFiveMinutes()
-    ->withoutOverlapping();
+$applySchedulerConcurrency = static function (Event $event, int $overlapMinutes) use ($schedulerTimezone, $schedulerOnOneServer): Event {
+    $event
+        ->timezone($schedulerTimezone)
+        ->withoutOverlapping(max(1, $overlapMinutes));
 
-Schedule::command('system:alerts')
-    ->everyFiveMinutes()
-    ->withoutOverlapping();
+    if ($schedulerOnOneServer) {
+        $event->onOneServer();
+    }
 
-Schedule::command('platform:prune-operational-data')
-    ->dailyAt('03:15')
-    ->withoutOverlapping();
+    return $event;
+};
+
+$scheduleEveryMinutes = static function (Event $event, int $minutes): Event {
+    $minutes = max(1, $minutes);
+
+    return $minutes === 1
+        ? $event->everyMinute()
+        : $event->cron(sprintf('*/%d * * * *', $minutes));
+};
+
+$dispatchEvent = Schedule::command(sprintf(
+    'billing:dispatch-outbox --limit=%d --graceful-if-unmigrated',
+    max(1, (int) ($schedulerConfig['dispatch_limit'] ?? 20)),
+));
+$scheduleEveryMinutes($dispatchEvent, (int) ($schedulerConfig['dispatch_every_minutes'] ?? 1));
+$applySchedulerConcurrency($dispatchEvent, (int) ($schedulerConfig['dispatch_overlap_minutes'] ?? 10));
+
+$reconcileEvent = Schedule::command(sprintf(
+    'billing:reconcile-pending --limit=%d --graceful-if-unmigrated',
+    max(1, (int) ($schedulerConfig['reconcile_limit'] ?? 20)),
+));
+$scheduleEveryMinutes($reconcileEvent, (int) ($schedulerConfig['reconcile_every_minutes'] ?? 5));
+$applySchedulerConcurrency($reconcileEvent, (int) ($schedulerConfig['reconcile_overlap_minutes'] ?? 15));
+
+$alertsEvent = Schedule::command('system:alerts');
+$scheduleEveryMinutes($alertsEvent, (int) ($schedulerConfig['alerts_every_minutes'] ?? 5));
+$applySchedulerConcurrency($alertsEvent, (int) ($schedulerConfig['alerts_overlap_minutes'] ?? 10));
+
+$pruneEvent = Schedule::command('platform:prune-operational-data');
+$pruneEvent->dailyAt((string) ($schedulerConfig['prune_at'] ?? '03:15'));
+$applySchedulerConcurrency($pruneEvent, (int) ($schedulerConfig['prune_overlap_minutes'] ?? 180));

@@ -19,6 +19,11 @@ class OperationalDataPruneService
                     ->where('created_at', '<', $now->subDays((int) $retention['idempotency_days']))
                     ->where('status', '!=', 'in_progress'),
             ],
+            'outbox_attempts' => [
+                'cutoff' => $now->subDays((int) $retention['outbox_attempts_days']),
+                'query' => fn () => DB::table('outbox_attempts')
+                    ->where('created_at', '<', $now->subDays((int) $retention['outbox_attempts_days'])),
+            ],
             'tenant_user_invitations' => [
                 'cutoff' => $now->subDays((int) $retention['team_invitations_days']),
                 'query' => fn () => DB::table('tenant_user_invitations')
