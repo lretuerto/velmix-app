@@ -38,6 +38,16 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::getDriverName() === 'mysql') {
+            Schema::table('sale_receivable_payments', function (Blueprint $table) {
+                $table->index('sale_receivable_id', 'sale_receivable_payments_receivable_fk_idx');
+            });
+
+            Schema::table('purchase_payments', function (Blueprint $table) {
+                $table->index('purchase_payable_id', 'purchase_payments_payable_fk_idx');
+            });
+        }
+
         Schema::table('sale_receivable_payments', function (Blueprint $table) {
             $table->dropUnique('sale_receivable_payments_receivable_reference_unique');
         });
