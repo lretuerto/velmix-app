@@ -1,6 +1,7 @@
-﻿<?php
+<?php
 
-use App\Http\Middleware\TenantContext;
+use App\Http\Middleware\AddRequestContext;
+use App\Http\Middleware\EnsureIdempotency;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -12,11 +13,17 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-    $middleware->alias([
-        'tenant.context' => \App\Http\Middleware\TenantContext::class,
-        'perm' => \App\Http\Middleware\RequirePermission::class,
-    ]);
-})
+        $middleware->append(AddRequestContext::class);
+
+        $middleware->alias([
+            'auth.hybrid' => \App\Http\Middleware\AuthenticateSessionOrToken::class,
+            'auth.session' => \App\Http\Middleware\AuthenticateSessionOnly::class,
+            'tenant.context' => \App\Http\Middleware\TenantContext::class,
+            'tenant.access' => \App\Http\Middleware\EnsureTenantAccess::class,
+            'perm' => \App\Http\Middleware\RequirePermission::class,
+            'idempotent' => EnsureIdempotency::class,
+        ]);
+    })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
     })->create();

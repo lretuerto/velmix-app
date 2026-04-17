@@ -1,0 +1,32 @@
+[Unit]
+Description=VELMiX queue worker
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/velmix/current
+EnvironmentFile=-/etc/velmix/velmix.env
+Environment=APP_ENV=production
+Environment=VELMIX_QUEUE_NAME=default
+Environment=VELMIX_QUEUE_SLEEP=1
+Environment=VELMIX_QUEUE_TRIES=1
+Environment=VELMIX_QUEUE_TIMEOUT=120
+Environment=VELMIX_QUEUE_MAX_TIME=3600
+ExecStartPre=/usr/bin/php artisan system:preflight --json --fail-on-critical
+ExecStart=/usr/bin/php artisan queue:work --queue=${VELMIX_QUEUE_NAME} --sleep=${VELMIX_QUEUE_SLEEP} --tries=${VELMIX_QUEUE_TRIES} --timeout=${VELMIX_QUEUE_TIMEOUT} --max-time=${VELMIX_QUEUE_MAX_TIME} --no-interaction
+ExecReload=/usr/bin/php artisan queue:restart
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=180
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/var/www/velmix/current/storage /var/www/velmix/current/bootstrap/cache /var/www/velmix/shared
+UMask=0027
+
+[Install]
+WantedBy=velmix-backend.target

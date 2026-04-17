@@ -48,6 +48,104 @@
             "@php artisan config:clear --ansi",
             "@php artisan test"
         ],
+        "velmix:reset": [
+            "@php artisan migrate:fresh --seed"
+        ],
+        "velmix:test": [
+            "@php artisan test"
+        ],
+        "velmix:concurrency": [
+            "@php artisan test --group=concurrency"
+        ],
+        "velmix:qa": [
+            "@velmix:reset",
+            "@velmix:test"
+        ],
+        "velmix:readiness": [
+            "@php artisan system:readiness --json"
+        ],
+        "velmix:preflight": [
+            "@php artisan system:preflight --json --fail-on-warning"
+        ],
+        "velmix:backup-readiness": [
+            "@php artisan system:backup-readiness --json"
+        ],
+        "velmix:record-backup:ci": [
+            "@php artisan system:record-backup ci://latest-backup --checksum=ci-placeholder --size=0 --driver=ci-placeholder --json"
+        ],
+        "velmix:restore-drill": [
+            "@php artisan system:restore-drill --json"
+        ],
+        "velmix:alerts": [
+            "@php artisan system:alerts --json"
+        ],
+        "velmix:dispatch-alerts": [
+            "@php artisan system:dispatch-alerts --json"
+        ],
+        "velmix:observability": [
+            "@php artisan system:observability-report --json"
+        ],
+        "velmix:outbox": [
+            "@php artisan billing:dispatch-outbox --limit=20 --graceful-if-unmigrated"
+        ],
+        "velmix:reconcile": [
+            "@php artisan billing:reconcile-pending --limit=20 --graceful-if-unmigrated"
+        ],
+        "velmix:prune": [
+            "@php artisan platform:prune-operational-data --pretend --json"
+        ],
+        "velmix:lint": [
+            "@php vendor/bin/pint --test app/Services/Platform app/Http/Middleware routes/console.php config/velmix.php tests/Feature/Platform tests/Feature/Docs"
+        ],
+        "velmix:lint:full": [
+            "@php vendor/bin/pint --test"
+        ],
+        "velmix:audit": [
+            "composer audit --locked --no-dev --abandoned=report"
+        ],
+        "velmix:schedule": [
+            "@php artisan schedule:list"
+        ],
+        "velmix:ci": [
+            "composer validate --no-check-publish",
+            "@velmix:qa",
+            "@velmix:reset",
+            "@velmix:schedule",
+            "@velmix:preflight",
+            "@velmix:record-backup:ci",
+            "@velmix:backup-readiness",
+            "@velmix:routes",
+            "@velmix:readiness",
+            "@velmix:alerts",
+            "@velmix:dispatch-alerts",
+            "@velmix:observability",
+            "@velmix:restore-drill",
+            "@velmix:prune",
+            "@velmix:outbox",
+            "@velmix:reconcile"
+        ],
+        "velmix:ci:mysql": [
+            "composer validate --no-check-publish",
+            "@velmix:qa",
+            "@velmix:concurrency",
+            "@velmix:reset",
+            "@velmix:schedule",
+            "@velmix:preflight",
+            "@velmix:record-backup:ci",
+            "@velmix:backup-readiness",
+            "@velmix:routes",
+            "@velmix:readiness",
+            "@velmix:alerts",
+            "@velmix:dispatch-alerts",
+            "@velmix:observability",
+            "@velmix:restore-drill",
+            "@velmix:prune",
+            "@velmix:outbox",
+            "@velmix:reconcile"
+        ],
+        "velmix:routes": [
+            "@php artisan route:list --except-vendor"
+        ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"

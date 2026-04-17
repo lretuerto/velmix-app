@@ -1,0 +1,3307 @@
+openapi: 3.1.0
+info:
+  title: VELMiX ERP API
+  version: sprint1-day187
+  description: |
+    Contrato OpenAPI de endpoints prioritarios de VELMiX ERP.
+    Cubre la convencion multi-tenant y los flujos criticos ya implementados.
+    Para la superficie completa vigente usar `php artisan route:list --except-vendor`.
+servers:
+  - url: /
+    description: Aplicacion Laravel local
+tags:
+  - name: Tenant
+  - name: Inventory
+  - name: POS
+  - name: Sales
+  - name: Cash
+  - name: Purchasing
+  - name: Billing
+  - name: Reports
+  - name: Audit
+security:
+  - bearerAuth: []
+    tenantHeader: []
+  - laravelSession: []
+    tenantHeader: []
+paths:
+  /docs:
+    get:
+      tags: [Reports]
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      summary: Portal interno de documentacion
+      responses:
+        '200':
+          description: Documentos disponibles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /docs/openapi.yaml:
+    get:
+      tags: [Reports]
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      summary: Especificacion OpenAPI en YAML
+      responses:
+        '200':
+          description: YAML bruto
+          content:
+            application/yaml:
+              schema:
+                type: string
+  /docs/api-guide:
+    get:
+      tags: [Reports]
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      summary: Guia operativa de la API
+      responses:
+        '200':
+          description: Markdown bruto
+          content:
+            text/markdown:
+              schema:
+                type: string
+  /docs/release-readiness:
+    get:
+      tags: [Reports]
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      summary: Checklist interno de release readiness
+      responses:
+        '200':
+          description: Markdown bruto
+          content:
+            text/markdown:
+              schema:
+                type: string
+  /docs/operations-runbook:
+    get:
+      tags: [Reports]
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      summary: Runbook interno de operacion backend
+      responses:
+        '200':
+          description: Markdown bruto
+          content:
+            text/markdown:
+              schema:
+                type: string
+  /docs/deployment-rollback:
+    get:
+      tags: [Reports]
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      summary: Runbook interno de despliegue y rollback
+      responses:
+        '200':
+          description: Markdown bruto
+          content:
+            text/markdown:
+              schema:
+                type: string
+  /auth/me:
+    get:
+      tags: [Tenant]
+      summary: Resuelve el actor autenticado actual
+      description: Requiere el permiso `security.context.read`. Los bearer tokens con `abilities` limitadas deben incluirlo para usar este endpoint.
+      security:
+        - laravelSession: []
+          tenantHeader: []
+        - bearerAuth: []
+          tenantHeader: []
+      responses:
+        '200':
+          description: Usuario y tenant actual
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /auth/tokens:
+    get:
+      tags: [Tenant]
+      summary: Lista tokens del tenant
+      description: Requiere usuario autenticado por sesion con permiso `security.api-token.manage`. Puede filtrar por `user_id`.
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      parameters:
+        - in: query
+          name: user_id
+          schema:
+            type: integer
+          required: false
+          description: Filtra tokens por propietario dentro del tenant.
+      responses:
+        '200':
+          description: Tokens del tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+    post:
+      tags: [Tenant]
+      summary: Emite token API para el usuario actual
+      description: Requiere usuario autenticado por sesion con permiso `security.api-token.manage`. Si se envian abilities, el bearer token queda limitado a rutas protegidas por esos permisos. Soporta `*` y prefijos `modulo.*`. Si no se envia `expires_at`, se asigna expiracion a 30 dias. No se aceptan expiraciones mayores a 90 dias.
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiTokenCreateRequest'
+      responses:
+        '200':
+          description: Token creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /auth/tokens/{token}:
+    delete:
+      tags: [Tenant]
+      summary: Revoca token API del tenant
+      description: Requiere usuario autenticado por sesion con permiso `security.api-token.manage`.
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      parameters:
+        - $ref: '#/components/parameters/TokenId'
+      responses:
+        '200':
+          description: Token revocado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /auth/tokens/{token}/rotate:
+    post:
+      tags: [Tenant]
+      summary: Rota token API del tenant
+      description: Requiere usuario autenticado por sesion con permiso `security.api-token.manage`. Revoca el token anterior y emite un bearer nuevo para el mismo owner dentro del tenant.
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      parameters:
+        - $ref: '#/components/parameters/TokenId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiTokenRotateRequest'
+      responses:
+        '200':
+          description: Token rotado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /admin/team/roles:
+    get:
+      tags: [Tenant]
+      summary: Lista roles disponibles para bootstrap del tenant
+      responses:
+        '200':
+          description: Catalogo de roles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /admin/team/users:
+    get:
+      tags: [Tenant]
+      summary: Lista usuarios miembros del tenant
+      responses:
+        '200':
+          description: Miembros del tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+    post:
+      tags: [Tenant]
+      summary: Crea un usuario nuevo o reutiliza uno ya miembro del tenant actual
+      description: Rechaza adjuntar directamente usuarios existentes de otros tenants para evitar asociaciones cruzadas no intencionales.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email]
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                password:
+                  type: string
+                roles:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Usuario del equipo creado o adjuntado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /admin/team/invitations:
+    get:
+      tags: [Tenant]
+      summary: Lista invitaciones del tenant
+      responses:
+        '200':
+          description: Invitaciones
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+    post:
+      tags: [Tenant]
+      summary: Crea invitacion de equipo del tenant
+      description: Devuelve `plain_text_token` una sola vez y permite proyectar roles para la aceptacion.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                name:
+                  type: string
+                expires_at:
+                  type: string
+                  format: date
+                roles:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Invitacion creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /admin/team/users/{user}/roles:
+    post:
+      tags: [Tenant]
+      summary: Sincroniza roles RBAC del usuario dentro del tenant
+      parameters:
+        - in: path
+          name: user
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roles]
+              properties:
+                roles:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Roles sincronizados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /admin/team/invitations/{invitation}/revoke:
+    post:
+      tags: [Tenant]
+      summary: Revoca invitacion pendiente del tenant
+      parameters:
+        - in: path
+          name: invitation
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Invitacion revocada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /team/invitations/accept:
+    post:
+      tags: [Tenant]
+      summary: Acepta invitacion de equipo
+      description: Si el email ya existe, la aceptacion requiere sesion autenticada del mismo usuario invitado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                name:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Invitacion aceptada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /tenant/ping:
+    get:
+      tags: [Tenant]
+      summary: Verifica contexto tenant
+      description: Requiere el permiso `security.context.read`. Los bearer tokens con `abilities` limitadas deben incluirlo para usar este endpoint.
+      security:
+        - laravelSession: []
+          tenantHeader: []
+        - bearerAuth: []
+          tenantHeader: []
+      responses:
+        '200':
+          description: Contexto tenant resuelto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  tenant:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/TenantRequired'
+  /inventory/products:
+    get:
+      tags: [Inventory]
+      summary: Lista productos del tenant
+      responses:
+        '200':
+          description: Productos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Inventory]
+      summary: Crea producto
+      description: Acepta `Idempotency-Key` para evitar doble submit administrativo del mismo payload.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductCreateRequest'
+      responses:
+        '200':
+          description: Producto creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /inventory/lots:
+    post:
+      tags: [Inventory]
+      summary: Crea lote
+      description: Acepta `Idempotency-Key` para evitar doble submit administrativo del mismo payload.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LotCreateRequest'
+      responses:
+        '200':
+          description: Lote creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /inventory/lots/{lot}:
+    get:
+      tags: [Inventory]
+      summary: Lee detalle de lote
+      parameters:
+        - $ref: '#/components/parameters/LotId'
+      responses:
+        '200':
+          description: Lote
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /inventory/lots/{lot}/immobilize:
+    post:
+      tags: [Inventory]
+      summary: Inmoviliza lote
+      parameters:
+        - $ref: '#/components/parameters/LotId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Lote inmovilizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /inventory/movements:
+    get:
+      tags: [Inventory]
+      summary: Lista movimientos de stock
+      parameters:
+        - in: query
+          name: lot_id
+          schema:
+            type: integer
+        - in: query
+          name: product_id
+          schema:
+            type: integer
+        - in: query
+          name: type
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Movimientos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /stock/movements:
+    post:
+      tags: [Inventory]
+      summary: Registra movimiento manual de stock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockMovementCreateRequest'
+      responses:
+        '200':
+          description: Movimiento registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /pos/sales:
+    get:
+      tags: [POS]
+      summary: Lista ventas del tenant
+      responses:
+        '200':
+          description: Ventas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+    post:
+      tags: [POS]
+      summary: Ejecuta venta POS
+      description: |
+        Soporta modo simple con `lot_id` y modo multi-item con `items[]`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaleCreateRequest'
+            examples:
+              multiItem:
+                value:
+                  payment_method: cash
+                  items:
+                    - product_id: 1
+                      quantity: 2
+                      unit_price: 4.5
+                    - lot_id: 10
+                      quantity: 1
+                      unit_price: 9.9
+      responses:
+        '200':
+          description: Venta registrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /pos/sales/{sale}:
+    get:
+      tags: [POS]
+      summary: Lee detalle de venta
+      parameters:
+        - $ref: '#/components/parameters/SaleId'
+      responses:
+        '200':
+          description: Venta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /pos/sales/{sale}/cancel:
+    post:
+      tags: [POS]
+      summary: Anula venta
+      parameters:
+        - $ref: '#/components/parameters/SaleId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Venta anulada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /sales/customers:
+    get:
+      tags: [Sales]
+      summary: Lista clientes
+      responses:
+        '200':
+          description: Clientes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+    post:
+      tags: [Sales]
+      summary: Crea cliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerCreateRequest'
+      responses:
+        '200':
+          description: Cliente creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /sales/customers/{customer}:
+    patch:
+      tags: [Sales]
+      summary: Actualiza cliente
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerUpdateRequest'
+      responses:
+        '200':
+          description: Cliente actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /sales/customers/{customer}/statement:
+    get:
+      tags: [Sales]
+      summary: Estado de cuenta del cliente
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+      responses:
+        '200':
+          description: Statement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /sales/receivables:
+    get:
+      tags: [Sales]
+      summary: Lista cuentas por cobrar
+      responses:
+        '200':
+          description: Receivables
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /sales/receivables/{receivable}:
+    get:
+      tags: [Sales]
+      summary: Detalle de cuenta por cobrar
+      parameters:
+        - $ref: '#/components/parameters/ReceivableId'
+      responses:
+        '200':
+          description: Receivable detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /sales/receivables/{receivable}/payments:
+    post:
+      tags: [Sales]
+      summary: Registra cobranza
+      parameters:
+        - $ref: '#/components/parameters/ReceivableId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceivablePaymentRequest'
+      responses:
+        '200':
+          description: Cobranza registrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /sales/receivables/{receivable}/follow-ups:
+    get:
+      tags: [Sales]
+      summary: Historial de seguimiento
+      parameters:
+        - $ref: '#/components/parameters/ReceivableId'
+      responses:
+        '200':
+          description: Follow ups
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+    post:
+      tags: [Sales]
+      summary: Registra nota o promesa de cobro
+      parameters:
+        - $ref: '#/components/parameters/ReceivableId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FollowUpRequest'
+      responses:
+        '200':
+          description: Follow up creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /cash/sessions/open:
+    post:
+      tags: [Cash]
+      summary: Abre caja
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [opening_amount]
+              properties:
+                opening_amount:
+                  type: number
+                  format: float
+      responses:
+        '200':
+          description: Sesion abierta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /cash/sessions/current:
+    get:
+      tags: [Cash]
+      summary: Lee caja activa
+      responses:
+        '200':
+          description: Sesion actual
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /cash/sessions/current/close:
+    post:
+      tags: [Cash]
+      summary: Cierra caja con monto o denominaciones
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashCloseRequest'
+      responses:
+        '200':
+          description: Sesion cerrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /cash/movements:
+    post:
+      tags: [Cash]
+      summary: Registra ingreso o egreso manual de caja
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashMovementCreateRequest'
+      responses:
+        '200':
+          description: Movimiento registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /purchases/suppliers:
+    get:
+      tags: [Purchasing]
+      summary: Lista proveedores
+      responses:
+        '200':
+          description: Proveedores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+    post:
+      tags: [Purchasing]
+      summary: Crea proveedor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierCreateRequest'
+      responses:
+        '200':
+          description: Proveedor creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /purchases/orders:
+    get:
+      tags: [Purchasing]
+      summary: Lista ordenes de compra
+      responses:
+        '200':
+          description: Ordenes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+    post:
+      tags: [Purchasing]
+      summary: Crea orden de compra
+      description: Acepta `Idempotency-Key` y no permite repetir el mismo `product_id` en multiples lineas.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseOrderCreateRequest'
+      responses:
+        '200':
+          description: Orden creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /purchases/orders/from-replenishment:
+    post:
+      tags: [Purchasing]
+      summary: Crea orden desde sugerencias de reposicion
+      description: Acepta `Idempotency-Key` y no permite repetir el mismo `product_id` en multiples lineas.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseOrderFromReplenishmentRequest'
+      responses:
+        '200':
+          description: Orden creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /purchases/receipts:
+    get:
+      tags: [Purchasing]
+      summary: Lista recepciones
+      responses:
+        '200':
+          description: Recepciones
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+    post:
+      tags: [Purchasing]
+      summary: Registra recepcion de compra
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseReceiptCreateRequest'
+      responses:
+        '200':
+          description: Recepcion registrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /purchases/receipts/{receipt}/returns:
+    post:
+      tags: [Purchasing]
+      summary: Registra devolucion a proveedor
+      parameters:
+        - $ref: '#/components/parameters/ReceiptId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseReturnCreateRequest'
+      responses:
+        '200':
+          description: Devolucion registrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /purchases/payables:
+    get:
+      tags: [Purchasing]
+      summary: Lista cuentas por pagar
+      responses:
+        '200':
+          description: Payables
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /purchases/payables/{payable}/payments:
+    post:
+      tags: [Purchasing]
+      summary: Registra pago a proveedor
+      parameters:
+        - $ref: '#/components/parameters/PayableId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayablePaymentRequest'
+      responses:
+        '200':
+          description: Pago registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /purchases/payables/{payable}/apply-credits:
+    post:
+      tags: [Purchasing]
+      summary: Aplica creditos de proveedor a una deuda
+      parameters:
+        - $ref: '#/components/parameters/PayableId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: number
+                  format: float
+      responses:
+        '200':
+          description: Creditos aplicados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/vouchers:
+    post:
+      tags: [Billing]
+      summary: Emite voucher interno desde venta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sale_id, type]
+              properties:
+                sale_id:
+                  type: integer
+                type:
+                  type: string
+                  example: boleta
+      responses:
+        '200':
+          description: Voucher emitido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/vouchers/{voucher}:
+    get:
+      tags: [Billing]
+      summary: Lee detalle de voucher
+      parameters:
+        - $ref: '#/components/parameters/VoucherId'
+      responses:
+        '200':
+          description: Voucher
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/vouchers/{voucher}/payloads:
+    get:
+      tags: [Billing]
+      summary: Lista snapshots versionados de payload para un voucher
+      parameters:
+        - $ref: '#/components/parameters/VoucherId'
+      responses:
+        '200':
+          description: Payloads del voucher
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/vouchers/{voucher}/payloads/regenerate:
+    post:
+      tags: [Billing]
+      summary: Regenera snapshots de payload para un voucher usando el provider profile actual
+      parameters:
+        - $ref: '#/components/parameters/VoucherId'
+      responses:
+        '200':
+          description: Snapshot regenerado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/vouchers/{voucher}/replay:
+    post:
+      tags: [Billing]
+      summary: Reencola un voucher no aceptado con el ultimo snapshot disponible
+      parameters:
+        - $ref: '#/components/parameters/VoucherId'
+      responses:
+        '200':
+          description: Replay programado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/vouchers/{voucher}/reconcile:
+    post:
+      tags: [Billing]
+      summary: Reconciliacion puntual de un voucher pendiente o fallido
+      parameters:
+        - $ref: '#/components/parameters/VoucherId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                simulate_result:
+                  type: string
+                  enum: [accepted, rejected, pending]
+      responses:
+        '200':
+          description: Resultado de reconciliacion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/credit-notes:
+    post:
+      tags: [Billing]
+      summary: Emite nota de credito total o parcial
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditNoteCreateRequest'
+      responses:
+        '200':
+          description: Nota emitida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/credit-notes/{creditNote}:
+    get:
+      tags: [Billing]
+      summary: Lee detalle de nota de credito
+      parameters:
+        - $ref: '#/components/parameters/CreditNoteId'
+      responses:
+        '200':
+          description: Nota de credito
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/credit-notes/{creditNote}/payloads:
+    get:
+      tags: [Billing]
+      summary: Lista snapshots versionados de payload para una nota de credito
+      parameters:
+        - $ref: '#/components/parameters/CreditNoteId'
+      responses:
+        '200':
+          description: Payloads de la nota de credito
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/credit-notes/{creditNote}/payloads/regenerate:
+    post:
+      tags: [Billing]
+      summary: Regenera snapshots de payload para una nota de credito usando el provider profile actual
+      parameters:
+        - $ref: '#/components/parameters/CreditNoteId'
+      responses:
+        '200':
+          description: Snapshot regenerado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/credit-notes/{creditNote}/replay:
+    post:
+      tags: [Billing]
+      summary: Reencola una nota de credito no aceptada con el ultimo snapshot disponible
+      parameters:
+        - $ref: '#/components/parameters/CreditNoteId'
+      responses:
+        '200':
+          description: Replay programado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/credit-notes/{creditNote}/reconcile:
+    post:
+      tags: [Billing]
+      summary: Reconciliacion puntual de una nota de credito pendiente o fallida
+      parameters:
+        - $ref: '#/components/parameters/CreditNoteId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                simulate_result:
+                  type: string
+                  enum: [accepted, rejected, pending]
+      responses:
+        '200':
+          description: Resultado de reconciliacion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/outbox/dispatch:
+    post:
+      tags: [Billing]
+      summary: Despacha eventos outbox usando el provider configurado del tenant
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                simulate_result:
+                  type: string
+                  enum: [accepted, rejected, transient_fail]
+                limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+      responses:
+        '200':
+          description: Evento procesado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/reconcile-pending:
+    post:
+      tags: [Billing]
+      summary: Reconciliacion en lote de documentos billing pending o failed
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                simulate_result:
+                  type: string
+                  enum: [accepted, rejected, pending]
+                limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+      responses:
+        '200':
+          description: Resultado de reconciliacion por lote
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/provider-profile:
+    get:
+      tags: [Billing]
+      summary: Lee el provider profile de billing del tenant con credenciales redactadas
+      responses:
+        '200':
+          description: Perfil de provider
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+    put:
+      tags: [Billing]
+      summary: Actualiza el provider profile de billing del tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillingProviderProfileUpdateRequest'
+      responses:
+        '200':
+          description: Perfil actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/provider-profile/check:
+    post:
+      tags: [Billing]
+      summary: Ejecuta health check del provider profile del tenant
+      responses:
+        '200':
+          description: Snapshot de salud actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/outbox/provider-trace:
+    get:
+      tags: [Billing]
+      summary: Lee trazabilidad de intentos por provider y environment
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Trazabilidad del provider
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/provider-metrics:
+    get:
+      tags: [Billing]
+      summary: Lee SLA operativo del provider y del outbox de billing
+      parameters:
+        - in: query
+          name: date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: recent_failures_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+      responses:
+        '200':
+          description: Metricas operativas del provider billing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/outbox/summary:
+    get:
+      tags: [Billing]
+      summary: Lee backlog y ultimo intento del outbox
+      responses:
+        '200':
+          description: Summary del outbox
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/outbox/{event}/retry:
+    post:
+      tags: [Billing]
+      summary: Reintenta evento fallido solo si el documento no fue aceptado y no existe otro pending
+      parameters:
+        - $ref: '#/components/parameters/OutboxEventId'
+      responses:
+        '200':
+          description: Retry programado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/outbox/{event}/lineage:
+    get:
+      tags: [Billing]
+      summary: Lee el lineage completo de un evento outbox con payloads, replays e intentos
+      parameters:
+        - $ref: '#/components/parameters/OutboxEventId'
+      responses:
+        '200':
+          description: Lineage del evento outbox
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /billing/outbox/{event}/attempts:
+    get:
+      tags: [Billing]
+      summary: Lista intentos del outbox
+      parameters:
+        - $ref: '#/components/parameters/OutboxEventId'
+      responses:
+        '200':
+          description: Intentos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/daily:
+    get:
+      tags: [Reports]
+      summary: Dashboard diario operativo
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+      responses:
+        '200':
+          description: Resumen diario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/platform-observability:
+    get:
+      tags: [Reports]
+      summary: Dashboard tecnico de observabilidad de plataforma
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+      responses:
+        '200':
+          description: Snapshot tecnico de plataforma, canales salientes y postura de recovery
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-control-tower:
+    get:
+      tags: [Reports]
+      summary: Tablero maestro operativo cross-domain
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: billing_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+        - in: query
+          name: finance_days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: priority_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+        - in: query
+          name: failure_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+      responses:
+        '200':
+          description: Vista ejecutiva consolidada para operar billing, finanzas y escalaciones
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-control-tower/briefing:
+      get:
+        tags: [Reports]
+        summary: Paquete ejecutivo del control tower con drift contra snapshots
+        description: Si las ventanas pedidas difieren del snapshot usado como contexto, el drift se calcula contra el briefing live actual usando esas ventanas solicitadas.
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: billing_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+        - in: query
+          name: finance_days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: priority_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+        - in: query
+          name: failure_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: snapshot_id
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Briefing ejecutivo del tablero maestro
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-control-tower/briefing/export:
+    get:
+      tags: [Reports]
+      summary: Exporta el briefing ejecutivo del control tower
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: billing_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+        - in: query
+          name: finance_days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: priority_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+        - in: query
+          name: failure_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: snapshot_id
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum: [markdown, json]
+      responses:
+        '200':
+          description: Export del briefing ejecutivo del tablero maestro
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-control-tower/history:
+    get:
+      tags: [Reports]
+      summary: Tendencia historica del tablero maestro operativo
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: billing_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+        - in: query
+          name: finance_days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: priority_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+        - in: query
+          name: failure_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+      responses:
+        '200':
+          description: Tendencia diaria resumida del control tower
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-control-tower/compare:
+    get:
+      tags: [Reports]
+      summary: Compara el tablero maestro entre dos fechas
+      parameters:
+        - in: query
+          name: base_date
+          required: true
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: compare_date
+          required: true
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: billing_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+        - in: query
+          name: finance_days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: priority_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+        - in: query
+          name: failure_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+      responses:
+        '200':
+          description: Delta de estado y metricas del control tower entre dos fechas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-control-tower/snapshots:
+    get:
+      tags: [Reports]
+      summary: Lista snapshots persistidos del control tower
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [ok, warning, critical]
+        - in: query
+          name: from_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: to_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: label
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista snapshots del tablero maestro por tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+    post:
+      tags: [Reports]
+      summary: Captura snapshot persistido del control tower
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                date:
+                  type: string
+                  format: date
+                billing_days:
+                  type: integer
+                  minimum: 1
+                  maximum: 14
+                finance_days_ahead:
+                  type: integer
+                  minimum: 1
+                  maximum: 30
+                priority_limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 20
+                failure_limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 20
+                stale_follow_up_days:
+                  type: integer
+                  minimum: 1
+                  maximum: 30
+                label:
+                  type: string
+                  maxLength: 120
+      responses:
+        '200':
+          description: Snapshot persistido del tablero maestro
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-control-tower/snapshots/{snapshot}:
+    get:
+      tags: [Reports]
+      summary: Lee el detalle de un snapshot del control tower
+      parameters:
+        - in: path
+          name: snapshot
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Detalle del snapshot del tablero maestro
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-control-tower/snapshots/{snapshot}/export:
+    get:
+      tags: [Reports]
+      summary: Exporta un snapshot del control tower en markdown o json
+      parameters:
+        - in: path
+          name: snapshot
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum: [markdown, json]
+      responses:
+        '200':
+          description: Export del snapshot del tablero maestro
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-control-tower/snapshots/{snapshot}/compare:
+    get:
+      tags: [Reports]
+      summary: Compara un snapshot del control tower contra live u otro snapshot
+      parameters:
+        - in: path
+          name: snapshot
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: against_snapshot
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Comparacion del snapshot del tablero maestro
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-control-tower/snapshots/{snapshot}/compare/export:
+    get:
+      tags: [Reports]
+      summary: Exporta la comparacion de un snapshot del control tower
+      parameters:
+        - in: path
+          name: snapshot
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: against_snapshot
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum: [markdown, json]
+      responses:
+        '200':
+          description: Export de la comparacion del snapshot del tablero maestro
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/billing-operations:
+    get:
+      tags: [Reports]
+      summary: Dashboard ejecutivo de billing
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+        - in: query
+          name: failure_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+      responses:
+        '200':
+          description: Operaciones ejecutivas de billing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/billing-escalations:
+    get:
+      tags: [Reports]
+      summary: Alertas accionables y escalamiento de billing
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+      responses:
+        '200':
+          description: Escalaciones abiertas de billing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/billing-escalations/history:
+    get:
+      tags: [Reports]
+      summary: Historial operativo de escalaciones de billing
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+      responses:
+        '200':
+          description: Historial resumido por codigo de escalacion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/billing-escalation-metrics:
+    get:
+      tags: [Reports]
+      summary: Metricas operativas de workflow para escalaciones de billing
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+      responses:
+        '200':
+          description: Backlog, workflow y SLA de escalaciones
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/billing-escalations/{code}:
+    get:
+      tags: [Reports]
+      summary: Detalle operativo de una escalacion de billing
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+        - in: query
+          name: activity_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+      responses:
+        '200':
+          description: Estado, alerta activa y timeline de la escalacion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /reports/billing-escalations/{code}/acknowledge:
+    post:
+      tags: [Reports]
+      summary: Reconoce internamente una escalacion de billing
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Escalacion reconocida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/billing-escalations/{code}/resolve:
+    post:
+      tags: [Reports]
+      summary: Cierra manualmente una escalacion de billing
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Escalacion resuelta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/due-reminders:
+    get:
+      tags: [Reports]
+      summary: Vencimientos y proximos compromisos
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days_ahead
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Reminder summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/promise-compliance:
+    get:
+      tags: [Reports]
+      summary: Cumplimiento de promesas de cobro y pago
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Promise compliance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/finance-operations:
+    get:
+      tags: [Reports]
+      summary: Dashboard financiero operativo de cobranzas y pagos
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+      responses:
+        '200':
+          description: Resumen financiero unificado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/finance-escalations:
+    get:
+      tags: [Reports]
+      summary: Escalaciones accionables sobre la cola financiera
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+      responses:
+        '200':
+          description: Cola financiera con severidad y acciones recomendadas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/finance-escalations/history:
+    get:
+      tags: [Reports]
+      summary: Historial operativo de escalaciones financieras agregadas
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+      responses:
+        '200':
+          description: Timeline resumido por codigo de alerta financiera
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/finance-escalation-metrics:
+    get:
+      tags: [Reports]
+      summary: Metricas de workflow sobre escalaciones financieras agregadas
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+      responses:
+        '200':
+          description: Backlog activo, aging y SLA por codigo de alerta financiera
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/finance-escalations/{code}:
+    get:
+      tags: [Reports]
+      summary: Detalle de una alerta agregada financiera
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+        - in: query
+          name: activity_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+      responses:
+        '200':
+          description: Detalle de la alerta financiera agregada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /reports/finance-escalations/{code}/acknowledge:
+    post:
+      tags: [Reports]
+      summary: Reconoce una alerta agregada financiera
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Alerta financiera agregada reconocida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/finance-escalations/{code}/resolve:
+    post:
+      tags: [Reports]
+      summary: Cierra una alerta agregada financiera
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Alerta financiera agregada resuelta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/finance-operations/history:
+    get:
+      tags: [Reports]
+      summary: Historial operativo de prioridades financieras
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+      responses:
+        '200':
+          description: Historial financiero agrupado por entidad
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/finance-operations/metrics:
+    get:
+      tags: [Reports]
+      summary: Metricas de workflow financiero
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+      responses:
+        '200':
+          description: Metricas de backlog, aging y SLA financiero
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/finance-operations/{kind}/{entity}:
+    get:
+      tags: [Reports]
+      summary: Detalle operativo de una prioridad financiera
+      parameters:
+        - in: path
+          name: kind
+          required: true
+          schema:
+            type: string
+            enum: [receivable, payable]
+        - in: path
+          name: entity
+          required: true
+          schema:
+            type: integer
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+      responses:
+        '200':
+          description: Detalle de prioridad financiera
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /reports/finance-operations/{kind}/{entity}/history:
+    get:
+      tags: [Reports]
+      summary: Historial operativo de una prioridad financiera
+      parameters:
+        - in: path
+          name: kind
+          required: true
+          schema:
+            type: string
+            enum: [receivable, payable]
+        - in: path
+          name: entity
+          required: true
+          schema:
+            type: integer
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+        - in: query
+          name: activity_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+      responses:
+        '200':
+          description: Historial financiero por entidad
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /reports/finance-operations/{kind}/{entity}/acknowledge:
+    post:
+      tags: [Reports]
+      summary: Reconoce internamente una prioridad financiera
+      parameters:
+        - in: path
+          name: kind
+          required: true
+          schema:
+            type: string
+            enum: [receivable, payable]
+        - in: path
+          name: entity
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Prioridad financiera reconocida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/finance-operations/{kind}/{entity}/resolve:
+    post:
+      tags: [Reports]
+      summary: Cierra manualmente una prioridad financiera
+      parameters:
+        - in: path
+          name: kind
+          required: true
+          schema:
+            type: string
+            enum: [receivable, payable]
+        - in: path
+          name: entity
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Prioridad financiera resuelta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-escalations:
+    get:
+      tags: [Reports]
+      summary: Cola unificada de escalaciones operativas
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: billing_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+        - in: query
+          name: finance_days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+      responses:
+        '200':
+          description: Cola unificada cross-domain de billing y finanzas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-escalations/history:
+    get:
+      tags: [Reports]
+      summary: Historial de escalaciones operativas unificadas
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: billing_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+        - in: query
+          name: finance_days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+      responses:
+        '200':
+          description: Historial consolidado de la cola unificada cross-domain
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-escalation-metrics:
+    get:
+      tags: [Reports]
+      summary: Metricas de workflow para la cola unificada de escalaciones
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: billing_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+        - in: query
+          name: finance_days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+      responses:
+        '200':
+          description: Backlog, eventos y SLA agregados entre billing y finanzas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-escalations/{domain}/{code}:
+    get:
+      tags: [Reports]
+      summary: Detalle de una escalacion operativa unificada
+      parameters:
+        - in: path
+          name: domain
+          required: true
+          schema:
+            type: string
+            enum: [billing, finance]
+        - in: path
+          name: code
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/ReportDate'
+        - in: query
+          name: billing_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+        - in: query
+          name: finance_days_ahead
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+        - in: query
+          name: history_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+        - in: query
+          name: activity_limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+        - in: query
+          name: stale_follow_up_days
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+      responses:
+        '200':
+          description: Detalle operativo unificado con enlaces al dominio origen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /reports/operations-escalations/{domain}/{code}/acknowledge:
+    post:
+      tags: [Reports]
+      summary: Reconocer una escalacion operativa unificada
+      parameters:
+        - in: path
+          name: domain
+          required: true
+          schema:
+            type: string
+            enum: [billing, finance]
+        - in: path
+          name: code
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                date:
+                  type: string
+                  format: date
+                billing_days:
+                  type: integer
+                finance_days_ahead:
+                  type: integer
+                history_days:
+                  type: integer
+                activity_limit:
+                  type: integer
+                stale_follow_up_days:
+                  type: integer
+      responses:
+        '200':
+          description: Escalacion operativa reconocida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/operations-escalations/{domain}/{code}/resolve:
+    post:
+      tags: [Reports]
+      summary: Resolver una escalacion operativa unificada
+      parameters:
+        - in: path
+          name: domain
+          required: true
+          schema:
+            type: string
+            enum: [billing, finance]
+        - in: path
+          name: code
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note:
+                  type: string
+                date:
+                  type: string
+                  format: date
+                billing_days:
+                  type: integer
+                finance_days_ahead:
+                  type: integer
+                history_days:
+                  type: integer
+                activity_limit:
+                  type: integer
+                stale_follow_up_days:
+                  type: integer
+      responses:
+        '200':
+          description: Escalacion operativa resuelta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/receivable-risk:
+    get:
+      tags: [Reports]
+      summary: Riesgo de cobranza
+      responses:
+        '200':
+          description: Risk summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /reports/sales-profitability:
+    get:
+      tags: [Reports]
+      summary: Rentabilidad de ventas
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+      responses:
+        '200':
+          description: Profitability summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /audit/timeline:
+    get:
+      tags: [Audit]
+      summary: Timeline operativo por tenant
+      parameters:
+        - in: query
+          name: domain
+          schema:
+            type: string
+        - in: query
+          name: event_type
+          schema:
+            type: string
+        - in: query
+          name: aggregate_type
+          schema:
+            type: string
+        - in: query
+          name: user_id
+          schema:
+            type: integer
+        - in: query
+          name: date_from
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: date_to
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+      responses:
+        '200':
+          description: Actividad reciente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /audit/timeline/{activity}:
+    get:
+      tags: [Audit]
+      summary: Detalle de actividad
+      parameters:
+        - $ref: '#/components/parameters/ActivityId'
+      responses:
+        '200':
+          description: Actividad
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API token
+    laravelSession:
+      type: apiKey
+      in: cookie
+      name: laravel_session
+    tenantHeader:
+      type: apiKey
+      in: header
+      name: X-Tenant-Id
+      description: Header obligatorio en rutas multi-tenant.
+  parameters:
+    ReportDate:
+      in: query
+      name: date
+      schema:
+        type: string
+        format: date
+      required: false
+      description: Fecha de corte en formato Y-m-d
+    LotId:
+      in: path
+      name: lot
+      required: true
+      schema: { type: integer }
+    SaleId:
+      in: path
+      name: sale
+      required: true
+      schema: { type: integer }
+    CustomerId:
+      in: path
+      name: customer
+      required: true
+      schema: { type: integer }
+    ReceivableId:
+      in: path
+      name: receivable
+      required: true
+      schema: { type: integer }
+    PayableId:
+      in: path
+      name: payable
+      required: true
+      schema: { type: integer }
+    ReceiptId:
+      in: path
+      name: receipt
+      required: true
+      schema: { type: integer }
+    VoucherId:
+      in: path
+      name: voucher
+      required: true
+      schema: { type: integer }
+    CreditNoteId:
+      in: path
+      name: creditNote
+      required: true
+      schema: { type: integer }
+    OutboxEventId:
+      in: path
+      name: event
+      required: true
+      schema: { type: integer }
+    ActivityId:
+      in: path
+      name: activity
+      required: true
+      schema: { type: integer }
+    TokenId:
+      in: path
+      name: token
+      required: true
+      schema: { type: integer }
+  responses:
+    TenantRequired:
+      description: Falta header X-Tenant-Id
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorMessage'
+          example:
+            message: Tenant context is required
+    Forbidden:
+      description: Usuario sin acceso o permiso
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorMessage'
+          example:
+            message: Missing permission: reports.daily.read
+    NotFound:
+      description: Recurso no encontrado dentro del tenant
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorMessage'
+          example:
+            message: Voucher not found.
+    ValidationError:
+      description: Error de validacion o regla de negocio
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+  schemas:
+    DataEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: array
+              items:
+                type: object
+                additionalProperties: true
+    ErrorMessage:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+    ValidationError:
+      type: object
+      required: [message, errors]
+      properties:
+        message:
+          type: string
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+    ProductCreateRequest:
+      type: object
+      required: [sku, name, is_controlled]
+      properties:
+        sku: { type: string }
+        name: { type: string }
+        is_controlled: { type: boolean }
+    LotCreateRequest:
+      type: object
+      required: [product_id, code, expires_at, stock_quantity]
+      properties:
+        product_id: { type: integer }
+        code: { type: string }
+        expires_at:
+          type: string
+          format: date
+        stock_quantity:
+          type: integer
+          minimum: 0
+    StockMovementCreateRequest:
+      type: object
+      required: [lot_id, type, quantity, reference]
+      properties:
+        lot_id: { type: integer }
+        type: { type: string }
+        quantity:
+          type: integer
+          minimum: 1
+        reference: { type: string }
+    SaleCreateRequest:
+      type: object
+      properties:
+        payment_method:
+          type: string
+          enum: [cash, card, transfer, credit]
+        customer_id: { type: integer }
+        due_at:
+          type: string
+          format: date
+        lot_id: { type: integer }
+        quantity:
+          type: integer
+          minimum: 1
+        unit_price:
+          type: number
+          format: float
+        prescription_code: { type: string }
+        approval_code: { type: string }
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [quantity, unit_price]
+            properties:
+              lot_id: { type: integer }
+              product_id: { type: integer }
+              quantity:
+                type: integer
+                minimum: 1
+              unit_price:
+                type: number
+                format: float
+              prescription_code: { type: string }
+              approval_code: { type: string }
+    CustomerCreateRequest:
+      type: object
+      required: [document_type, document_number, name]
+      properties:
+        document_type: { type: string }
+        document_number: { type: string }
+        name: { type: string }
+        phone: { type: string }
+        email:
+          type: string
+          format: email
+        credit_limit:
+          type: number
+          format: float
+        credit_days:
+          type: integer
+          minimum: 0
+        block_on_overdue: { type: boolean }
+    CustomerUpdateRequest:
+      type: object
+      properties:
+        document_type: { type: string }
+        document_number: { type: string }
+        name: { type: string }
+        phone:
+          type: [string, 'null']
+        email:
+          type: [string, 'null']
+          format: email
+        credit_limit:
+          type: [number, 'null']
+        credit_days:
+          type: [integer, 'null']
+        block_on_overdue: { type: boolean }
+        status:
+          type: string
+          enum: [active, inactive]
+    ReceivablePaymentRequest:
+      type: object
+      required: [amount, payment_method, reference]
+      properties:
+        amount:
+          type: number
+          format: float
+        payment_method: { type: string }
+        reference: { type: string }
+    FollowUpRequest:
+      type: object
+      required: [type, note]
+      properties:
+        type:
+          type: string
+          enum: [note, promise]
+        note: { type: string }
+        promised_amount:
+          type: number
+          format: float
+        promised_at:
+          type: string
+          format: date
+    CashCloseRequest:
+      type: object
+      properties:
+        counted_amount:
+          type: number
+          format: float
+        denominations:
+          type: array
+          items:
+            type: object
+            required: [value, quantity]
+            properties:
+              value:
+                type: number
+                format: float
+              quantity:
+                type: integer
+                minimum: 1
+    CashMovementCreateRequest:
+      type: object
+      required: [type, amount, reference]
+      properties:
+        type:
+          type: string
+          enum: [manual_in, manual_out]
+        amount:
+          type: number
+          format: float
+        reference: { type: string }
+        notes: { type: string }
+    SupplierCreateRequest:
+      type: object
+      required: [document_type, document_number, name]
+      properties:
+        document_type: { type: string }
+        document_number: { type: string }
+        name: { type: string }
+        contact_name: { type: string }
+        phone: { type: string }
+        email:
+          type: string
+          format: email
+    PurchaseOrderCreateRequest:
+      type: object
+      required: [supplier_id, items]
+      properties:
+        supplier_id: { type: integer }
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [product_id, ordered_quantity, unit_cost]
+            properties:
+              product_id: { type: integer }
+              ordered_quantity:
+                type: integer
+                minimum: 1
+              unit_cost:
+                type: number
+                format: float
+    PurchaseOrderFromReplenishmentRequest:
+      type: object
+      required: [supplier_id, items]
+      properties:
+        supplier_id: { type: integer }
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [product_id, unit_cost]
+            properties:
+              product_id: { type: integer }
+              unit_cost:
+                type: number
+                format: float
+              suggested_order_quantity:
+                type: integer
+                minimum: 1
+              order_quantity:
+                type: integer
+                minimum: 1
+    PurchaseReceiptCreateRequest:
+      type: object
+      required: [supplier_id, items]
+      properties:
+        supplier_id: { type: integer }
+        purchase_order_id: { type: integer }
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [quantity, unit_cost]
+            properties:
+              lot_id: { type: integer }
+              product_id: { type: integer }
+              lot_code: { type: string }
+              expires_at:
+                type: string
+                format: date
+              quantity:
+                type: integer
+                minimum: 1
+              unit_cost:
+                type: number
+                format: float
+    PurchaseReturnCreateRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string }
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [purchase_receipt_item_id, quantity]
+            properties:
+              purchase_receipt_item_id: { type: integer }
+              quantity:
+                type: integer
+                minimum: 1
+    PayablePaymentRequest:
+      type: object
+      required: [amount, payment_method, reference]
+      properties:
+        amount:
+          type: number
+          format: float
+        payment_method: { type: string }
+        reference: { type: string }
+    CreditNoteCreateRequest:
+      type: object
+      required: [sale_id, reason]
+      properties:
+        sale_id: { type: integer }
+        reason: { type: string }
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [sale_item_id, quantity]
+            properties:
+              sale_item_id: { type: integer }
+              quantity:
+                type: integer
+                minimum: 1
+    BillingProviderProfileUpdateRequest:
+      type: object
+      properties:
+        provider_code:
+          type: string
+          enum: [fake_sunat]
+        environment:
+          type: string
+          enum: [sandbox, live]
+        default_outcome:
+          type: string
+          enum: [accepted, rejected, transient_fail]
+        credentials:
+          type: object
+          additionalProperties: true
+    ApiTokenCreateRequest:
+        type: object
+        required: [name]
+        properties:
+          name:
+            type: string
+          abilities:
+            type: array
+            description: Permisos que puede usar el bearer token en rutas protegidas. Acepta `*` y prefijos `modulo.*`.
+            items:
+              type: string
+          expires_at:
+            type: string
+            format: date
+            description: Fecha de expiracion inclusiva. El backend la normaliza al fin del dia y limita la vida maxima a 90 dias.
+    ApiTokenRotateRequest:
+        type: object
+        properties:
+          name:
+            type: string
+          abilities:
+            type: array
+            description: Si se envia, reemplaza las abilities del token anterior.
+            items:
+              type: string
+          expires_at:
+            type: string
+            format: date
+            description: Fecha de expiracion inclusiva para el token nuevo. Si no se envia, se aplica la expiracion por defecto.
+  /health/live:
+    get:
+      tags: [Tenant]
+      security: []
+      summary: Liveness probe del backend
+      responses:
+        '200':
+          description: Backend vivo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+  /health/ready:
+    get:
+      tags: [Tenant]
+      security: []
+      summary: Readiness probe resumido del backend
+      responses:
+        '200':
+          description: Backend listo con resumen publico de readiness
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '503':
+          description: Backend degradado con resumen publico de readiness
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'

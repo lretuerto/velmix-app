@@ -1,0 +1,522 @@
+<?php
+
+namespace App\Services\Sales;
+
+use App\Services\Audit\TenantActivityLogService;
+use App\Services\Inventory\LotStockMutationService;
+use App\Support\ReferenceCode;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\HttpException;
+
+class PosSaleService
+{
+    public function execute(
+        int $tenantId,
+        int $userId,
+        array $items,
+        string $paymentMethod = 'cash',
+        ?int $customerId = null,
+        ?string $dueAt = null
+    ): array {
+        if ($tenantId <= 0 || $userId <= 0) {
+            throw new HttpException(403, 'Tenant context or authenticated user missing.');
+        }
+
+        if ($items === []) {
+            throw new HttpException(422, 'At least one sale item is required.');
+        }
+
+        if (! in_array($paymentMethod, ['cash', 'card', 'transfer', 'credit'], true)) {
+            throw new HttpException(422, 'Payment method is invalid.');
+        }
+
+        return DB::transaction(function () use ($tenantId, $userId, $items, $paymentMethod, $customerId, $dueAt) {
+            $customer = $this->resolveCustomer($tenantId, $customerId);
+            $lotReservations = [];
+
+            if ($paymentMethod === 'credit' && $customer === null) {
+                throw new HttpException(422, 'Credit sale requires customer_id.');
+            }
+
+            $resolvedItems = collect($items)
+                ->map(function (array $item) use ($tenantId, &$lotReservations) {
+                    return $this->resolveItem($tenantId, $item, $lotReservations);
+                });
+
+            $totalAmount = round($resolvedItems->sum('line_total'), 2);
+            $grossCost = round($resolvedItems->sum('cost_amount'), 2);
+            $grossMargin = round($totalAmount - $grossCost, 2);
+
+            if ($paymentMethod === 'credit') {
+                if ($customer->status !== 'active') {
+                    throw new HttpException(422, 'Customer is not active for credit sales.');
+                }
+
+                $creditSummary = DB::table('sale_receivables')
+                    ->where('tenant_id', $tenantId)
+                    ->where('customer_id', $customer->id)
+                    ->where('outstanding_amount', '>', 0)
+                    ->lockForUpdate()
+                    ->selectRaw("
+                        COALESCE(SUM(outstanding_amount), 0) as outstanding_total,
+                        SUM(CASE WHEN due_at IS NOT NULL AND due_at < ? THEN 1 ELSE 0 END) as overdue_count
+                    ", [now()])
+                    ->first();
+
+                $outstandingTotal = round((float) ($creditSummary->outstanding_total ?? 0), 2);
+                $overdueCount = (int) ($creditSummary->overdue_count ?? 0);
+
+                if ((bool) $customer->block_on_overdue && $overdueCount > 0) {
+                    throw new HttpException(422, 'Customer has overdue receivables.');
+                }
+
+                if ($customer->credit_limit !== null && ($outstandingTotal + $totalAmount) > (float) $customer->credit_limit) {
+                    throw new HttpException(422, 'Customer credit limit exceeded.');
+                }
+
+                if ($dueAt === null) {
+                    if ($customer->credit_days === null) {
+                        throw new HttpException(422, 'Credit sale requires due_at or customer credit_days.');
+                    }
+
+                    $dueAt = now()->addDays((int) $customer->credit_days)->toDateString();
+                }
+            }
+
+            $saleId = DB::table('sales')->insertGetId([
+                'tenant_id' => $tenantId,
+                'user_id' => $userId,
+                'customer_id' => $customer?->id,
+                'reference' => ReferenceCode::temporary('SALE'),
+                'status' => 'completed',
+                'payment_method' => $paymentMethod,
+                'total_amount' => $totalAmount,
+                'gross_cost' => $grossCost,
+                'gross_margin' => $grossMargin,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $reference = ReferenceCode::fromId('SALE', $saleId);
+
+            DB::table('sales')
+                ->where('id', $saleId)
+                ->update([
+                    'reference' => $reference,
+                    'updated_at' => now(),
+                ]);
+
+            foreach ($resolvedItems as $item) {
+                foreach ($item['allocations'] as $allocation) {
+                    $costAmount = round($allocation['quantity'] * $item['unit_cost_snapshot'], 2);
+                    $lineTotal = round($allocation['quantity'] * $item['unit_price'], 2);
+
+                    DB::table('sale_items')->insert([
+                        'sale_id' => $saleId,
+                        'lot_id' => $allocation['lot_id'],
+                        'product_id' => $item['product_id'],
+                        'quantity' => $allocation['quantity'],
+                        'unit_price' => $item['unit_price'],
+                        'unit_cost_snapshot' => $item['unit_cost_snapshot'],
+                        'line_total' => $lineTotal,
+                        'cost_amount' => $costAmount,
+                        'gross_margin' => round($lineTotal - $costAmount, 2),
+                        'prescription_code' => $item['prescription_code'],
+                        'approval_code' => $item['approval_code'],
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+
+                    app(LotStockMutationService::class)->decrementById(
+                        $tenantId,
+                        (int) $allocation['lot_id'],
+                        (int) $allocation['quantity'],
+                        'Lot not found during sale.',
+                        'Insufficient stock for lot.',
+                    );
+
+                    DB::table('stock_movements')->insert([
+                        'tenant_id' => $tenantId,
+                        'lot_id' => $allocation['lot_id'],
+                        'product_id' => $item['product_id'],
+                        'sale_id' => $saleId,
+                        'type' => 'sale',
+                        'quantity' => -$allocation['quantity'],
+                        'reference' => $reference,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+
+                if ($item['approval_id'] !== null) {
+                    DB::table('sale_approvals')
+                        ->where('id', $item['approval_id'])
+                        ->update([
+                            'status' => 'consumed',
+                            'consumed_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                }
+            }
+
+            $receivable = null;
+
+            if ($paymentMethod === 'credit') {
+                $receivableId = DB::table('sale_receivables')->insertGetId([
+                    'tenant_id' => $tenantId,
+                    'customer_id' => $customer->id,
+                    'sale_id' => $saleId,
+                    'total_amount' => $totalAmount,
+                    'paid_amount' => 0,
+                    'outstanding_amount' => $totalAmount,
+                    'status' => 'pending',
+                    'due_at' => $dueAt,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                $receivable = [
+                    'id' => $receivableId,
+                    'status' => 'pending',
+                    'due_at' => $dueAt,
+                    'outstanding_amount' => $totalAmount,
+                ];
+            }
+
+            app(TenantActivityLogService::class)->record(
+                $tenantId,
+                $userId,
+                'sales',
+                'sales.sale.completed',
+                'sale',
+                $saleId,
+                'Venta '.$reference.' registrada',
+                [
+                    'reference' => $reference,
+                    'payment_method' => $paymentMethod,
+                    'customer_id' => $customer?->id,
+                    'item_count' => count($items),
+                    'total_amount' => $totalAmount,
+                    'gross_margin' => $grossMargin,
+                    'receivable_id' => $receivable['id'] ?? null,
+                ],
+            );
+
+            return [
+                'sale_id' => $saleId,
+                'reference' => $reference,
+                'payment_method' => $paymentMethod,
+                'customer' => $customer !== null ? [
+                    'id' => $customer->id,
+                    'document_type' => $customer->document_type,
+                    'document_number' => $customer->document_number,
+                    'name' => $customer->name,
+                ] : null,
+                'receivable' => $receivable,
+                'total_amount' => $totalAmount,
+                'gross_cost' => $grossCost,
+                'gross_margin' => $grossMargin,
+                'items' => $resolvedItems->map(fn (array $item) => [
+                    'product_id' => $item['product_id'],
+                    'product_sku' => $item['product_sku'],
+                    'quantity' => $item['quantity'],
+                    'unit_price' => $item['unit_price'],
+                    'unit_cost_snapshot' => $item['unit_cost_snapshot'],
+                    'line_total' => $item['line_total'],
+                    'cost_amount' => $item['cost_amount'],
+                    'gross_margin' => $item['gross_margin'],
+                    'prescription_code' => $item['prescription_code'],
+                    'approval_code' => $item['approval_code'],
+                    'allocations' => array_map(fn (array $allocation) => [
+                        'lot_id' => $allocation['lot_id'],
+                        'lot_code' => $allocation['lot_code'],
+                        'quantity' => $allocation['quantity'],
+                        'remaining_stock' => $allocation['remaining_stock'],
+                    ], $item['allocations']),
+                ])->values()->all(),
+            ];
+        });
+    }
+
+    private function resolveCustomer(int $tenantId, ?int $customerId): ?object
+    {
+        if ($customerId === null) {
+            return null;
+        }
+
+        $customer = DB::table('customers')
+            ->where('tenant_id', $tenantId)
+            ->where('id', $customerId)
+            ->first([
+                'id',
+                'document_type',
+                'document_number',
+                'name',
+                'status',
+                'credit_limit',
+                'credit_days',
+                'block_on_overdue',
+            ]);
+
+        if ($customer === null) {
+            throw new HttpException(404, 'Customer not found.');
+        }
+
+        return $customer;
+    }
+
+    private function resolveItem(int $tenantId, array $item, array &$lotReservations): array
+    {
+        $quantity = (int) ($item['quantity'] ?? 0);
+        $unitPrice = (float) ($item['unit_price'] ?? -1);
+        $prescriptionCode = $item['prescription_code'] ?? null;
+        $approvalCode = $item['approval_code'] ?? null;
+
+        if ($quantity <= 0 || $unitPrice < 0) {
+            throw new HttpException(422, 'Quantity and unit price must be valid.');
+        }
+
+        if (array_key_exists('lot_id', $item) && $item['lot_id'] !== null) {
+            return $this->resolveDirectLotItem(
+                $tenantId,
+                (int) $item['lot_id'],
+                $quantity,
+                $unitPrice,
+                $prescriptionCode,
+                $approvalCode,
+                $lotReservations,
+            );
+        }
+
+        if (array_key_exists('product_id', $item) && $item['product_id'] !== null) {
+            return $this->resolveFifoProductItem(
+                $tenantId,
+                (int) $item['product_id'],
+                $quantity,
+                $unitPrice,
+                $prescriptionCode,
+                $approvalCode,
+                $lotReservations,
+            );
+        }
+
+        throw new HttpException(422, 'Each item must include lot_id or product_id.');
+    }
+
+    private function resolveDirectLotItem(
+        int $tenantId,
+        int $lotId,
+        int $quantity,
+        float $unitPrice,
+        ?string $prescriptionCode,
+        ?string $approvalCode,
+        array &$lotReservations,
+    ): array {
+        $lot = DB::table('lots')
+            ->join('products', 'products.id', '=', 'lots.product_id')
+            ->where('lots.id', $lotId)
+            ->where('lots.tenant_id', $tenantId)
+            ->lockForUpdate()
+            ->first([
+                'lots.id',
+                'lots.product_id',
+                'lots.code',
+                'lots.stock_quantity',
+                'lots.status',
+                'lots.expires_at',
+                'products.sku',
+                'products.is_controlled',
+                'products.average_cost',
+            ]);
+
+        if ($lot === null) {
+            throw new HttpException(404, 'Lot not found.');
+        }
+
+        $effectiveStock = $this->effectiveLotStock((int) $lot->id, (int) $lot->stock_quantity, $lotReservations);
+
+        if ($effectiveStock < $quantity) {
+            throw new HttpException(422, 'Insufficient stock for lot.');
+        }
+
+        $this->assertLotAvailableForSale((string) $lot->status, (string) $lot->expires_at);
+
+        $approval = $this->resolveControlledAuthorization(
+            $tenantId,
+            (int) $lot->product_id,
+            (bool) $lot->is_controlled,
+            $prescriptionCode,
+            $approvalCode,
+        );
+
+        $remainingStock = $effectiveStock - $quantity;
+        $lotReservations[(int) $lot->id] = ($lotReservations[(int) $lot->id] ?? 0) + $quantity;
+
+        return [
+            'product_id' => $lot->product_id,
+            'product_sku' => $lot->sku,
+            'quantity' => $quantity,
+            'unit_price' => $unitPrice,
+            'unit_cost_snapshot' => round((float) $lot->average_cost, 2),
+            'line_total' => round($quantity * $unitPrice, 2),
+            'cost_amount' => round($quantity * (float) $lot->average_cost, 2),
+            'gross_margin' => round(($quantity * $unitPrice) - ($quantity * (float) $lot->average_cost), 2),
+            'prescription_code' => $prescriptionCode,
+            'approval_code' => $approval['approval_code'],
+            'approval_id' => $approval['approval_id'],
+            'allocations' => [[
+                'lot_id' => $lot->id,
+                'lot_code' => $lot->code,
+                'quantity' => $quantity,
+                'remaining_stock' => $remainingStock,
+            ]],
+        ];
+    }
+
+    private function resolveFifoProductItem(
+        int $tenantId,
+        int $productId,
+        int $quantity,
+        float $unitPrice,
+        ?string $prescriptionCode,
+        ?string $approvalCode,
+        array &$lotReservations,
+    ): array {
+        $product = DB::table('products')
+            ->where('id', $productId)
+            ->where('tenant_id', $tenantId)
+            ->first(['id', 'sku', 'is_controlled', 'average_cost']);
+
+        if ($product === null) {
+            throw new HttpException(404, 'Product not found.');
+        }
+
+        $approval = $this->resolveControlledAuthorization(
+            $tenantId,
+            $productId,
+            (bool) $product->is_controlled,
+            $prescriptionCode,
+            $approvalCode,
+        );
+
+        $lots = DB::table('lots')
+            ->where('tenant_id', $tenantId)
+            ->where('product_id', $productId)
+            ->where('status', 'available')
+            ->whereDate('expires_at', '>=', now()->toDateString())
+            ->where('stock_quantity', '>', 0)
+            ->orderBy('expires_at')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get(['id', 'code', 'stock_quantity']);
+
+        return [
+            'product_id' => $product->id,
+            'product_sku' => $product->sku,
+            'quantity' => $quantity,
+            'unit_price' => $unitPrice,
+            'unit_cost_snapshot' => round((float) $product->average_cost, 2),
+            'line_total' => round($quantity * $unitPrice, 2),
+            'cost_amount' => round($quantity * (float) $product->average_cost, 2),
+            'gross_margin' => round(($quantity * $unitPrice) - ($quantity * (float) $product->average_cost), 2),
+            'prescription_code' => $prescriptionCode,
+            'approval_code' => $approval['approval_code'],
+            'approval_id' => $approval['approval_id'],
+            'allocations' => $this->allocateFifoLots($lots, $quantity, $lotReservations),
+        ];
+    }
+
+    private function resolveControlledAuthorization(
+        int $tenantId,
+        int $productId,
+        bool $isControlled,
+        ?string $prescriptionCode,
+        ?string $approvalCode
+    ): array {
+        if (! $isControlled) {
+            return [
+                'approval_id' => null,
+                'approval_code' => null,
+            ];
+        }
+
+        if ($prescriptionCode !== null && trim($prescriptionCode) !== '') {
+            return [
+                'approval_id' => null,
+                'approval_code' => null,
+            ];
+        }
+
+        if ($approvalCode === null || trim($approvalCode) === '') {
+            throw new HttpException(422, 'Controlled product requires prescription_code or approval_code.');
+        }
+
+        $approval = DB::table('sale_approvals')
+            ->where('tenant_id', $tenantId)
+            ->where('product_id', $productId)
+            ->where('code', $approvalCode)
+            ->where('status', 'approved')
+            ->lockForUpdate()
+            ->first(['id', 'code']);
+
+        if ($approval === null) {
+            throw new HttpException(422, 'Approval code is invalid or already consumed.');
+        }
+
+        return [
+            'approval_id' => $approval->id,
+            'approval_code' => $approval->code,
+        ];
+    }
+
+    private function allocateFifoLots(Collection $lots, int $quantity, array &$lotReservations): array
+    {
+        $remaining = $quantity;
+        $allocations = [];
+
+        foreach ($lots as $lot) {
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $effectiveStock = $this->effectiveLotStock((int) $lot->id, (int) $lot->stock_quantity, $lotReservations);
+            $taken = min($remaining, $effectiveStock);
+
+            if ($taken <= 0) {
+                continue;
+            }
+
+            $remaining -= $taken;
+            $lotReservations[(int) $lot->id] = ($lotReservations[(int) $lot->id] ?? 0) + $taken;
+            $allocations[] = [
+                'lot_id' => $lot->id,
+                'lot_code' => $lot->code,
+                'quantity' => $taken,
+                'remaining_stock' => $effectiveStock - $taken,
+            ];
+        }
+
+        if ($remaining > 0) {
+            throw new HttpException(422, 'Insufficient stock for product.');
+        }
+
+        return $allocations;
+    }
+
+    private function effectiveLotStock(int $lotId, int $databaseStock, array $lotReservations): int
+    {
+        return max($databaseStock - (int) ($lotReservations[$lotId] ?? 0), 0);
+    }
+
+    private function assertLotAvailableForSale(string $status, string $expiresAt): void
+    {
+        if ($status !== 'available') {
+            throw new HttpException(422, 'Lot is not available for sale.');
+        }
+
+        if ($expiresAt < now()->toDateString()) {
+            throw new HttpException(422, 'Lot is expired.');
+        }
+    }
+}

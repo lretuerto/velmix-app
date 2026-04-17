@@ -1,0 +1,27 @@
+[Unit]
+Description=VELMiX Laravel scheduler
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/velmix/current
+EnvironmentFile=-/etc/velmix/velmix.env
+Environment=APP_ENV=production
+ExecStartPre=/usr/bin/php artisan system:preflight --json --fail-on-critical
+ExecStart=/usr/bin/php artisan schedule:work
+ExecStop=/usr/bin/php artisan schedule:interrupt
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/var/www/velmix/current/storage /var/www/velmix/current/bootstrap/cache /var/www/velmix/shared
+UMask=0027
+
+[Install]
+WantedBy=velmix-backend.target
