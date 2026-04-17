@@ -245,7 +245,9 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - Para QA reproducible existe `composer run velmix:outbox`, que sale en verde si la base todavía no está migrada
 - Reconciliacion manual: `php artisan billing:reconcile-pending --limit=20`
 - Alertas operativas agregadas: `php artisan system:alerts --json`
+- Preflight de release y configuracion: `php artisan system:preflight --json`
 - En CI o chequeos manuales puede usarse `php artisan system:alerts --fail-on-critical`
+- En deploys se recomienda `php artisan system:preflight --json --fail-on-warning`
 - Pruning conservador: `php artisan platform:prune-operational-data --pretend --json`
 - Scheduler recomendado:
   - `billing:dispatch-outbox --limit=20 --graceful-if-unmigrated` cada minuto
@@ -255,6 +257,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - validar tareas registradas con `php artisan schedule:list`
   - para proceso dedicado puede usarse `php artisan schedule:work`
   - en multi-nodo, `VELMIX_SCHEDULER_ON_ONE_SERVER=true` requiere cache compartido con locks atomicos
+  - el preflight avisa con `scheduler_lock_store_not_shared` si `onOneServer` se combina con stores locales como `file` o `array`
   - los candados `withoutOverlapping()` ya usan TTL explicito y no el default de 24 horas
 
 ## Gobernanza de API tokens
@@ -327,6 +330,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /health/live` valida liveness y devuelve `request_id`
 - `GET /health/ready` valida conectividad y readiness en modo resumido publico
 - `php artisan system:readiness --json` entrega el detalle completo de base y esquema para operacion
+- `php artisan system:preflight --json` valida readiness y coherencia de plataforma antes de un release
 - `php artisan system:alerts --json` resume alertas cross-tenant sin degradar el scheduler
 - `php artisan platform:prune-operational-data --pretend --json` expone housekeeping conservador de datos operativos
 - el pruning conservador actual cubre `idempotency_keys`, `outbox_attempts`, `tenant_user_invitations` y `operations_control_tower_snapshots`
@@ -359,6 +363,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - `composer run velmix:qa`
   - `composer run velmix:reset`
   - `composer run velmix:schedule`
+  - `composer run velmix:preflight`
   - `composer run velmix:routes`
   - `composer run velmix:readiness`
   - `composer run velmix:alerts`

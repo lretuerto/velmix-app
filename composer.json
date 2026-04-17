@@ -64,6 +64,9 @@
         "velmix:readiness": [
             "@php artisan system:readiness --json"
         ],
+        "velmix:preflight": [
+            "@php artisan system:preflight --json --fail-on-warning"
+        ],
         "velmix:alerts": [
             "@php artisan system:alerts --json"
         ],
@@ -93,6 +96,7 @@
             "@velmix:qa",
             "@velmix:reset",
             "@velmix:schedule",
+            "@velmix:preflight",
             "@velmix:routes",
             "@velmix:readiness",
             "@velmix:alerts",
@@ -106,6 +110,7 @@
             "@velmix:concurrency",
             "@velmix:reset",
             "@velmix:schedule",
+            "@velmix:preflight",
             "@velmix:routes",
             "@velmix:readiness",
             "@velmix:alerts",

@@ -55,4 +55,24 @@ class SystemAlertsCommandTest extends TestCase
         $this->assertSame('critical', $output['status']);
         $this->assertContains('billing_critical', array_column($output['items'], 'code'));
     }
+
+    public function test_system_alerts_command_reports_platform_warning_for_unsafe_scheduler_lock_store(): void
+    {
+        $this->seed(\Database\Seeders\TenantSeeder::class);
+
+        config([
+            'velmix.scheduler.on_one_server' => true,
+            'cache.default' => 'file',
+        ]);
+
+        $exitCode = Artisan::call('system:alerts', [
+            '--json' => true,
+        ]);
+
+        $output = json_decode(Artisan::output(), true, 512, JSON_THROW_ON_ERROR);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertSame('warning', $output['status']);
+        $this->assertContains('scheduler_lock_store_not_shared', array_column($output['items'], 'code'));
+    }
 }

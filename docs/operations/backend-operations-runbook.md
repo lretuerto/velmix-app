@@ -70,15 +70,17 @@ Variables asociadas:
    - `GET /health/ready`
 3. Verificar detalle tecnico:
    - `php artisan system:readiness --json`
-4. Verificar tareas registradas:
+4. Ejecutar preflight de release/configuracion:
+   - `php artisan system:preflight --json`
+5. Verificar tareas registradas:
    - `php artisan schedule:list`
-5. Revisar alertas cross-tenant:
+6. Revisar alertas cross-tenant:
    - `php artisan system:alerts --json`
-6. Revisar outbox:
+7. Revisar outbox:
    - `php artisan billing:dispatch-outbox --limit=20 --graceful-if-unmigrated`
-7. Revisar reconciliacion:
+8. Revisar reconciliacion:
    - `php artisan billing:reconcile-pending --limit=20 --graceful-if-unmigrated`
-8. Revisar housekeeping:
+9. Revisar housekeeping:
    - `php artisan platform:prune-operational-data --pretend --json`
 
 ## Politica de alertas
@@ -86,6 +88,22 @@ Variables asociadas:
 - `system:alerts` es observacional para scheduler
 - `system:alerts --fail-on-critical` se reserva para chequeos manuales, gates de CI o validaciones de despliegue
 - una alerta critica no debe tumbar `schedule:run`; debe abrir diagnostico y respuesta operativa
+- `system:preflight --fail-on-warning` si puede usarse como gate de despliegue porque valida coherencia de plataforma sin mezclar backlog de negocio
+- gate recomendado de despliegue:
+  - `php artisan system:preflight --json --fail-on-warning`
+
+## Politica de preflight
+
+Checks actuales:
+
+- readiness resumido del backend
+- `APP_DEBUG` habilitado fuera de `local/testing`
+- coherencia entre `VELMIX_SCHEDULER_ON_ONE_SERVER=true` y un store de cache compartido
+
+Codigos esperados:
+
+- `app_debug_enabled`
+- `scheduler_lock_store_not_shared`
 
 ## Politica de retencion
 
@@ -205,6 +223,7 @@ WantedBy=multi-user.target
 
 ```powershell
 composer run velmix:readiness
+composer run velmix:preflight
 composer run velmix:alerts
 composer run velmix:prune
 composer run velmix:outbox

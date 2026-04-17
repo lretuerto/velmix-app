@@ -259,6 +259,7 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('composer run velmix:lint', false)
             ->assertSee('composer run velmix:lint:full', false)
             ->assertSee('composer run velmix:audit', false)
+            ->assertSee('composer run velmix:preflight', false)
             ->assertSee('phpstan analyse --configuration=phpstan.neon.dist', false)
             ->assertSee('ops/scripts/post-deploy.sh', false);
 
@@ -277,7 +278,9 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('platform:prune-operational-data', false)
             ->assertSee('system:alerts --fail-on-critical', false)
             ->assertSee('VELMIX_SCHEDULER_ON_ONE_SERVER', false)
+            ->assertSee('scheduler_lock_store_not_shared', false)
             ->assertSee('outbox_attempts', false)
+            ->assertSee('system:preflight --json --fail-on-warning', false)
             ->assertSee('php artisan schedule:work', false);
 
         $this->actingAs($user)
@@ -288,6 +291,7 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('Rollback de aplicacion', false)
             ->assertSee('Rollback de esquema', false)
             ->assertSee('schedule:interrupt', false)
+            ->assertSee('system:preflight --json --fail-on-critical', false)
             ->assertSee('php artisan queue:restart', false);
     }
 

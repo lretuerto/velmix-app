@@ -91,6 +91,7 @@ php artisan test
 - Worker manual outbox: `php artisan billing:dispatch-outbox --limit=20`
 - Worker manual de reconciliación billing: `php artisan billing:reconcile-pending --limit=20`
 - Script de readiness: `composer run velmix:readiness`
+- Script de preflight de release: `composer run velmix:preflight`
 - Script de alertas operativas: `composer run velmix:alerts`
 - Script de pruning conservador: `composer run velmix:prune`
 - Script de lint de estilo: `composer run velmix:lint`
@@ -179,6 +180,7 @@ composer run velmix:test
 composer run velmix:concurrency
 composer run velmix:qa
 composer run velmix:readiness
+composer run velmix:preflight
 composer run velmix:alerts
 composer run velmix:prune
 composer run velmix:lint
@@ -203,12 +205,13 @@ composer run velmix:routes
 2. `composer run velmix:qa`
 3. `composer run velmix:reset`
 4. `composer run velmix:schedule`
-5. `composer run velmix:routes`
-6. `composer run velmix:readiness`
-7. `composer run velmix:alerts`
-8. `composer run velmix:prune`
-9. `composer run velmix:outbox`
-10. `composer run velmix:reconcile`
+5. `composer run velmix:preflight`
+6. `composer run velmix:routes`
+7. `composer run velmix:readiness`
+8. `composer run velmix:alerts`
+9. `composer run velmix:prune`
+10. `composer run velmix:outbox`
+11. `composer run velmix:reconcile`
 
 `velmix:ci:mysql` reutiliza la misma secuencia sobre MySQL, agrega la suite `concurrency` y rehidrata el esquema antes del bloque operativo, para validar locks, unicidad e idempotencia en un engine mas parecido a produccion.
 
@@ -220,6 +223,7 @@ composer run velmix:routes
 - `platform:prune-operational-data` diariamente a las `03:15`
 - el scheduler usa `withoutOverlapping()` con TTL explicito para evitar locks huérfanos de 24 horas tras un crash
 - puede habilitarse `VELMIX_SCHEDULER_ON_ONE_SERVER=true` en despliegues multi-nodo con cache compartido y locks atomicos
+- `composer run velmix:preflight` valida que `VELMIX_SCHEDULER_ON_ONE_SERVER=true` no quede montado sobre stores locales como `file` o `array`
 - el pruning conservador ahora incluye `outbox_attempts` ademas de claves de idempotencia, invitaciones y snapshots
 - artefactos operativos versionados en [`ops/README.md`](C:\Users\user\Desktop\velmix-app\ops\README.md), [`ops/systemd/velmix-scheduler.service`](C:\Users\user\Desktop\velmix-app\ops\systemd\velmix-scheduler.service) y [`ops/scripts/post-deploy.sh`](C:\Users\user\Desktop\velmix-app\ops\scripts\post-deploy.sh)
 

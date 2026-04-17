@@ -12,6 +12,7 @@ Ejecutar en CI o staging:
 composer validate --no-check-publish
 composer run velmix:qa
 composer run velmix:schedule
+composer run velmix:preflight
 composer run velmix:routes
 composer run velmix:readiness
 composer run velmix:alerts
@@ -43,13 +44,15 @@ composer run velmix:ci:mysql
    - `php artisan optimize:clear`
    - `php artisan config:cache`
    - `php artisan route:cache`
-8. Reiniciar workers/procesos:
+8. Ejecutar preflight de plataforma:
+   - `php artisan system:preflight --json --fail-on-warning`
+9. Reiniciar workers/procesos:
    - `php artisan queue:restart`
    - reiniciar servicio de `schedule:work` o supervisor equivalente
-9. Verificar:
+10. Verificar:
    - `GET /health/live`
    - `GET /health/ready`
-   - `php artisan system:readiness --json`
+   - `php artisan system:preflight --json`
    - `php artisan system:alerts --json`
    - `php artisan schedule:list`
 
@@ -89,13 +92,15 @@ Pasos:
 3. volver al artefacto o release anterior
 4. limpiar caches:
    - `php artisan optimize:clear`
-5. reiniciar workers:
+5. ejecutar preflight de rollback:
+   - `php artisan system:preflight --json --fail-on-critical`
+6. reiniciar workers:
    - `php artisan queue:restart`
    - reiniciar proceso `schedule:work` o supervisor equivalente
-6. revalidar:
+7. revalidar:
    - `GET /health/live`
    - `GET /health/ready`
-   - `php artisan system:readiness --json`
+   - `php artisan system:preflight --json`
    - `php artisan system:alerts --json`
    - `php artisan schedule:list`
 
@@ -117,6 +122,7 @@ Antes de revertir esquema revisar:
 ## Continuidad operativa
 
 - `system:alerts --fail-on-critical` debe usarse como gate manual o de pipeline, no dentro del scheduler
+- `system:preflight --fail-on-warning` si debe usarse como gate de deploy, porque valida coherencia de plataforma y release
 - el pruning debe comenzar en modo `--pretend` antes de activarse automatico en un entorno nuevo
 - conservar evidencia de `X-Request-Id` y logs JSON durante incidentes
 - en multi-nodo, habilitar `VELMIX_SCHEDULER_ON_ONE_SERVER=true` solo si existe cache compartido con locks atomicos

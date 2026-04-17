@@ -9,6 +9,7 @@ class SystemAlertService
 {
     public function __construct(
         private readonly SystemHealthService $health,
+        private readonly PlatformSafetyService $platformSafety,
         private readonly OperationsControlTowerReportService $controlTower,
     ) {}
 
@@ -30,6 +31,19 @@ class SystemAlertService
                     'status' => $readiness['status'] ?? 'unknown',
                     'checks' => $readiness['checks'] ?? [],
                 ],
+            ];
+        }
+
+        foreach ($this->platformSafety->summary()['items'] as $item) {
+            $alerts[] = [
+                'severity' => $item['severity'],
+                'scope' => 'platform',
+                'code' => $item['code'],
+                'message' => $item['message'],
+                'action' => $item['action'],
+                'path' => '/docs/operations-runbook',
+                'tenant_id' => null,
+                'metric_snapshot' => $item['metric_snapshot'] ?? [],
             ];
         }
 

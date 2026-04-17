@@ -13,7 +13,6 @@ cd "$APP_PATH"
 "$PHP_BIN" artisan optimize:clear
 "$PHP_BIN" artisan config:cache
 "$PHP_BIN" artisan route:cache
+"$PHP_BIN" artisan system:preflight --json --fail-on-warning
 "$PHP_BIN" artisan queue:restart
-"$PHP_BIN" artisan system:readiness --json
-"$PHP_BIN" artisan system:alerts --json
 "$PHP_BIN" artisan schedule:list

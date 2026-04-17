@@ -5,6 +5,7 @@ use App\Services\Billing\OutboxDispatchService;
 use App\Services\Platform\OperationalDataPruneService;
 use App\Services\Platform\SystemAlertService;
 use App\Services\Platform\SystemHealthService;
+use App\Services\Platform\SystemPreflightService;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\SQLiteDatabaseDoesNotExistException;
@@ -170,6 +171,28 @@ Artisan::command('system:alerts {--date=} {--json} {--fail-on-critical}', functi
 
     return 0;
 })->purpose('Summarize operational alerts across tenants.');
+
+Artisan::command('system:preflight {--json} {--fail-on-critical} {--fail-on-warning}', function (SystemPreflightService $service) {
+    $result = $service->summary();
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf('Preflight status: %s', $result['status']));
+        $this->line(sprintf('Readiness: %s', $result['checks']['readiness']['status']));
+        $this->line(sprintf('Platform safety: %s', $result['checks']['platform_safety']['status']));
+    }
+
+    if ((bool) $this->option('fail-on-warning') && in_array($result['status'], ['warning', 'critical'], true)) {
+        return 1;
+    }
+
+    if ((bool) $this->option('fail-on-critical') && $result['status'] === 'critical') {
+        return 1;
+    }
+
+    return 0;
+})->purpose('Run release preflight checks for readiness and platform safety.');
 
 Artisan::command('platform:prune-operational-data {--pretend} {--json}', function (OperationalDataPruneService $service) {
     $result = $service->prune((bool) $this->option('pretend'));
