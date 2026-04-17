@@ -248,6 +248,11 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - Preflight de release y configuracion: `php artisan system:preflight --json`
 - En CI o chequeos manuales puede usarse `php artisan system:alerts --fail-on-critical`
 - En deploys se recomienda `php artisan system:preflight --json --fail-on-warning`
+- El preflight tambien valida:
+  - `CACHE_STORE` y locks de scheduler si `onOneServer` esta activo
+  - `QUEUE_CONNECTION` y tablas `jobs/job_batches/failed_jobs` cuando aplica
+  - logging estructurado efectivo en entornos no locales
+  - paths criticos escribibles para runtime y cache
 - Pruning conservador: `php artisan platform:prune-operational-data --pretend --json`
 - Scheduler recomendado:
   - `billing:dispatch-outbox --limit=20 --graceful-if-unmigrated` cada minuto

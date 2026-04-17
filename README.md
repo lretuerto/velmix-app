@@ -88,6 +88,11 @@ php artisan test
 - `GET /health/ready` es publico pero resumido; el detalle completo queda para `php artisan system:readiness --json`
 - Todas las respuestas ahora devuelven `X-Request-Id` para correlación operativa
 - Logs estructurados disponibles via canales `stderr_json` y `daily_json`
+- `composer run velmix:preflight` ahora valida tambien:
+  - coherencia de `QUEUE_CONNECTION`
+  - existencia de tablas de cola si el driver es `database`
+  - presencia de logging estructurado en entornos no locales
+  - write-paths criticos (`storage`, `storage/logs`, `bootstrap/cache`)
 - Worker manual outbox: `php artisan billing:dispatch-outbox --limit=20`
 - Worker manual de reconciliación billing: `php artisan billing:reconcile-pending --limit=20`
 - Script de readiness: `composer run velmix:readiness`
@@ -224,6 +229,7 @@ composer run velmix:routes
 - el scheduler usa `withoutOverlapping()` con TTL explicito para evitar locks huérfanos de 24 horas tras un crash
 - puede habilitarse `VELMIX_SCHEDULER_ON_ONE_SERVER=true` en despliegues multi-nodo con cache compartido y locks atomicos
 - `composer run velmix:preflight` valida que `VELMIX_SCHEDULER_ON_ONE_SERVER=true` no quede montado sobre stores locales como `file` o `array`
+- tambien detecta `QUEUE_CONNECTION` invalido, tablas de cola ausentes, logging no estructurado en entorno productivo y paths no escribibles
 - el pruning conservador ahora incluye `outbox_attempts` ademas de claves de idempotencia, invitaciones y snapshots
 - artefactos operativos versionados en [`ops/README.md`](C:\Users\user\Desktop\velmix-app\ops\README.md), [`ops/systemd/velmix-scheduler.service`](C:\Users\user\Desktop\velmix-app\ops\systemd\velmix-scheduler.service) y [`ops/scripts/post-deploy.sh`](C:\Users\user\Desktop\velmix-app\ops\scripts\post-deploy.sh)
 - despliegue reproducible versionado tambien en:

@@ -14,9 +14,12 @@ class SystemPreflightService
         $readiness = $this->health->ready(detailed: true);
         $platformSafety = $this->platformSafety->summary();
 
+        $platformStatus = (string) ($platformSafety['status'] ?? 'ok');
         $status = ($readiness['status'] ?? 'ready') !== 'ready'
             ? 'critical'
-            : (($platformSafety['status'] ?? 'ok') === 'warning' ? 'warning' : 'ok');
+            : ($platformStatus === 'critical'
+                ? 'critical'
+                : ($platformStatus === 'warning' ? 'warning' : 'ok'));
 
         return [
             'status' => $status,

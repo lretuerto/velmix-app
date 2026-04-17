@@ -75,4 +75,24 @@ class SystemAlertsCommandTest extends TestCase
         $this->assertSame('warning', $output['status']);
         $this->assertContains('scheduler_lock_store_not_shared', array_column($output['items'], 'code'));
     }
+
+    public function test_system_alerts_command_reports_platform_critical_for_missing_queue_connection(): void
+    {
+        $this->seed(\Database\Seeders\TenantSeeder::class);
+
+        config([
+            'queue.default' => 'missing-queue',
+        ]);
+
+        $exitCode = Artisan::call('system:alerts', [
+            '--json' => true,
+            '--fail-on-critical' => true,
+        ]);
+
+        $output = json_decode(Artisan::output(), true, 512, JSON_THROW_ON_ERROR);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertSame('critical', $output['status']);
+        $this->assertContains('queue_connection_missing', array_column($output['items'], 'code'));
+    }
 }

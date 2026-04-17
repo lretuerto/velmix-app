@@ -4,6 +4,7 @@ namespace Tests\Feature\Platform;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 class SystemPreflightCommandTest extends TestCase
@@ -42,5 +43,70 @@ class SystemPreflightCommandTest extends TestCase
         $this->assertSame(1, $exitCode);
         $this->assertSame('warning', $output['status']);
         $this->assertContains('scheduler_lock_store_not_shared', array_column($output['items'], 'code'));
+    }
+
+    public function test_system_preflight_command_fails_on_critical_for_missing_queue_connection(): void
+    {
+        config([
+            'queue.default' => 'missing-queue',
+        ]);
+
+        $exitCode = Artisan::call('system:preflight', [
+            '--json' => true,
+            '--fail-on-critical' => true,
+        ]);
+
+        $output = json_decode(Artisan::output(), true, 512, JSON_THROW_ON_ERROR);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertSame('critical', $output['status']);
+        $this->assertContains('queue_connection_missing', array_column($output['items'], 'code'));
+    }
+
+    public function test_system_preflight_command_warns_when_structured_logging_is_not_enabled_in_production_like_env(): void
+    {
+        config([
+            'app.env' => 'production',
+            'app.debug' => false,
+            'logging.default' => 'stack',
+            'logging.channels.stack.channels' => ['single'],
+        ]);
+
+        $exitCode = Artisan::call('system:preflight', [
+            '--json' => true,
+            '--fail-on-warning' => true,
+        ]);
+
+        $output = json_decode(Artisan::output(), true, 512, JSON_THROW_ON_ERROR);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertSame('warning', $output['status']);
+        $this->assertContains('structured_logging_not_enabled', array_column($output['items'], 'code'));
+    }
+
+    public function test_system_preflight_command_fails_when_required_writable_path_is_missing(): void
+    {
+        $storagePath = storage_path();
+        $tempStoragePath = storage_path('framework/testing/preflight-missing-logs');
+
+        File::deleteDirectory($tempStoragePath);
+        File::ensureDirectoryExists($tempStoragePath);
+        $this->app->useStoragePath($tempStoragePath);
+
+        try {
+            $exitCode = Artisan::call('system:preflight', [
+                '--json' => true,
+                '--fail-on-critical' => true,
+            ]);
+
+            $output = json_decode(Artisan::output(), true, 512, JSON_THROW_ON_ERROR);
+
+            $this->assertSame(1, $exitCode);
+            $this->assertSame('critical', $output['status']);
+            $this->assertContains('writable_path_missing', array_column($output['items'], 'code'));
+        } finally {
+            $this->app->useStoragePath($storagePath);
+            File::deleteDirectory($tempStoragePath);
+        }
     }
 }

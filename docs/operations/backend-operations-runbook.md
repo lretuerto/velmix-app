@@ -99,11 +99,27 @@ Checks actuales:
 - readiness resumido del backend
 - `APP_DEBUG` habilitado fuera de `local/testing`
 - coherencia entre `VELMIX_SCHEDULER_ON_ONE_SERVER=true` y un store de cache compartido
+- `QUEUE_CONNECTION` valido y durable para entorno no local
+- tablas de cola listas cuando el driver es `database`
+- canal de logs activo y stack sin referencias invalidas
+- logging estructurado habilitado en entornos no locales
+- write-paths criticos presentes y escribibles
 
 Codigos esperados:
 
 - `app_debug_enabled`
+- `cache_store_missing`
 - `scheduler_lock_store_not_shared`
+- `queue_connection_missing`
+- `queue_driver_missing`
+- `queue_storage_check_failed`
+- `queue_storage_not_ready`
+- `queue_connection_not_async`
+- `logging_channel_missing`
+- `logging_stack_channel_missing`
+- `structured_logging_not_enabled`
+- `writable_path_missing`
+- `writable_path_not_writable`
 
 ## Politica de retencion
 
