@@ -42,6 +42,9 @@ class SystemObservabilityReportCommandTest extends TestCase
         $this->assertSame(['log', 'webhook'], $output['notifications']['channels']);
         $this->assertSame('critical', $output['notifications']['minimum_severity']);
         $this->assertTrue($output['notifications']['webhook_enabled']);
+        $this->assertSame('critical', $output['delivery']['minimum_severity']);
+        $logChannel = collect($output['delivery']['channels'])->firstWhere('channel', 'log');
+        $this->assertSame('ready', is_array($logChannel) ? ($logChannel['status'] ?? null) : null);
     }
 
     public function test_system_observability_report_command_surfaces_critical_preflight_state(): void

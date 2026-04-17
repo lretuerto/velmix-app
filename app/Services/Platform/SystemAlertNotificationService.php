@@ -22,18 +22,12 @@ class SystemAlertNotificationService
     public function dispatch(?string $date = null, bool $force = false): array
     {
         $summary = $this->alerts->summary($date);
-        $config = config('velmix.alerts.notifications', []);
-        $channels = array_values(array_filter(array_map(
-            static fn ($channel) => is_string($channel) ? trim($channel) : null,
-            (array) ($config['channels'] ?? [])
-        )));
+        $config = $this->notificationConfig();
+        $channels = $this->configuredChannels($config);
         $minimumSeverity = (string) ($config['minimum_severity'] ?? 'warning');
         $cooldownMinutes = max(1, (int) ($config['cooldown_minutes'] ?? 30));
 
-        $candidateAlerts = array_values(array_filter(
-            $summary['items'] ?? [],
-            fn (array $alert) => $this->shouldDispatchSeverity((string) ($alert['severity'] ?? 'info'), $minimumSeverity)
-        ));
+        $candidateAlerts = $this->candidateAlerts($summary, $minimumSeverity);
 
         if ($candidateAlerts === [] || $channels === []) {
             return [
@@ -78,6 +72,25 @@ class SystemAlertNotificationService
         ];
     }
 
+    public function describe(?string $date = null): array
+    {
+        $summary = $this->alerts->summary($date);
+        $config = $this->notificationConfig();
+        $channels = $this->configuredChannels($config);
+        $minimumSeverity = (string) ($config['minimum_severity'] ?? 'warning');
+        $candidateAlerts = $this->candidateAlerts($summary, $minimumSeverity);
+
+        return [
+            'checked_at' => now()->toIso8601String(),
+            'minimum_severity' => $minimumSeverity,
+            'candidate_alert_count' => count($candidateAlerts),
+            'channels' => array_map(
+                fn (string $channel) => $this->describeChannel($channel, $config),
+                $channels
+            ),
+        ];
+    }
+
     /**
      * @param  array<string, mixed>  $summary
      * @param  array<string, mixed>  $alert
@@ -106,6 +119,7 @@ class SystemAlertNotificationService
             match ($channel) {
                 'log' => $this->dispatchToLog($payload, $config),
                 'webhook' => $this->dispatchToWebhook($payload, $config),
+                'slack' => $this->dispatchToSlack($payload, $config),
                 default => throw new \RuntimeException(sprintf('Unsupported alert notification channel [%s].', $channel)),
             };
 
@@ -196,6 +210,29 @@ class SystemAlertNotificationService
         }
     }
 
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $config
+     */
+    private function dispatchToSlack(array $payload, array $config): void
+    {
+        $url = trim((string) ($config['slack_webhook_url'] ?? ''));
+
+        if ($url === '') {
+            throw new \RuntimeException('VELMIX_ALERT_SLACK_WEBHOOK_URL is required for slack notifications.');
+        }
+
+        $timeoutSeconds = max(1, (int) ($config['webhook_timeout_seconds'] ?? 5));
+        $response = Http::timeout($timeoutSeconds)
+            ->acceptJson()
+            ->asJson()
+            ->post($url, $this->buildSlackPayload($payload, $config));
+
+        if (! $response->successful()) {
+            throw new \RuntimeException(sprintf('Slack notification failed with status %d.', $response->status()));
+        }
+    }
+
     private function shouldDispatchSeverity(string $severity, string $minimumSeverity): bool
     {
         $current = self::SEVERITY_RANK[$severity] ?? 0;
@@ -236,5 +273,191 @@ class SystemAlertNotificationService
         } catch (Throwable) {
             // Alert delivery should degrade safely even if cache is unavailable.
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function notificationConfig(): array
+    {
+        return (array) config('velmix.alerts.notifications', []);
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @return array<int, string>
+     */
+    private function configuredChannels(array $config): array
+    {
+        return array_values(array_filter(array_map(
+            static fn ($channel) => is_string($channel) ? trim($channel) : null,
+            (array) ($config['channels'] ?? [])
+        )));
+    }
+
+    /**
+     * @param  array<string, mixed>  $summary
+     * @return array<int, array<string, mixed>>
+     */
+    private function candidateAlerts(array $summary, string $minimumSeverity): array
+    {
+        return array_values(array_filter(
+            $summary['items'] ?? [],
+            fn (array $alert) => $this->shouldDispatchSeverity((string) ($alert['severity'] ?? 'info'), $minimumSeverity)
+        ));
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>
+     */
+    private function describeChannel(string $channel, array $config): array
+    {
+        return match ($channel) {
+            'log' => $this->describeLogChannel($config),
+            'webhook' => $this->describeWebhookChannel($config),
+            'slack' => $this->describeSlackChannel($config),
+            default => [
+                'channel' => $channel,
+                'status' => 'critical',
+                'configured' => false,
+                'destination' => null,
+                'message' => sprintf('Unsupported alert notification channel [%s].', $channel),
+            ],
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>
+     */
+    private function describeLogChannel(array $config): array
+    {
+        $logChannel = (string) ($config['log_channel'] ?? 'daily_json');
+        $knownChannels = (array) config('logging.channels', []);
+        $configured = is_array($knownChannels[$logChannel] ?? null);
+
+        return [
+            'channel' => 'log',
+            'status' => $configured ? 'ready' : 'critical',
+            'configured' => $configured,
+            'destination' => $logChannel,
+            'message' => $configured
+                ? 'Structured log alert delivery is ready.'
+                : 'Configured alert log channel is missing.',
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>
+     */
+    private function describeWebhookChannel(array $config): array
+    {
+        $url = trim((string) ($config['webhook_url'] ?? ''));
+        $configured = $url !== '';
+
+        return [
+            'channel' => 'webhook',
+            'status' => $configured ? 'ready' : 'warning',
+            'configured' => $configured,
+            'destination' => $this->redactUrlHost($url),
+            'message' => $configured
+                ? 'Generic webhook alert delivery is configured.'
+                : 'Generic webhook alert delivery is disabled.',
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>
+     */
+    private function describeSlackChannel(array $config): array
+    {
+        $url = trim((string) ($config['slack_webhook_url'] ?? ''));
+        $configured = $url !== '';
+
+        return [
+            'channel' => 'slack',
+            'status' => $configured ? 'ready' : 'warning',
+            'configured' => $configured,
+            'destination' => $this->redactUrlHost($url),
+            'message' => $configured
+                ? 'Slack alert delivery is configured.'
+                : 'Slack alert delivery is disabled.',
+            'slack_channel' => $config['slack_channel'] ?? null,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>
+     */
+    private function buildSlackPayload(array $payload, array $config): array
+    {
+        $alert = (array) ($payload['alert'] ?? []);
+        $summary = (array) ($payload['summary'] ?? []);
+        $text = sprintf(
+            '[%s] %s | code=%s | tenant=%s | status=%s',
+            strtoupper((string) ($alert['severity'] ?? 'info')),
+            (string) ($alert['message'] ?? 'Operational alert'),
+            (string) ($alert['code'] ?? 'n/a'),
+            $alert['tenant_id'] ?? 'platform',
+            (string) ($summary['status'] ?? 'unknown'),
+        );
+
+        $message = [
+            'text' => $text,
+            'username' => (string) ($config['slack_username'] ?? 'VELMiX Alerts'),
+            'icon_emoji' => (string) ($config['slack_icon_emoji'] ?? ':rotating_light:'),
+            'blocks' => [
+                [
+                    'type' => 'section',
+                    'text' => [
+                        'type' => 'mrkdwn',
+                        'text' => sprintf(
+                            '*%s*\\n%s\\nTenant: `%s`\\nCode: `%s`',
+                            strtoupper((string) ($alert['severity'] ?? 'info')),
+                            (string) ($alert['message'] ?? 'Operational alert'),
+                            $alert['tenant_id'] ?? 'platform',
+                            (string) ($alert['code'] ?? 'n/a'),
+                        ),
+                    ],
+                ],
+                [
+                    'type' => 'context',
+                    'elements' => [
+                        [
+                            'type' => 'mrkdwn',
+                            'text' => sprintf(
+                                'Action: %s | Path: %s',
+                                (string) ($alert['action'] ?? 'Review alert'),
+                                (string) ($alert['path'] ?? 'n/a'),
+                            ),
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $channel = trim((string) ($config['slack_channel'] ?? ''));
+
+        if ($channel !== '') {
+            $message['channel'] = $channel;
+        }
+
+        return $message;
+    }
+
+    private function redactUrlHost(string $url): ?string
+    {
+        if ($url === '') {
+            return null;
+        }
+
+        $host = parse_url($url, PHP_URL_HOST);
+
+        return is_string($host) && $host !== '' ? $host : 'configured';
     }
 }

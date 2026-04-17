@@ -70,6 +70,10 @@ Variables asociadas:
 - `VELMIX_ALERT_NOTIFY_LOG_CHANNEL`
 - `VELMIX_ALERT_WEBHOOK_URL`
 - `VELMIX_ALERT_WEBHOOK_TIMEOUT_SECONDS`
+- `VELMIX_ALERT_SLACK_WEBHOOK_URL`
+- `VELMIX_ALERT_SLACK_CHANNEL`
+- `VELMIX_ALERT_SLACK_USERNAME`
+- `VELMIX_ALERT_SLACK_ICON_EMOJI`
 
 ## Secuencia de observacion operativa
 
@@ -108,6 +112,7 @@ Variables asociadas:
 - notificaciones soportadas:
   - `log` para persistencia estructurada local o centralizada
   - `webhook` para integracion con relays, Slack gateways o plataformas externas
+  - `slack` para webhook entrante compatible con canales operativos
 - cooldown defensivo:
   - deduplica por `code + severity + tenant + path + channel`
   - puede forzarse manualmente con `php artisan system:dispatch-alerts --force`
@@ -194,6 +199,7 @@ Contexto minimo agregado:
   - conexion y tablas de cola
   - frecuencias del scheduler
   - canales de notificacion y cooldown
+- `GET /reports/platform-observability` publica el mismo snapshot como dashboard tecnico autenticado
 
 ## Supervision recomendada
 

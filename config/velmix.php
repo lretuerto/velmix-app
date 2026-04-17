@@ -19,6 +19,10 @@ return [
             'log_channel' => env('VELMIX_ALERT_NOTIFY_LOG_CHANNEL', 'daily_json'),
             'webhook_url' => env('VELMIX_ALERT_WEBHOOK_URL'),
             'webhook_timeout_seconds' => env('VELMIX_ALERT_WEBHOOK_TIMEOUT_SECONDS', 5),
+            'slack_webhook_url' => env('VELMIX_ALERT_SLACK_WEBHOOK_URL'),
+            'slack_channel' => env('VELMIX_ALERT_SLACK_CHANNEL'),
+            'slack_username' => env('VELMIX_ALERT_SLACK_USERNAME', 'VELMiX Alerts'),
+            'slack_icon_emoji' => env('VELMIX_ALERT_SLACK_ICON_EMOJI', ':rotating_light:'),
         ],
     ],
     'scheduler' => [

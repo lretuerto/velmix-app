@@ -136,6 +136,42 @@ class SystemAlertDispatchCommandTest extends TestCase
         });
     }
 
+    public function test_system_alert_dispatch_command_sends_slack_notifications(): void
+    {
+        $this->seed(\Database\Seeders\TenantSeeder::class);
+
+        Http::fake([
+            'https://hooks.slack.example.test/*' => Http::response(['ok' => true], 200),
+        ]);
+
+        config([
+            'velmix.alerts.notifications.channels' => ['slack'],
+            'velmix.alerts.notifications.slack_webhook_url' => 'https://hooks.slack.example.test/services/velmix',
+            'velmix.alerts.notifications.slack_channel' => '#ops-alerts',
+            'velmix.alerts.notifications.slack_username' => 'VELMiX Ops',
+            'velmix.alerts.notifications.minimum_severity' => 'warning',
+        ]);
+
+        $this->insertFailedOutboxEvent();
+
+        $exitCode = Artisan::call('system:dispatch-alerts', [
+            '--json' => true,
+        ]);
+
+        $output = json_decode(Artisan::output(), true, 512, JSON_THROW_ON_ERROR);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertSame('ok', $output['status']);
+        $this->assertGreaterThanOrEqual(1, $output['notification']['dispatched_count']);
+
+        Http::assertSent(function ($request) {
+            return str_starts_with($request->url(), 'https://hooks.slack.example.test/')
+                && ($request['channel'] ?? null) === '#ops-alerts'
+                && ($request['username'] ?? null) === 'VELMiX Ops'
+                && str_contains((string) ($request['text'] ?? ''), 'billing_critical');
+        });
+    }
+
     public function test_system_alert_dispatch_command_can_fail_on_delivery_errors(): void
     {
         $this->seed(\Database\Seeders\TenantSeeder::class);

@@ -48,6 +48,7 @@ use App\Services\Reports\PromiseComplianceReportService;
 use App\Services\Reports\ReceivableRiskReportService;
 use App\Services\Reports\OperationsEscalationReportService;
 use App\Services\Platform\SystemHealthService;
+use App\Services\Platform\SystemObservabilityReportService;
 use App\Services\Security\ApiTokenService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
@@ -433,6 +434,17 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
 
         return response()->json(['data' => $result]);
     })->middleware('perm:reports.daily.read');
+
+    Route::get('/reports/platform-observability', function (SystemObservabilityReportService $service) {
+        $payload = request()->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+
+        $result = $service->summary($payload['date'] ?? null);
+        $result['tenant_id'] = (int) request()->attributes->get('tenant_id');
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:reports.platform-observability.read');
 
     Route::get('/reports/operations-control-tower', function (OperationsControlTowerReportService $service) {
         $payload = request()->validate([

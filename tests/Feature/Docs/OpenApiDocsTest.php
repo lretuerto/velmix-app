@@ -137,6 +137,7 @@ class OpenApiDocsTest extends TestCase
         $this->assertStringContainsString('/billing/outbox/{event}/lineage', $response->getContent());
         $this->assertStringContainsString('/billing/outbox/provider-trace', $response->getContent());
         $this->assertStringContainsString('/billing/outbox/summary', $response->getContent());
+        $this->assertStringContainsString('/reports/platform-observability', $response->getContent());
         $this->assertStringContainsString('/reports/operations-control-tower', $response->getContent());
         $this->assertStringContainsString('/reports/operations-control-tower/briefing', $response->getContent());
         $this->assertStringContainsString('/reports/operations-control-tower/briefing/export', $response->getContent());
@@ -220,6 +221,8 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('GET /billing/outbox/{event}/lineage', false)
             ->assertSee('GET /billing/outbox/provider-trace', false)
             ->assertSee('GET /reports/operations-control-tower', false)
+            ->assertSee('GET /reports/platform-observability', false)
+            ->assertSee('reports.platform-observability.read', false)
             ->assertSee('GET /reports/operations-control-tower/briefing', false)
             ->assertSee('GET /reports/operations-control-tower/briefing/export', false)
             ->assertSee('GET /reports/operations-control-tower/history', false)
@@ -284,6 +287,7 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('VELMIX_SCHEDULER_ON_ONE_SERVER', false)
             ->assertSee('VELMIX_ALERT_NOTIFY_CHANNELS', false)
             ->assertSee('VELMIX_ALERT_WEBHOOK_URL', false)
+            ->assertSee('VELMIX_ALERT_SLACK_WEBHOOK_URL', false)
             ->assertSee('VELMIX_SCHEDULER_ALERT_DISPATCH_EVERY_MINUTES', false)
             ->assertSee('scheduler_lock_store_not_shared', false)
             ->assertSee('queue_connection_missing', false)

@@ -1394,6 +1394,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataEnvelope'
+  /reports/platform-observability:
+    get:
+      tags: [Reports]
+      summary: Dashboard tecnico de observabilidad de plataforma
+      parameters:
+        - $ref: '#/components/parameters/ReportDate'
+      responses:
+        '200':
+          description: Snapshot tecnico de plataforma y canales salientes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
   /reports/operations-control-tower:
     get:
       tags: [Reports]

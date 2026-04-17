@@ -135,6 +135,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 ### Reportes y auditoria
 
 - `GET /reports/daily`
+- `GET /reports/platform-observability`
 - `GET /reports/operations-control-tower`
 - `GET /reports/operations-control-tower/briefing`
 - `GET /reports/operations-control-tower/briefing/export`
@@ -178,6 +179,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /reports/sales-profitability`
 - `GET /audit/timeline`
 - `GET /audit/timeline/{activity}`
+- `GET /reports/platform-observability` requiere `reports.platform-observability.read`
 
 ## Request examples
 
@@ -247,6 +249,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - Alertas operativas agregadas: `php artisan system:alerts --json`
 - Dispatch de alertas operativas: `php artisan system:dispatch-alerts --json`
 - Snapshot de observabilidad tecnica: `php artisan system:observability-report --json`
+- Dashboard tecnico autenticado: `GET /reports/platform-observability`
 - Equivalentes por Composer:
   - `composer run velmix:dispatch-alerts`
   - `composer run velmix:observability`
@@ -285,6 +288,10 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
     - `VELMIX_ALERT_NOTIFY_LOG_CHANNEL=daily_json`
     - `VELMIX_ALERT_WEBHOOK_URL=...`
     - `VELMIX_ALERT_WEBHOOK_TIMEOUT_SECONDS=5`
+    - `VELMIX_ALERT_SLACK_WEBHOOK_URL=...`
+    - `VELMIX_ALERT_SLACK_CHANNEL=#ops-alerts`
+    - `VELMIX_ALERT_SLACK_USERNAME=VELMiX Alerts`
+    - `VELMIX_ALERT_SLACK_ICON_EMOJI=:rotating_light:`
     - `VELMIX_SCHEDULER_ALERT_DISPATCH_EVERY_MINUTES=5`
     - `VELMIX_SCHEDULER_ALERT_DISPATCH_OVERLAP_MINUTES=10`
 
@@ -360,6 +367,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `php artisan system:readiness --json` entrega el detalle completo de base y esquema para operacion
 - `php artisan system:preflight --json` valida readiness y coherencia de plataforma antes de un release
 - `php artisan system:alerts --json` resume alertas cross-tenant sin degradar el scheduler
+- `php artisan system:dispatch-alerts --json` puede despachar alertas por `log`, `webhook` y `slack`
+- `GET /reports/platform-observability` expone snapshot tecnico autenticado de plataforma y readiness de canales salientes
 - `php artisan platform:prune-operational-data --pretend --json` expone housekeeping conservador de datos operativos
 - el pruning conservador actual cubre `idempotency_keys`, `outbox_attempts`, `tenant_user_invitations` y `operations_control_tower_snapshots`
 - El backend puede emitir logs estructurados via `stderr_json` o `daily_json`

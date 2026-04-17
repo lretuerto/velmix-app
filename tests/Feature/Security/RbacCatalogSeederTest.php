@@ -63,6 +63,7 @@ class RbacCatalogSeederTest extends TestCase
         $this->assertDatabaseHas('permissions', ['code' => 'reports.finance-operations.manage']);
         $this->assertDatabaseHas('permissions', ['code' => 'reports.operations-control-tower.read']);
         $this->assertDatabaseHas('permissions', ['code' => 'reports.operations-control-tower.manage']);
+        $this->assertDatabaseHas('permissions', ['code' => 'reports.platform-observability.read']);
         $this->assertDatabaseHas('permissions', ['code' => 'reports.operations-escalations.read']);
         $this->assertDatabaseHas('permissions', ['code' => 'reports.operations-escalations.manage']);
         $this->assertDatabaseHas('permissions', ['code' => 'reports.receivable-risk.read']);
@@ -100,6 +101,7 @@ class RbacCatalogSeederTest extends TestCase
 
         $docsPermId = DB::table('permissions')->where('code', 'security.docs.read')->value('id');
         $contextPermId = DB::table('permissions')->where('code', 'security.context.read')->value('id');
+        $platformObservabilityPermId = DB::table('permissions')->where('code', 'reports.platform-observability.read')->value('id');
         $providerReadPermId = DB::table('permissions')->where('code', 'billing.provider.read')->value('id');
         $providerUpdatePermId = DB::table('permissions')->where('code', 'billing.provider.update')->value('id');
         $teamReadPermId = DB::table('permissions')->where('code', 'team.user.read')->value('id');
@@ -117,6 +119,11 @@ class RbacCatalogSeederTest extends TestCase
         $this->assertDatabaseHas('role_permission', [
             'role_id' => $adminId,
             'permission_id' => $contextPermId,
+        ]);
+
+        $this->assertDatabaseHas('role_permission', [
+            'role_id' => $adminId,
+            'permission_id' => $platformObservabilityPermId,
         ]);
 
         $this->assertDatabaseHas('role_permission', [

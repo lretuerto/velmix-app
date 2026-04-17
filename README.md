@@ -13,6 +13,7 @@ Backend SaaS multi-tenant para operaciones farmacéuticas, construido sobre Lara
 - Caja con guard de una sola sesion abierta por tenant, reforzado tambien a nivel BD
 - Reportes operativos, riesgo, vencimientos, promesas y auditoría transversal
 - Dashboard financiero unificado para cobranza y pagos con prioridad operativa
+- Observabilidad tecnica de plataforma con snapshot autenticado, alert dispatch y readiness operativo
 - Workflow operativo para prioridades financieras con acknowledge y resolve
 - Historial operativo de prioridades financieras con timeline por entidad
 - Metricas financieras de backlog, aging y SLA de resolución
@@ -107,8 +108,9 @@ php artisan test
 - Script de validacion del scheduler: `composer run velmix:schedule`
 - Script de validación outbox: `composer run velmix:outbox` no falla si la base aún no fue migrada
 - `php artisan system:alerts --fail-on-critical` queda para CI o chequeos manuales; el scheduler solo observa y no degrada `schedule:run`
-- `php artisan system:dispatch-alerts --json` permite notificar alertas por `log` o `webhook` con cooldown defensivo
+- `php artisan system:dispatch-alerts --json` permite notificar alertas por `log`, `webhook` o `slack` con cooldown defensivo
 - `php artisan system:observability-report --json` resume preflight, alertas, logging, cola, scheduler y canales de notificacion
+- `GET /reports/platform-observability` expone el snapshot tecnico autenticado para operacion
 - Variables de observabilidad/alerting:
   - `VELMIX_ALERT_NOTIFY_CHANNELS`
   - `VELMIX_ALERT_NOTIFY_MIN_SEVERITY`
@@ -116,6 +118,10 @@ php artisan test
   - `VELMIX_ALERT_NOTIFY_LOG_CHANNEL`
   - `VELMIX_ALERT_WEBHOOK_URL`
   - `VELMIX_ALERT_WEBHOOK_TIMEOUT_SECONDS`
+  - `VELMIX_ALERT_SLACK_WEBHOOK_URL`
+  - `VELMIX_ALERT_SLACK_CHANNEL`
+  - `VELMIX_ALERT_SLACK_USERNAME`
+  - `VELMIX_ALERT_SLACK_ICON_EMOJI`
   - `VELMIX_SCHEDULER_ALERT_DISPATCH_EVERY_MINUTES`
   - `VELMIX_SCHEDULER_ALERT_DISPATCH_OVERLAP_MINUTES`
 - Perfil/provider billing por tenant:
