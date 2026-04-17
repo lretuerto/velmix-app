@@ -37,6 +37,7 @@ Frecuencias por defecto:
 - `billing:dispatch-outbox --limit=20 --graceful-if-unmigrated` cada minuto
 - `billing:reconcile-pending --limit=20 --graceful-if-unmigrated` cada cinco minutos
 - `system:alerts` cada cinco minutos
+- `system:dispatch-alerts` cada cinco minutos
 - `platform:prune-operational-data` cada dia a las `03:15`
 
 Candados y seguridad operativa:
@@ -59,8 +60,16 @@ Variables asociadas:
 - `VELMIX_SCHEDULER_RECONCILE_OVERLAP_MINUTES`
 - `VELMIX_SCHEDULER_ALERTS_EVERY_MINUTES`
 - `VELMIX_SCHEDULER_ALERTS_OVERLAP_MINUTES`
+- `VELMIX_SCHEDULER_ALERT_DISPATCH_EVERY_MINUTES`
+- `VELMIX_SCHEDULER_ALERT_DISPATCH_OVERLAP_MINUTES`
 - `VELMIX_SCHEDULER_PRUNE_AT`
 - `VELMIX_SCHEDULER_PRUNE_OVERLAP_MINUTES`
+- `VELMIX_ALERT_NOTIFY_CHANNELS`
+- `VELMIX_ALERT_NOTIFY_MIN_SEVERITY`
+- `VELMIX_ALERT_NOTIFY_COOLDOWN_MINUTES`
+- `VELMIX_ALERT_NOTIFY_LOG_CHANNEL`
+- `VELMIX_ALERT_WEBHOOK_URL`
+- `VELMIX_ALERT_WEBHOOK_TIMEOUT_SECONDS`
 
 ## Secuencia de observacion operativa
 
@@ -76,21 +85,32 @@ Variables asociadas:
    - `php artisan schedule:list`
 6. Revisar alertas cross-tenant:
    - `php artisan system:alerts --json`
-7. Revisar outbox:
+7. Despachar alertas salientes:
+   - `php artisan system:dispatch-alerts --json`
+8. Revisar snapshot de observabilidad:
+   - `php artisan system:observability-report --json`
+9. Revisar outbox:
    - `php artisan billing:dispatch-outbox --limit=20 --graceful-if-unmigrated`
-8. Revisar reconciliacion:
+10. Revisar reconciliacion:
    - `php artisan billing:reconcile-pending --limit=20 --graceful-if-unmigrated`
-9. Revisar housekeeping:
+11. Revisar housekeeping:
    - `php artisan platform:prune-operational-data --pretend --json`
 
 ## Politica de alertas
 
 - `system:alerts` es observacional para scheduler
+- `system:dispatch-alerts` materializa notificaciones segun canal/configuracion y tambien es observacional para scheduler
 - `system:alerts --fail-on-critical` se reserva para chequeos manuales, gates de CI o validaciones de despliegue
 - una alerta critica no debe tumbar `schedule:run`; debe abrir diagnostico y respuesta operativa
 - `system:preflight --fail-on-warning` si puede usarse como gate de despliegue porque valida coherencia de plataforma sin mezclar backlog de negocio
 - gate recomendado de despliegue:
   - `php artisan system:preflight --json --fail-on-warning`
+- notificaciones soportadas:
+  - `log` para persistencia estructurada local o centralizada
+  - `webhook` para integracion con relays, Slack gateways o plataformas externas
+- cooldown defensivo:
+  - deduplica por `code + severity + tenant + path + channel`
+  - puede forzarse manualmente con `php artisan system:dispatch-alerts --force`
 
 ## Politica de preflight
 
@@ -164,6 +184,16 @@ Contexto minimo agregado:
 - `auth_mode`
 - `user_id`
 - `api_token_id`
+
+## Snapshot tecnico de observabilidad
+
+- `php artisan system:observability-report --json` resume:
+  - estado agregado entre preflight y alertas
+  - correlacion por `X-Request-Id`
+  - configuracion efectiva de logging estructurado
+  - conexion y tablas de cola
+  - frecuencias del scheduler
+  - canales de notificacion y cooldown
 
 ## Supervision recomendada
 
@@ -259,6 +289,8 @@ WantedBy=velmix-backend.target
 
 ```powershell
 composer run velmix:readiness
+composer run velmix:dispatch-alerts
+composer run velmix:observability
 composer run velmix:preflight
 composer run velmix:alerts
 composer run velmix:prune

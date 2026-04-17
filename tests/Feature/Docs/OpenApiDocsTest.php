@@ -260,6 +260,8 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('composer run velmix:lint:full', false)
             ->assertSee('composer run velmix:audit', false)
             ->assertSee('composer run velmix:preflight', false)
+            ->assertSee('composer run velmix:dispatch-alerts', false)
+            ->assertSee('composer run velmix:observability', false)
             ->assertSee('phpstan analyse --configuration=phpstan.neon.dist', false)
             ->assertSee('ops/scripts/post-deploy.sh', false);
 
@@ -277,7 +279,12 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('billing:dispatch-outbox --limit=20 --graceful-if-unmigrated', false)
             ->assertSee('platform:prune-operational-data', false)
             ->assertSee('system:alerts --fail-on-critical', false)
+            ->assertSee('system:dispatch-alerts --json', false)
+            ->assertSee('system:observability-report --json', false)
             ->assertSee('VELMIX_SCHEDULER_ON_ONE_SERVER', false)
+            ->assertSee('VELMIX_ALERT_NOTIFY_CHANNELS', false)
+            ->assertSee('VELMIX_ALERT_WEBHOOK_URL', false)
+            ->assertSee('VELMIX_SCHEDULER_ALERT_DISPATCH_EVERY_MINUTES', false)
             ->assertSee('scheduler_lock_store_not_shared', false)
             ->assertSee('queue_connection_missing', false)
             ->assertSee('queue_storage_not_ready', false)

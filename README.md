@@ -98,6 +98,8 @@ php artisan test
 - Script de readiness: `composer run velmix:readiness`
 - Script de preflight de release: `composer run velmix:preflight`
 - Script de alertas operativas: `composer run velmix:alerts`
+- Script de dispatch de alertas operativas: `composer run velmix:dispatch-alerts`
+- Script de snapshot de observabilidad tecnica: `composer run velmix:observability`
 - Script de pruning conservador: `composer run velmix:prune`
 - Script de lint de estilo: `composer run velmix:lint`
 - Script de lint completo del repo: `composer run velmix:lint:full`
@@ -105,6 +107,17 @@ php artisan test
 - Script de validacion del scheduler: `composer run velmix:schedule`
 - Script de validación outbox: `composer run velmix:outbox` no falla si la base aún no fue migrada
 - `php artisan system:alerts --fail-on-critical` queda para CI o chequeos manuales; el scheduler solo observa y no degrada `schedule:run`
+- `php artisan system:dispatch-alerts --json` permite notificar alertas por `log` o `webhook` con cooldown defensivo
+- `php artisan system:observability-report --json` resume preflight, alertas, logging, cola, scheduler y canales de notificacion
+- Variables de observabilidad/alerting:
+  - `VELMIX_ALERT_NOTIFY_CHANNELS`
+  - `VELMIX_ALERT_NOTIFY_MIN_SEVERITY`
+  - `VELMIX_ALERT_NOTIFY_COOLDOWN_MINUTES`
+  - `VELMIX_ALERT_NOTIFY_LOG_CHANNEL`
+  - `VELMIX_ALERT_WEBHOOK_URL`
+  - `VELMIX_ALERT_WEBHOOK_TIMEOUT_SECONDS`
+  - `VELMIX_SCHEDULER_ALERT_DISPATCH_EVERY_MINUTES`
+  - `VELMIX_SCHEDULER_ALERT_DISPATCH_OVERLAP_MINUTES`
 - Perfil/provider billing por tenant:
   - `GET /billing/provider-profile`
   - `PUT /billing/provider-profile`
@@ -187,6 +200,8 @@ composer run velmix:qa
 composer run velmix:readiness
 composer run velmix:preflight
 composer run velmix:alerts
+composer run velmix:dispatch-alerts
+composer run velmix:observability
 composer run velmix:prune
 composer run velmix:lint
 composer run velmix:lint:full
@@ -214,9 +229,11 @@ composer run velmix:routes
 6. `composer run velmix:routes`
 7. `composer run velmix:readiness`
 8. `composer run velmix:alerts`
-9. `composer run velmix:prune`
-10. `composer run velmix:outbox`
-11. `composer run velmix:reconcile`
+9. `composer run velmix:dispatch-alerts`
+10. `composer run velmix:observability`
+11. `composer run velmix:prune`
+12. `composer run velmix:outbox`
+13. `composer run velmix:reconcile`
 
 `velmix:ci:mysql` reutiliza la misma secuencia sobre MySQL, agrega la suite `concurrency` y rehidrata el esquema antes del bloque operativo, para validar locks, unicidad e idempotencia en un engine mas parecido a produccion.
 

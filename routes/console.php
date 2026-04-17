@@ -3,8 +3,10 @@
 use App\Services\Billing\BillingReconciliationService;
 use App\Services\Billing\OutboxDispatchService;
 use App\Services\Platform\OperationalDataPruneService;
+use App\Services\Platform\SystemAlertNotificationService;
 use App\Services\Platform\SystemAlertService;
 use App\Services\Platform\SystemHealthService;
+use App\Services\Platform\SystemObservabilityReportService;
 use App\Services\Platform\SystemPreflightService;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Database\QueryException;
@@ -172,6 +174,28 @@ Artisan::command('system:alerts {--date=} {--json} {--fail-on-critical}', functi
     return 0;
 })->purpose('Summarize operational alerts across tenants.');
 
+Artisan::command('system:dispatch-alerts {--date=} {--json} {--force} {--fail-on-error}', function (SystemAlertNotificationService $service) {
+    $result = $service->dispatch(
+        $this->option('date') ?: null,
+        (bool) $this->option('force'),
+    );
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf('Alert dispatch status: %s', $result['status']));
+        $this->line(sprintf('Dispatched: %d', $result['notification']['dispatched_count'] ?? 0));
+        $this->line(sprintf('Suppressed: %d', $result['notification']['suppressed_count'] ?? 0));
+        $this->line(sprintf('Failed: %d', $result['notification']['failed_count'] ?? 0));
+    }
+
+    if ((bool) $this->option('fail-on-error') && ($result['status'] ?? 'ok') !== 'ok') {
+        return 1;
+    }
+
+    return 0;
+})->purpose('Dispatch operational alerts through configured notification channels.');
+
 Artisan::command('system:preflight {--json} {--fail-on-critical} {--fail-on-warning}', function (SystemPreflightService $service) {
     $result = $service->summary();
 
@@ -193,6 +217,22 @@ Artisan::command('system:preflight {--json} {--fail-on-critical} {--fail-on-warn
 
     return 0;
 })->purpose('Run release preflight checks for readiness and platform safety.');
+
+Artisan::command('system:observability-report {--date=} {--json}', function (SystemObservabilityReportService $service) {
+    $result = $service->summary($this->option('date') ?: null);
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf('Observability status: %s', $result['status']));
+        $this->line(sprintf('Preflight: %s', $result['preflight']['status'] ?? 'unknown'));
+        $this->line(sprintf('Alerts: %s', $result['alerts']['status'] ?? 'unknown'));
+        $this->line(sprintf('Queue: %s', $result['queue']['connection'] ?? 'unknown'));
+        $this->line(sprintf('Logging: %s', implode(', ', $result['logging']['effective_channels'] ?? [])));
+    }
+
+    return 0;
+})->purpose('Summarize technical observability, platform alerts, and runtime configuration.');
 
 Artisan::command('platform:prune-operational-data {--pretend} {--json}', function (OperationalDataPruneService $service) {
     $result = $service->prune((bool) $this->option('pretend'));
@@ -247,6 +287,10 @@ $applySchedulerConcurrency($reconcileEvent, (int) ($schedulerConfig['reconcile_o
 $alertsEvent = Schedule::command('system:alerts');
 $scheduleEveryMinutes($alertsEvent, (int) ($schedulerConfig['alerts_every_minutes'] ?? 5));
 $applySchedulerConcurrency($alertsEvent, (int) ($schedulerConfig['alerts_overlap_minutes'] ?? 10));
+
+$alertDispatchEvent = Schedule::command('system:dispatch-alerts');
+$scheduleEveryMinutes($alertDispatchEvent, (int) ($schedulerConfig['alert_dispatch_every_minutes'] ?? 5));
+$applySchedulerConcurrency($alertDispatchEvent, (int) ($schedulerConfig['alert_dispatch_overlap_minutes'] ?? 10));
 
 $pruneEvent = Schedule::command('platform:prune-operational-data');
 $pruneEvent->dailyAt((string) ($schedulerConfig['prune_at'] ?? '03:15'));

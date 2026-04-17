@@ -245,6 +245,11 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - Para QA reproducible existe `composer run velmix:outbox`, que sale en verde si la base todavía no está migrada
 - Reconciliacion manual: `php artisan billing:reconcile-pending --limit=20`
 - Alertas operativas agregadas: `php artisan system:alerts --json`
+- Dispatch de alertas operativas: `php artisan system:dispatch-alerts --json`
+- Snapshot de observabilidad tecnica: `php artisan system:observability-report --json`
+- Equivalentes por Composer:
+  - `composer run velmix:dispatch-alerts`
+  - `composer run velmix:observability`
 - Preflight de release y configuracion: `php artisan system:preflight --json`
 - En CI o chequeos manuales puede usarse `php artisan system:alerts --fail-on-critical`
 - En deploys se recomienda `php artisan system:preflight --json --fail-on-warning`
@@ -258,6 +263,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - `billing:dispatch-outbox --limit=20 --graceful-if-unmigrated` cada minuto
   - `billing:reconcile-pending --limit=20 --graceful-if-unmigrated` cada cinco minutos
   - `system:alerts` cada cinco minutos
+  - `system:dispatch-alerts` cada cinco minutos
   - `platform:prune-operational-data` diario a las `03:15`
   - validar tareas registradas con `php artisan schedule:list`
   - para proceso dedicado puede usarse `php artisan schedule:work`
@@ -272,6 +278,15 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
     - `ops/scripts/rollback-to-previous-release.sh`
   - la plantilla de environment file para `systemd` es `ops/systemd/velmix-app.env.example`
   - los candados `withoutOverlapping()` ya usan TTL explicito y no el default de 24 horas
+  - notificaciones operativas configurables:
+    - `VELMIX_ALERT_NOTIFY_CHANNELS=log,webhook`
+    - `VELMIX_ALERT_NOTIFY_MIN_SEVERITY=warning|critical`
+    - `VELMIX_ALERT_NOTIFY_COOLDOWN_MINUTES=30`
+    - `VELMIX_ALERT_NOTIFY_LOG_CHANNEL=daily_json`
+    - `VELMIX_ALERT_WEBHOOK_URL=...`
+    - `VELMIX_ALERT_WEBHOOK_TIMEOUT_SECONDS=5`
+    - `VELMIX_SCHEDULER_ALERT_DISPATCH_EVERY_MINUTES=5`
+    - `VELMIX_SCHEDULER_ALERT_DISPATCH_OVERLAP_MINUTES=10`
 
 ## Gobernanza de API tokens
 

@@ -70,6 +70,12 @@
         "velmix:alerts": [
             "@php artisan system:alerts --json"
         ],
+        "velmix:dispatch-alerts": [
+            "@php artisan system:dispatch-alerts --json"
+        ],
+        "velmix:observability": [
+            "@php artisan system:observability-report --json"
+        ],
         "velmix:outbox": [
             "@php artisan billing:dispatch-outbox --limit=20 --graceful-if-unmigrated"
         ],
@@ -100,6 +106,8 @@
             "@velmix:routes",
             "@velmix:readiness",
             "@velmix:alerts",
+            "@velmix:dispatch-alerts",
+            "@velmix:observability",
             "@velmix:prune",
             "@velmix:outbox",
             "@velmix:reconcile"
@@ -114,6 +122,8 @@
             "@velmix:routes",
             "@velmix:readiness",
             "@velmix:alerts",
+            "@velmix:dispatch-alerts",
+            "@velmix:observability",
             "@velmix:prune",
             "@velmix:outbox",
             "@velmix:reconcile"
