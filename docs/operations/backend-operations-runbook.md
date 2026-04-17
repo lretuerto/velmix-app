@@ -161,33 +161,53 @@ After=network.target
 [Service]
 Type=simple
 User=www-data
-WorkingDirectory=/var/www/velmix
+WorkingDirectory=/var/www/velmix/current
+EnvironmentFile=-/etc/velmix/velmix.env
+ExecStartPre=/usr/bin/php artisan system:preflight --json --fail-on-critical
 ExecStart=/usr/bin/php artisan schedule:work
+ExecStop=/usr/bin/php artisan schedule:interrupt
 Restart=always
 RestartSec=5
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=velmix-backend.target
 ```
 
-### systemd para worker manual de outbox
+### systemd para queue worker persistente
 
 ```ini
 [Unit]
-Description=VELMiX Billing Dispatch Worker
+Description=VELMiX queue worker
 After=network.target
 
 [Service]
 Type=simple
 User=www-data
-WorkingDirectory=/var/www/velmix
-ExecStart=/usr/bin/php artisan billing:dispatch-outbox --limit=20 --graceful-if-unmigrated
+WorkingDirectory=/var/www/velmix/current
+EnvironmentFile=-/etc/velmix/velmix.env
+ExecStartPre=/usr/bin/php artisan system:preflight --json --fail-on-critical
+ExecStart=/usr/bin/php artisan queue:work --queue=${VELMIX_QUEUE_NAME:-default} --sleep=${VELMIX_QUEUE_SLEEP:-1} --tries=${VELMIX_QUEUE_TRIES:-1} --timeout=${VELMIX_QUEUE_TIMEOUT:-120} --max-time=${VELMIX_QUEUE_MAX_TIME:-3600} --no-interaction
+ExecReload=/usr/bin/php artisan queue:restart
 Restart=always
-RestartSec=15
+RestartSec=5
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=velmix-backend.target
 ```
+
+### Asset bundle recomendado
+
+- environment file base: `ops/systemd/velmix-app.env.example`
+- target coordinado: `ops/systemd/velmix-backend.target`
+- scheduler: `ops/systemd/velmix-scheduler.service`
+- queue worker: `ops/systemd/velmix-queue-worker.service`
+- restart hook: `ops/systemd/velmix-queue-restart.service`
+- instalacion de units: `ops/scripts/install-systemd-units.sh`
+- bootstrap compartido: `ops/scripts/bootstrap-shared-path.sh`
+- prepare/promote/rollback:
+  - `ops/scripts/prepare-release.sh`
+  - `ops/scripts/promote-release.sh`
+  - `ops/scripts/rollback-to-previous-release.sh`
 
 ## Incidentes frecuentes
 
@@ -233,4 +253,9 @@ php artisan schedule:list
 php artisan schedule:work
 php artisan schedule:interrupt
 php artisan queue:restart
+ops/scripts/install-systemd-units.sh
+ops/scripts/bootstrap-shared-path.sh
+ops/scripts/prepare-release.sh <release-path>
+ops/scripts/promote-release.sh <release-path>
+ops/scripts/rollback-to-previous-release.sh
 ```

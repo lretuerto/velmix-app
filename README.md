@@ -226,6 +226,15 @@ composer run velmix:routes
 - `composer run velmix:preflight` valida que `VELMIX_SCHEDULER_ON_ONE_SERVER=true` no quede montado sobre stores locales como `file` o `array`
 - el pruning conservador ahora incluye `outbox_attempts` ademas de claves de idempotencia, invitaciones y snapshots
 - artefactos operativos versionados en [`ops/README.md`](C:\Users\user\Desktop\velmix-app\ops\README.md), [`ops/systemd/velmix-scheduler.service`](C:\Users\user\Desktop\velmix-app\ops\systemd\velmix-scheduler.service) y [`ops/scripts/post-deploy.sh`](C:\Users\user\Desktop\velmix-app\ops\scripts\post-deploy.sh)
+- despliegue reproducible versionado tambien en:
+  - [`ops/systemd/velmix-app.env.example`](C:\Users\user\Desktop\velmix-app\ops\systemd\velmix-app.env.example)
+  - [`ops/systemd/velmix-queue-worker.service`](C:\Users\user\Desktop\velmix-app\ops\systemd\velmix-queue-worker.service)
+  - [`ops/systemd/velmix-backend.target`](C:\Users\user\Desktop\velmix-app\ops\systemd\velmix-backend.target)
+  - [`ops/scripts/install-systemd-units.sh`](C:\Users\user\Desktop\velmix-app\ops\scripts\install-systemd-units.sh)
+  - [`ops/scripts/bootstrap-shared-path.sh`](C:\Users\user\Desktop\velmix-app\ops\scripts\bootstrap-shared-path.sh)
+  - [`ops/scripts/prepare-release.sh`](C:\Users\user\Desktop\velmix-app\ops\scripts\prepare-release.sh)
+  - [`ops/scripts/promote-release.sh`](C:\Users\user\Desktop\velmix-app\ops\scripts\promote-release.sh)
+  - [`ops/scripts/rollback-to-previous-release.sh`](C:\Users\user\Desktop\velmix-app\ops\scripts\rollback-to-previous-release.sh)
 
 Para despliegues con logs estructurados se recomienda un stack como:
 

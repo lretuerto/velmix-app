@@ -29,27 +29,32 @@ composer run velmix:ci:mysql
 
 ## Deploy recomendado
 
+### Assets versionados
+
+- environment file base: `ops/systemd/velmix-app.env.example`
+- target coordinado: `ops/systemd/velmix-backend.target`
+- scheduler service: `ops/systemd/velmix-scheduler.service`
+- queue worker service: `ops/systemd/velmix-queue-worker.service`
+- queue restart hook: `ops/systemd/velmix-queue-restart.service`
+- instalacion de units: `ops/scripts/install-systemd-units.sh`
+- inicializacion de shared path: `ops/scripts/bootstrap-shared-path.sh`
+- preparacion/promocion de release:
+  - `ops/scripts/prepare-release.sh <release-path>`
+  - `ops/scripts/promote-release.sh <release-path>`
+  - `ops/scripts/rollback-to-previous-release.sh`
+
 ### Secuencia controlada
 
-1. Publicar artefacto o commit versionado
-2. Si existe `schedule:work`, interrumpir scheduler antiguo:
-   - `php artisan schedule:interrupt`
-3. Si el cambio toca esquema o mutaciones criticas, activar mantenimiento controlado
-4. Desplegar codigo nuevo
-5. Instalar dependencias de produccion si aplica:
-   - `composer install --no-dev --prefer-dist --optimize-autoloader`
-6. Aplicar migraciones:
-   - `php artisan migrate --force`
-7. Limpiar y recalentar caches:
-   - `php artisan optimize:clear`
-   - `php artisan config:cache`
-   - `php artisan route:cache`
-8. Ejecutar preflight de plataforma:
-   - `php artisan system:preflight --json --fail-on-warning`
-9. Reiniciar workers/procesos:
-   - `php artisan queue:restart`
-   - reiniciar servicio de `schedule:work` o supervisor equivalente
-10. Verificar:
+1. Publicar artefacto o release candidato bajo `releases/<timestamp-o-version>`
+2. Instalar o actualizar units si el nodo es nuevo o si cambiaron los assets operativos:
+   - `ops/scripts/install-systemd-units.sh`
+3. Inicializar estructura compartida si el nodo es nuevo:
+   - `ops/scripts/bootstrap-shared-path.sh`
+4. Preparar el release sin exponer trafico:
+   - `ops/scripts/prepare-release.sh /var/www/velmix/releases/<release>`
+5. Promover con swap atomico:
+   - `ops/scripts/promote-release.sh /var/www/velmix/releases/<release>`
+6. Verificar:
    - `GET /health/live`
    - `GET /health/ready`
    - `php artisan system:preflight --json`
@@ -89,19 +94,15 @@ Pasos:
 1. detener trafico de mutacion si el incidente es severo
 2. interrumpir scheduler actual:
    - `php artisan schedule:interrupt`
-3. volver al artefacto o release anterior
-4. limpiar caches:
-   - `php artisan optimize:clear`
-5. ejecutar preflight de rollback:
-   - `php artisan system:preflight --json --fail-on-critical`
-6. reiniciar workers:
-   - `php artisan queue:restart`
-   - reiniciar proceso `schedule:work` o supervisor equivalente
-7. revalidar:
+3. revertir al release anterior registrado:
+   - `ops/scripts/rollback-to-previous-release.sh`
+4. revalidar:
    - `GET /health/live`
    - `GET /health/ready`
+   - `php artisan system:preflight --json --fail-on-critical`
    - `php artisan system:preflight --json`
    - `php artisan system:alerts --json`
+   - `php artisan queue:restart`
    - `php artisan schedule:list`
 
 ### Rollback de esquema
@@ -126,6 +127,8 @@ Antes de revertir esquema revisar:
 - el pruning debe comenzar en modo `--pretend` antes de activarse automatico en un entorno nuevo
 - conservar evidencia de `X-Request-Id` y logs JSON durante incidentes
 - en multi-nodo, habilitar `VELMIX_SCHEDULER_ON_ONE_SERVER=true` solo si existe cache compartido con locks atomicos
+- si se usa `systemd`, cargar `/etc/velmix/velmix.env` a partir de `ops/systemd/velmix-app.env.example`
+- el target recomendado para restart coordinado es `velmix-backend.target`
 
 ## Checklist de cierre
 
@@ -135,4 +138,5 @@ Antes de revertir esquema revisar:
 - alertas criticas en cero o conocidas
 - scheduler registrado
 - workers reiniciados despues del deploy
+- release actual y release previo visibles via symlink `current` y `previous`
 - runbooks accesibles desde `/docs`

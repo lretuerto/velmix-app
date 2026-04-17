@@ -281,7 +281,14 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('scheduler_lock_store_not_shared', false)
             ->assertSee('outbox_attempts', false)
             ->assertSee('system:preflight --json --fail-on-warning', false)
-            ->assertSee('php artisan schedule:work', false);
+            ->assertSee('php artisan schedule:work', false)
+            ->assertSee('ops/systemd/velmix-app.env.example', false)
+            ->assertSee('ops/systemd/velmix-queue-worker.service', false)
+            ->assertSee('ops/systemd/velmix-backend.target', false)
+            ->assertSee('ops/scripts/install-systemd-units.sh', false)
+            ->assertSee('ops/scripts/prepare-release.sh', false)
+            ->assertSee('ops/scripts/promote-release.sh', false)
+            ->assertSee('ops/scripts/rollback-to-previous-release.sh', false);
 
         $this->actingAs($user)
             ->withHeader('X-Tenant-Id', '10')
@@ -292,7 +299,13 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('Rollback de esquema', false)
             ->assertSee('schedule:interrupt', false)
             ->assertSee('system:preflight --json --fail-on-critical', false)
-            ->assertSee('php artisan queue:restart', false);
+            ->assertSee('php artisan queue:restart', false)
+            ->assertSee('ops/scripts/install-systemd-units.sh', false)
+            ->assertSee('ops/scripts/bootstrap-shared-path.sh', false)
+            ->assertSee('ops/scripts/prepare-release.sh', false)
+            ->assertSee('ops/scripts/promote-release.sh', false)
+            ->assertSee('ops/scripts/rollback-to-previous-release.sh', false)
+            ->assertSee('velmix-backend.target', false);
     }
 
     private function seedTenantUser(int $tenantId): User

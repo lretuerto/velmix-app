@@ -258,6 +258,14 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - para proceso dedicado puede usarse `php artisan schedule:work`
   - en multi-nodo, `VELMIX_SCHEDULER_ON_ONE_SERVER=true` requiere cache compartido con locks atomicos
   - el preflight avisa con `scheduler_lock_store_not_shared` si `onOneServer` se combina con stores locales como `file` o `array`
+  - los assets versionados para despliegue reproducible viven en `ops/systemd` y `ops/scripts`
+  - secuencia de release recomendada:
+    - `ops/scripts/install-systemd-units.sh`
+    - `ops/scripts/bootstrap-shared-path.sh`
+    - `ops/scripts/prepare-release.sh <release-path>`
+    - `ops/scripts/promote-release.sh <release-path>`
+    - `ops/scripts/rollback-to-previous-release.sh`
+  - la plantilla de environment file para `systemd` es `ops/systemd/velmix-app.env.example`
   - los candados `withoutOverlapping()` ya usan TTL explicito y no el default de 24 horas
 
 ## Gobernanza de API tokens
