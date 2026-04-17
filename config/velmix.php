@@ -5,6 +5,14 @@ $alertNotificationChannels = array_values(array_filter(array_map(
     explode(',', (string) env('VELMIX_ALERT_NOTIFY_CHANNELS', 'log'))
 )));
 
+$sharedPath = trim((string) env('VELMIX_SHARED_PATH', ''));
+$defaultBackupStoragePath = $sharedPath !== ''
+    ? rtrim($sharedPath, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.'backups'
+    : storage_path('app/backups');
+$defaultRestoreDrillPath = $sharedPath !== ''
+    ? rtrim($sharedPath, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.'restore-drills'
+    : storage_path('app/restore-drills');
+
 return [
     'alerts' => [
         'billing_days' => env('VELMIX_ALERT_BILLING_DAYS', 7),
@@ -46,5 +54,18 @@ return [
         'outbox_attempts_days' => env('VELMIX_RETENTION_OUTBOX_ATTEMPTS_DAYS', 180),
         'team_invitations_days' => env('VELMIX_RETENTION_TEAM_INVITATIONS_DAYS', 90),
         'control_tower_snapshots_days' => env('VELMIX_RETENTION_CONTROL_TOWER_SNAPSHOTS_DAYS', 90),
+    ],
+    'backup' => [
+        'enabled' => env('VELMIX_BACKUP_ENABLED', false),
+        'driver' => env('VELMIX_BACKUP_DRIVER', 'external'),
+        'storage_path' => env('VELMIX_BACKUP_STORAGE_PATH', $defaultBackupStoragePath),
+        'manifest_filename' => env('VELMIX_BACKUP_MANIFEST_FILENAME', 'latest-backup.json'),
+        'history_path' => env('VELMIX_BACKUP_HISTORY_PATH', $defaultBackupStoragePath.DIRECTORY_SEPARATOR.'history'),
+        'freshness_hours' => env('VELMIX_BACKUP_MAX_AGE_HOURS', 26),
+        'retention_days' => env('VELMIX_BACKUP_RETENTION_DAYS', 14),
+        'require_encryption' => env('VELMIX_BACKUP_REQUIRE_ENCRYPTION', true),
+        'encryption_passphrase' => env('VELMIX_BACKUP_ENCRYPTION_PASSPHRASE'),
+        'restore_drill_path' => env('VELMIX_RESTORE_DRILL_PATH', $defaultRestoreDrillPath),
+        'restore_drill_max_age_days' => env('VELMIX_RESTORE_DRILL_MAX_AGE_DAYS', 30),
     ],
 ];

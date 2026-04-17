@@ -109,4 +109,37 @@ class SystemPreflightCommandTest extends TestCase
             File::deleteDirectory($tempStoragePath);
         }
     }
+
+    public function test_system_preflight_command_fails_on_critical_when_backup_encryption_is_missing(): void
+    {
+        $root = storage_path('framework/testing/preflight-backup-critical');
+        File::deleteDirectory($root);
+        File::ensureDirectoryExists($root.'/backups/history');
+        File::ensureDirectoryExists($root.'/restore-drills');
+
+        config([
+            'app.env' => 'production',
+            'app.debug' => false,
+            'velmix.backup.enabled' => true,
+            'velmix.backup.storage_path' => $root.'/backups',
+            'velmix.backup.history_path' => $root.'/backups/history',
+            'velmix.backup.restore_drill_path' => $root.'/restore-drills',
+            'velmix.backup.encryption_passphrase' => null,
+        ]);
+
+        try {
+            $exitCode = Artisan::call('system:preflight', [
+                '--json' => true,
+                '--fail-on-critical' => true,
+            ]);
+
+            $output = json_decode(Artisan::output(), true, 512, JSON_THROW_ON_ERROR);
+
+            $this->assertSame(1, $exitCode);
+            $this->assertSame('critical', $output['status']);
+            $this->assertContains('backup_encryption_passphrase_missing', array_column($output['items'], 'code'));
+        } finally {
+            File::deleteDirectory($root);
+        }
+    }
 }

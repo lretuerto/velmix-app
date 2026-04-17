@@ -95,4 +95,25 @@ class SystemAlertsCommandTest extends TestCase
         $this->assertSame('critical', $output['status']);
         $this->assertContains('queue_connection_missing', array_column($output['items'], 'code'));
     }
+
+    public function test_system_alerts_command_reports_backup_warning_for_disabled_backups_in_production_like_env(): void
+    {
+        $this->seed(\Database\Seeders\TenantSeeder::class);
+
+        config([
+            'app.env' => 'production',
+            'app.debug' => false,
+            'velmix.backup.enabled' => false,
+        ]);
+
+        $exitCode = Artisan::call('system:alerts', [
+            '--json' => true,
+        ]);
+
+        $output = json_decode(Artisan::output(), true, 512, JSON_THROW_ON_ERROR);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertSame('warning', $output['status']);
+        $this->assertContains('backup_disabled', array_column($output['items'], 'code'));
+    }
 }

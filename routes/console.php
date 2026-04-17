@@ -2,6 +2,7 @@
 
 use App\Services\Billing\BillingReconciliationService;
 use App\Services\Billing\OutboxDispatchService;
+use App\Services\Platform\BackupRecoveryService;
 use App\Services\Platform\OperationalDataPruneService;
 use App\Services\Platform\SystemAlertNotificationService;
 use App\Services\Platform\SystemAlertService;
@@ -217,6 +218,68 @@ Artisan::command('system:preflight {--json} {--fail-on-critical} {--fail-on-warn
 
     return 0;
 })->purpose('Run release preflight checks for readiness and platform safety.');
+
+Artisan::command('system:backup-readiness {--json} {--fail-on-critical} {--fail-on-warning}', function (BackupRecoveryService $service) {
+    $result = $service->backupReadinessSummary();
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf('Backup readiness status: %s', $result['status']));
+        $this->line(sprintf('Enabled: %s', ($result['enabled'] ?? false) ? 'yes' : 'no'));
+        $this->line(sprintf('Latest manifest: %s', $result['manifest_path'] ?? 'n/a'));
+    }
+
+    if ((bool) $this->option('fail-on-warning') && in_array($result['status'], ['warning', 'critical'], true)) {
+        return 1;
+    }
+
+    if ((bool) $this->option('fail-on-critical') && $result['status'] === 'critical') {
+        return 1;
+    }
+
+    return 0;
+})->purpose('Check backup recording readiness and manifest freshness.');
+
+Artisan::command('system:record-backup {artifact} {--checksum=} {--size=} {--driver=} {--generated-at=} {--json}', function (BackupRecoveryService $service) {
+    $size = $this->option('size');
+    $result = $service->recordBackup(
+        (string) $this->argument('artifact'),
+        $this->option('checksum') !== null ? (string) $this->option('checksum') : null,
+        $size !== null && $size !== '' ? max(0, (int) $size) : null,
+        $this->option('driver') !== null ? (string) $this->option('driver') : null,
+        $this->option('generated-at') !== null ? (string) $this->option('generated-at') : null,
+    );
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf('Backup manifest recorded: %s', $result['manifest_path'] ?? 'n/a'));
+    }
+
+    return 0;
+})->purpose('Record metadata for a successful backup artifact without mutating business data.');
+
+Artisan::command('system:restore-drill {--json} {--fail-on-critical} {--fail-on-warning}', function (BackupRecoveryService $service) {
+    $result = $service->restoreDrillSummary();
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf('Restore drill status: %s', $result['status']));
+        $this->line(sprintf('Latest report: %s', $result['report_path'] ?? (($result['latest_drill']['report_path'] ?? 'n/a'))));
+    }
+
+    if ((bool) $this->option('fail-on-warning') && in_array($result['status'], ['warning', 'critical'], true)) {
+        return 1;
+    }
+
+    if ((bool) $this->option('fail-on-critical') && $result['status'] === 'critical') {
+        return 1;
+    }
+
+    return 0;
+})->purpose('Run a non-destructive restore drill and persist the drill report.');
 
 Artisan::command('system:observability-report {--date=} {--json}', function (SystemObservabilityReportService $service) {
     $result = $service->summary($this->option('date') ?: null);

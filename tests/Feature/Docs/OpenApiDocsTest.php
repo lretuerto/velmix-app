@@ -22,6 +22,7 @@ class OpenApiDocsTest extends TestCase
         $this->get('/docs/release-readiness', ['Accept' => 'application/json'])->assertStatus(401);
         $this->get('/docs/operations-runbook', ['Accept' => 'application/json'])->assertStatus(401);
         $this->get('/docs/deployment-rollback', ['Accept' => 'application/json'])->assertStatus(401);
+        $this->get('/docs/backup-restore', ['Accept' => 'application/json'])->assertStatus(401);
     }
 
     public function test_docs_endpoints_require_tenant_context_for_authenticated_session(): void
@@ -97,7 +98,8 @@ class OpenApiDocsTest extends TestCase
             ->assertJsonFragment(['path' => '/docs/api-guide'])
             ->assertJsonFragment(['path' => '/docs/release-readiness'])
             ->assertJsonFragment(['path' => '/docs/operations-runbook'])
-            ->assertJsonFragment(['path' => '/docs/deployment-rollback']);
+            ->assertJsonFragment(['path' => '/docs/deployment-rollback'])
+            ->assertJsonFragment(['path' => '/docs/backup-restore']);
     }
 
     public function test_serves_openapi_yaml_for_priority_endpoints(): void
@@ -265,6 +267,8 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('composer run velmix:preflight', false)
             ->assertSee('composer run velmix:dispatch-alerts', false)
             ->assertSee('composer run velmix:observability', false)
+            ->assertSee('composer run velmix:backup-readiness', false)
+            ->assertSee('composer run velmix:restore-drill', false)
             ->assertSee('phpstan analyse --configuration=phpstan.neon.dist', false)
             ->assertSee('ops/scripts/post-deploy.sh', false);
 
@@ -288,14 +292,21 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('VELMIX_ALERT_NOTIFY_CHANNELS', false)
             ->assertSee('VELMIX_ALERT_WEBHOOK_URL', false)
             ->assertSee('VELMIX_ALERT_SLACK_WEBHOOK_URL', false)
+            ->assertSee('VELMIX_BACKUP_ENABLED', false)
+            ->assertSee('VELMIX_BACKUP_STORAGE_PATH', false)
+            ->assertSee('VELMIX_RESTORE_DRILL_PATH', false)
             ->assertSee('VELMIX_SCHEDULER_ALERT_DISPATCH_EVERY_MINUTES', false)
             ->assertSee('scheduler_lock_store_not_shared', false)
             ->assertSee('queue_connection_missing', false)
             ->assertSee('queue_storage_not_ready', false)
             ->assertSee('structured_logging_not_enabled', false)
             ->assertSee('writable_path_not_writable', false)
+            ->assertSee('backup_encryption_passphrase_missing', false)
+            ->assertSee('backup_manifest_missing', false)
             ->assertSee('outbox_attempts', false)
             ->assertSee('system:preflight --json --fail-on-warning', false)
+            ->assertSee('system:backup-readiness --json --fail-on-warning', false)
+            ->assertSee('system:restore-drill --json --fail-on-warning', false)
             ->assertSee('php artisan schedule:work', false)
             ->assertSee('ops/systemd/velmix-app.env.example', false)
             ->assertSee('ops/systemd/velmix-queue-worker.service', false)
@@ -303,7 +314,10 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('ops/scripts/install-systemd-units.sh', false)
             ->assertSee('ops/scripts/prepare-release.sh', false)
             ->assertSee('ops/scripts/promote-release.sh', false)
-            ->assertSee('ops/scripts/rollback-to-previous-release.sh', false);
+            ->assertSee('ops/scripts/rollback-to-previous-release.sh', false)
+            ->assertSee('ops/scripts/check-backup-readiness.sh', false)
+            ->assertSee('ops/scripts/record-backup-success.sh', false)
+            ->assertSee('ops/scripts/run-restore-drill.sh', false);
 
         $this->actingAs($user)
             ->withHeader('X-Tenant-Id', '10')
@@ -320,7 +334,19 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('ops/scripts/prepare-release.sh', false)
             ->assertSee('ops/scripts/promote-release.sh', false)
             ->assertSee('ops/scripts/rollback-to-previous-release.sh', false)
+            ->assertSee('ops/scripts/check-backup-readiness.sh', false)
+            ->assertSee('ops/scripts/run-restore-drill.sh', false)
             ->assertSee('velmix-backend.target', false);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->get('/docs/backup-restore')
+            ->assertOk()
+            ->assertSee('system:record-backup', false)
+            ->assertSee('VELMIX_BACKUP_ENABLED', false)
+            ->assertSee('VELMIX_RESTORE_DRILL_PATH', false)
+            ->assertSee('ops/scripts/record-backup-success.sh', false)
+            ->assertSee('ops/scripts/run-restore-drill.sh', false);
     }
 
     private function seedTenantUser(int $tenantId): User

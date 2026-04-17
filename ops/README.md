@@ -17,6 +17,9 @@ Contenido actual:
 - `scripts/post-deploy.sh`: secuencia segura post-deploy sobre el release activo
 - `scripts/post-rollback.sh`: secuencia segura posterior a rollback de aplicación
 - `scripts/check-backend-health.sh`: smoke operativo manual sobre readiness, alerts, outbox, reconcile y scheduler
+- `scripts/check-backup-readiness.sh`: valida posture de backup antes de una ventana de despliegue
+- `scripts/record-backup-success.sh`: registra el manifiesto del ultimo backup exitoso sin tocar datos de negocio
+- `scripts/run-restore-drill.sh`: ejecuta un restore drill no destructivo y persiste evidencia
 
 Suposiciones deliberadas:
 

@@ -1402,7 +1402,7 @@ paths:
         - $ref: '#/components/parameters/ReportDate'
       responses:
         '200':
-          description: Snapshot tecnico de plataforma y canales salientes
+          description: Snapshot tecnico de plataforma, canales salientes y postura de recovery
           content:
             application/json:
               schema:

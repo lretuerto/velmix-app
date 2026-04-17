@@ -74,6 +74,17 @@ Variables asociadas:
 - `VELMIX_ALERT_SLACK_CHANNEL`
 - `VELMIX_ALERT_SLACK_USERNAME`
 - `VELMIX_ALERT_SLACK_ICON_EMOJI`
+- `VELMIX_BACKUP_ENABLED`
+- `VELMIX_BACKUP_DRIVER`
+- `VELMIX_BACKUP_STORAGE_PATH`
+- `VELMIX_BACKUP_HISTORY_PATH`
+- `VELMIX_BACKUP_MANIFEST_FILENAME`
+- `VELMIX_BACKUP_MAX_AGE_HOURS`
+- `VELMIX_BACKUP_RETENTION_DAYS`
+- `VELMIX_BACKUP_REQUIRE_ENCRYPTION`
+- `VELMIX_BACKUP_ENCRYPTION_PASSPHRASE`
+- `VELMIX_RESTORE_DRILL_PATH`
+- `VELMIX_RESTORE_DRILL_MAX_AGE_DAYS`
 
 ## Secuencia de observacion operativa
 
@@ -93,11 +104,14 @@ Variables asociadas:
    - `php artisan system:dispatch-alerts --json`
 8. Revisar snapshot de observabilidad:
    - `php artisan system:observability-report --json`
-9. Revisar outbox:
+9. Revisar resiliencia de recovery:
+   - `php artisan system:backup-readiness --json --fail-on-warning`
+   - `php artisan system:restore-drill --json --fail-on-warning`
+10. Revisar outbox:
    - `php artisan billing:dispatch-outbox --limit=20 --graceful-if-unmigrated`
-10. Revisar reconciliacion:
+11. Revisar reconciliacion:
    - `php artisan billing:reconcile-pending --limit=20 --graceful-if-unmigrated`
-11. Revisar housekeeping:
+12. Revisar housekeeping:
    - `php artisan platform:prune-operational-data --pretend --json`
 
 ## Politica de alertas
@@ -145,6 +159,8 @@ Codigos esperados:
 - `structured_logging_not_enabled`
 - `writable_path_missing`
 - `writable_path_not_writable`
+- `backup_encryption_passphrase_missing`
+- `backup_manifest_missing`
 
 ## Politica de retencion
 
@@ -199,7 +215,12 @@ Contexto minimo agregado:
   - conexion y tablas de cola
   - frecuencias del scheduler
   - canales de notificacion y cooldown
+- `php artisan system:backup-readiness --json` valida storage, cifrado y frescura del manifiesto registrado
+- `php artisan system:restore-drill --json --fail-on-warning` genera evidencia de un drill no destructivo de restauracion
 - `GET /reports/platform-observability` publica el mismo snapshot como dashboard tecnico autenticado
+  - `delivery` resume readiness por canal saliente
+  - `recovery.backup` resume storage, cifrado y ultimo backup
+  - `recovery.restore_drill` resume la evidencia del ultimo drill
 
 ## Supervision recomendada
 
@@ -256,6 +277,9 @@ WantedBy=velmix-backend.target
 - restart hook: `ops/systemd/velmix-queue-restart.service`
 - instalacion de units: `ops/scripts/install-systemd-units.sh`
 - bootstrap compartido: `ops/scripts/bootstrap-shared-path.sh`
+- backup readiness: `ops/scripts/check-backup-readiness.sh`
+- record backup manifest: `ops/scripts/record-backup-success.sh`
+- restore drill: `ops/scripts/run-restore-drill.sh`
 - prepare/promote/rollback:
   - `ops/scripts/prepare-release.sh`
   - `ops/scripts/promote-release.sh`
@@ -297,6 +321,8 @@ WantedBy=velmix-backend.target
 composer run velmix:readiness
 composer run velmix:dispatch-alerts
 composer run velmix:observability
+composer run velmix:backup-readiness
+composer run velmix:restore-drill
 composer run velmix:preflight
 composer run velmix:alerts
 composer run velmix:prune
@@ -309,6 +335,9 @@ php artisan schedule:interrupt
 php artisan queue:restart
 ops/scripts/install-systemd-units.sh
 ops/scripts/bootstrap-shared-path.sh
+ops/scripts/check-backup-readiness.sh
+ops/scripts/record-backup-success.sh
+ops/scripts/run-restore-drill.sh
 ops/scripts/prepare-release.sh <release-path>
 ops/scripts/promote-release.sh <release-path>
 ops/scripts/rollback-to-previous-release.sh

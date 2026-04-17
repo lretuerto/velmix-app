@@ -8,6 +8,7 @@ class SystemObservabilityReportService
         private readonly SystemPreflightService $preflight,
         private readonly SystemAlertService $alerts,
         private readonly SystemAlertNotificationService $notifications,
+        private readonly BackupRecoveryService $backupRecovery,
     ) {}
 
     public function summary(?string $date = null): array
@@ -15,11 +16,12 @@ class SystemObservabilityReportService
         $preflight = $this->preflight->summary();
         $alerts = $this->alerts->summary($date);
         $delivery = $this->notifications->describe($date);
+        $recovery = $this->backupRecovery->observabilitySummary();
         $logging = $this->loggingSnapshot();
         $notificationConfig = (array) config('velmix.alerts.notifications', []);
 
         return [
-            'status' => $this->resolveStatus($preflight, $alerts, $delivery),
+            'status' => $this->resolveStatus($preflight, $alerts, $delivery, $recovery),
             'checked_at' => now()->toIso8601String(),
             'request_correlation' => [
                 'request_id_header' => 'X-Request-Id',
@@ -59,7 +61,8 @@ class SystemObservabilityReportService
                 'log_channel' => $notificationConfig['log_channel'] ?? 'daily_json',
             ],
             'delivery' => $delivery,
-            'recommendations' => $this->recommendations($preflight, $alerts, $logging, $delivery),
+            'recovery' => $recovery,
+            'recommendations' => $this->recommendations($preflight, $alerts, $logging, $delivery, $recovery),
         ];
     }
 
@@ -84,11 +87,13 @@ class SystemObservabilityReportService
      * @param  array<string, mixed>  $preflight
      * @param  array<string, mixed>  $alerts
      */
-    private function resolveStatus(array $preflight, array $alerts, array $delivery): string
+    private function resolveStatus(array $preflight, array $alerts, array $delivery, array $recovery): string
     {
         $statuses = [
             $preflight['status'] ?? 'ok',
             $alerts['status'] ?? 'ok',
+            $recovery['backup']['status'] ?? 'ok',
+            $recovery['restore_drill']['status'] ?? 'ok',
         ];
 
         foreach ((array) ($delivery['channels'] ?? []) as $channel) {
@@ -115,7 +120,7 @@ class SystemObservabilityReportService
      * @param  array<string, mixed>  $delivery
      * @return array<int, string>
      */
-    private function recommendations(array $preflight, array $alerts, array $logging, array $delivery): array
+    private function recommendations(array $preflight, array $alerts, array $logging, array $delivery, array $recovery): array
     {
         $items = [];
 
@@ -138,6 +143,14 @@ class SystemObservabilityReportService
                     (string) ($channel['channel'] ?? 'unknown'),
                 );
             }
+        }
+
+        if (($recovery['backup']['status'] ?? 'ok') !== 'ok') {
+            $items[] = 'Run php artisan system:backup-readiness --json and record a fresh backup manifest before the next production release.';
+        }
+
+        if (($recovery['restore_drill']['status'] ?? 'ok') !== 'ok') {
+            $items[] = 'Run php artisan system:restore-drill --json and review the latest restore drill report before the next production release.';
         }
 
         return array_values(array_unique($items));

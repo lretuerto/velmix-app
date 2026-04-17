@@ -6,8 +6,13 @@ use Illuminate\Support\Facades\Schema;
 
 class PlatformSafetyService
 {
+    public function __construct(
+        private readonly BackupRecoveryService $backupRecovery,
+    ) {}
+
     public function summary(): array
     {
+        $backup = $this->backupRecovery->backupReadinessSummary();
         $items = array_values(array_filter([
             $this->debugModeCheck(),
             $this->cacheStoreCheck(),
@@ -15,11 +20,13 @@ class PlatformSafetyService
             $this->queueConnectionCheck(),
             $this->loggingChannelCheck(),
             ...$this->writablePathChecks(),
+            ...($backup['items'] ?? []),
         ]));
 
         return [
             'status' => $this->resolveStatus($items),
             'checked_at' => now()->toIso8601String(),
+            'backup' => $backup,
             'items' => $items,
         ];
     }

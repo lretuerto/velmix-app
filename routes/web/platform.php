@@ -47,6 +47,7 @@ Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:secu
                     ['name' => 'Release Readiness', 'path' => '/docs/release-readiness'],
                     ['name' => 'Backend Operations Runbook', 'path' => '/docs/operations-runbook'],
                     ['name' => 'Deployment And Rollback Runbook', 'path' => '/docs/deployment-rollback'],
+                    ['name' => 'Backup And Restore Runbook', 'path' => '/docs/backup-restore'],
                 ],
                 'conventions' => [
                     'Business endpoints support Laravel session auth or Bearer token auth.',
@@ -92,6 +93,14 @@ Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:secu
     Route::get('/docs/deployment-rollback', function () {
         return response(
             file_get_contents(base_path('docs/operations/deployment-and-rollback-runbook.md')),
+            200,
+            ['Content-Type' => 'text/markdown; charset=UTF-8'],
+        );
+    });
+
+    Route::get('/docs/backup-restore', function () {
+        return response(
+            file_get_contents(base_path('docs/operations/backup-and-restore-runbook.md')),
             200,
             ['Content-Type' => 'text/markdown; charset=UTF-8'],
         );

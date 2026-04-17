@@ -13,9 +13,12 @@ composer validate --no-check-publish
 composer run velmix:qa
 composer run velmix:schedule
 composer run velmix:preflight
+composer run velmix:record-backup:ci
+composer run velmix:backup-readiness
 composer run velmix:routes
 composer run velmix:readiness
 composer run velmix:alerts
+composer run velmix:restore-drill
 composer run velmix:prune
 composer run velmix:outbox
 composer run velmix:reconcile
@@ -38,6 +41,8 @@ composer run velmix:ci:mysql
 - queue restart hook: `ops/systemd/velmix-queue-restart.service`
 - instalacion de units: `ops/scripts/install-systemd-units.sh`
 - inicializacion de shared path: `ops/scripts/bootstrap-shared-path.sh`
+- backup readiness: `ops/scripts/check-backup-readiness.sh`
+- restore drill: `ops/scripts/run-restore-drill.sh`
 - preparacion/promocion de release:
   - `ops/scripts/prepare-release.sh <release-path>`
   - `ops/scripts/promote-release.sh <release-path>`
@@ -50,20 +55,26 @@ composer run velmix:ci:mysql
    - `ops/scripts/install-systemd-units.sh`
 3. Inicializar estructura compartida si el nodo es nuevo:
    - `ops/scripts/bootstrap-shared-path.sh`
-4. Preparar el release sin exponer trafico:
+4. Validar backup posture antes de preparar el release:
+   - `ops/scripts/check-backup-readiness.sh`
+5. Preparar el release sin exponer trafico:
    - `ops/scripts/prepare-release.sh /var/www/velmix/releases/<release>`
-5. Promover con swap atomico:
+6. Promover con swap atomico:
    - `ops/scripts/promote-release.sh /var/www/velmix/releases/<release>`
-6. Verificar:
+7. Verificar:
    - `GET /health/live`
    - `GET /health/ready`
    - `php artisan system:preflight --json`
+   - `php artisan system:backup-readiness --json --fail-on-warning`
    - `php artisan system:alerts --json`
+   - `php artisan system:restore-drill --json`
+   - `ops/scripts/run-restore-drill.sh`
    - `php artisan schedule:list`
 
 ### Criterios de salida de deploy
 
 - readiness en `ready`
+- backup readiness en `ok`
 - alertas criticas en cero o conocidas
 - scheduler visible y sin comandos faltantes
 - outbox y reconcile smoke sin errores
@@ -76,6 +87,8 @@ Validacion minima:
 - listar tareas: `php artisan schedule:list`
 - dispatch outbox smoke
 - reconcile smoke
+- backup readiness smoke
+- restore drill smoke
 - lectura de docs internas `/docs`
 - lectura de dashboard diario `/reports/daily`
 
@@ -101,7 +114,9 @@ Pasos:
    - `GET /health/ready`
    - `php artisan system:preflight --json --fail-on-critical`
    - `php artisan system:preflight --json`
+   - `php artisan system:backup-readiness --json`
    - `php artisan system:alerts --json`
+   - `php artisan system:restore-drill --json`
    - `php artisan queue:restart`
    - `php artisan schedule:list`
 
@@ -124,6 +139,8 @@ Antes de revertir esquema revisar:
 
 - `system:alerts --fail-on-critical` debe usarse como gate manual o de pipeline, no dentro del scheduler
 - `system:preflight --fail-on-warning` si debe usarse como gate de deploy, porque valida coherencia de plataforma y release
+- `system:backup-readiness --fail-on-warning` debe formar parte del gate antes de promover un release en entornos no locales
+- el restore drill es no destructivo y su evidencia debe conservarse junto al release o en storage compartido
 - el pruning debe comenzar en modo `--pretend` antes de activarse automatico en un entorno nuevo
 - conservar evidencia de `X-Request-Id` y logs JSON durante incidentes
 - en multi-nodo, habilitar `VELMIX_SCHEDULER_ON_ONE_SERVER=true` solo si existe cache compartido con locks atomicos
@@ -140,3 +157,5 @@ Antes de revertir esquema revisar:
 - workers reiniciados despues del deploy
 - release actual y release previo visibles via symlink `current` y `previous`
 - runbooks accesibles desde `/docs`
+- backup manifest reciente registrado
+- restore drill reciente y legible

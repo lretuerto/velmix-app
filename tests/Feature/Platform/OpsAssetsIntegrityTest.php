@@ -18,12 +18,17 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertFileExists(base_path('ops/scripts/prepare-release.sh'));
         $this->assertFileExists(base_path('ops/scripts/promote-release.sh'));
         $this->assertFileExists(base_path('ops/scripts/rollback-to-previous-release.sh'));
+        $this->assertFileExists(base_path('ops/scripts/check-backup-readiness.sh'));
+        $this->assertFileExists(base_path('ops/scripts/record-backup-success.sh'));
+        $this->assertFileExists(base_path('ops/scripts/run-restore-drill.sh'));
 
         $envTemplate = file_get_contents(base_path('ops/systemd/velmix-app.env.example'));
         $this->assertIsString($envTemplate);
         $this->assertStringContainsString('VELMIX_CURRENT_LINK=/var/www/velmix/current', $envTemplate);
         $this->assertStringContainsString('VELMIX_PREVIOUS_LINK=/var/www/velmix/previous', $envTemplate);
         $this->assertStringContainsString('VELMIX_SYSTEMD_TARGET=velmix-backend.target', $envTemplate);
+        $this->assertStringContainsString('VELMIX_BACKUP_ENABLED=true', $envTemplate);
+        $this->assertStringContainsString('VELMIX_RESTORE_DRILL_PATH=/var/www/velmix/shared/restore-drills', $envTemplate);
 
         $schedulerUnit = file_get_contents(base_path('ops/systemd/velmix-scheduler.service'));
         $this->assertIsString($schedulerUnit);
@@ -53,5 +58,27 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('systemctl daemon-reload', $installUnitsScript);
         $this->assertStringContainsString('systemctl enable velmix-backend.target', $installUnitsScript);
         $this->assertStringContainsString('velmix-app.env.example', $installUnitsScript);
+
+        $bootstrapScript = file_get_contents(base_path('ops/scripts/bootstrap-shared-path.sh'));
+        $this->assertIsString($bootstrapScript);
+        $this->assertStringContainsString('VELMIX_BACKUP_STORAGE_PATH', $bootstrapScript);
+        $this->assertStringContainsString('VELMIX_RESTORE_DRILL_PATH', $bootstrapScript);
+
+        $checkBackupScript = file_get_contents(base_path('ops/scripts/check-backup-readiness.sh'));
+        $this->assertIsString($checkBackupScript);
+        $this->assertStringContainsString('artisan system:backup-readiness --json --fail-on-warning', $checkBackupScript);
+
+        $recordBackupScript = file_get_contents(base_path('ops/scripts/record-backup-success.sh'));
+        $this->assertIsString($recordBackupScript);
+        $this->assertStringContainsString('artisan system:record-backup', $recordBackupScript);
+
+        $restoreDrillScript = file_get_contents(base_path('ops/scripts/run-restore-drill.sh'));
+        $this->assertIsString($restoreDrillScript);
+        $this->assertStringContainsString('artisan system:restore-drill --json --fail-on-warning', $restoreDrillScript);
+
+        $healthScript = file_get_contents(base_path('ops/scripts/check-backend-health.sh'));
+        $this->assertIsString($healthScript);
+        $this->assertStringContainsString('artisan system:observability-report --json', $healthScript);
+        $this->assertStringContainsString('artisan system:backup-readiness --json', $healthScript);
     }
 }

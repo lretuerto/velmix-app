@@ -13,7 +13,7 @@ Backend SaaS multi-tenant para operaciones farmacéuticas, construido sobre Lara
 - Caja con guard de una sola sesion abierta por tenant, reforzado tambien a nivel BD
 - Reportes operativos, riesgo, vencimientos, promesas y auditoría transversal
 - Dashboard financiero unificado para cobranza y pagos con prioridad operativa
-- Observabilidad tecnica de plataforma con snapshot autenticado, alert dispatch y readiness operativo
+- Observabilidad tecnica de plataforma con snapshot autenticado, alert dispatch, delivery health y resiliencia de backup/restore
 - Workflow operativo para prioridades financieras con acknowledge y resolve
 - Historial operativo de prioridades financieras con timeline por entidad
 - Metricas financieras de backlog, aging y SLA de resolución
@@ -82,6 +82,7 @@ php artisan test
 - Checklist de release autenticado por sesión web: `GET /docs/release-readiness`
 - Runbook de operacion autenticado por sesión web: `GET /docs/operations-runbook`
 - Runbook de despliegue y rollback autenticado por sesión web: `GET /docs/deployment-rollback`
+- Runbook de backup y restore autenticado por sesión web: `GET /docs/backup-restore`
 - El portal de docs exige `X-Tenant-Id`, membresía al tenant y permiso `security.docs.read`
 - Health y readiness:
   - `GET /health/live`
@@ -101,6 +102,8 @@ php artisan test
 - Script de alertas operativas: `composer run velmix:alerts`
 - Script de dispatch de alertas operativas: `composer run velmix:dispatch-alerts`
 - Script de snapshot de observabilidad tecnica: `composer run velmix:observability`
+- Script de readiness de backup: `composer run velmix:backup-readiness`
+- Script de restore drill no destructivo: `composer run velmix:restore-drill`
 - Script de pruning conservador: `composer run velmix:prune`
 - Script de lint de estilo: `composer run velmix:lint`
 - Script de lint completo del repo: `composer run velmix:lint:full`
@@ -109,8 +112,10 @@ php artisan test
 - Script de validación outbox: `composer run velmix:outbox` no falla si la base aún no fue migrada
 - `php artisan system:alerts --fail-on-critical` queda para CI o chequeos manuales; el scheduler solo observa y no degrada `schedule:run`
 - `php artisan system:dispatch-alerts --json` permite notificar alertas por `log`, `webhook` o `slack` con cooldown defensivo
-- `php artisan system:observability-report --json` resume preflight, alertas, logging, cola, scheduler y canales de notificacion
-- `GET /reports/platform-observability` expone el snapshot tecnico autenticado para operacion
+- `php artisan system:observability-report --json` resume preflight, alertas, logging, cola, scheduler, canales de notificacion y resiliencia de recovery
+- `php artisan system:backup-readiness --json` valida storage, cifrado, manifiesto y frescura del backup registrado
+- `php artisan system:restore-drill --json` genera un drill no destructivo y persiste evidencia operativa
+- `GET /reports/platform-observability` expone el snapshot tecnico autenticado para operacion, incluyendo `delivery` y `recovery`
 - Variables de observabilidad/alerting:
   - `VELMIX_ALERT_NOTIFY_CHANNELS`
   - `VELMIX_ALERT_NOTIFY_MIN_SEVERITY`
@@ -122,6 +127,11 @@ php artisan test
   - `VELMIX_ALERT_SLACK_CHANNEL`
   - `VELMIX_ALERT_SLACK_USERNAME`
   - `VELMIX_ALERT_SLACK_ICON_EMOJI`
+  - `VELMIX_BACKUP_ENABLED`
+  - `VELMIX_BACKUP_STORAGE_PATH`
+  - `VELMIX_BACKUP_HISTORY_PATH`
+  - `VELMIX_BACKUP_ENCRYPTION_PASSPHRASE`
+  - `VELMIX_RESTORE_DRILL_PATH`
   - `VELMIX_SCHEDULER_ALERT_DISPATCH_EVERY_MINUTES`
   - `VELMIX_SCHEDULER_ALERT_DISPATCH_OVERLAP_MINUTES`
 - Perfil/provider billing por tenant:
@@ -208,6 +218,8 @@ composer run velmix:preflight
 composer run velmix:alerts
 composer run velmix:dispatch-alerts
 composer run velmix:observability
+composer run velmix:backup-readiness
+composer run velmix:restore-drill
 composer run velmix:prune
 composer run velmix:lint
 composer run velmix:lint:full
@@ -237,9 +249,11 @@ composer run velmix:routes
 8. `composer run velmix:alerts`
 9. `composer run velmix:dispatch-alerts`
 10. `composer run velmix:observability`
-11. `composer run velmix:prune`
-12. `composer run velmix:outbox`
-13. `composer run velmix:reconcile`
+11. `composer run velmix:backup-readiness`
+12. `composer run velmix:restore-drill`
+13. `composer run velmix:prune`
+14. `composer run velmix:outbox`
+15. `composer run velmix:reconcile`
 
 `velmix:ci:mysql` reutiliza la misma secuencia sobre MySQL, agrega la suite `concurrency` y rehidrata el esquema antes del bloque operativo, para validar locks, unicidad e idempotencia en un engine mas parecido a produccion.
 

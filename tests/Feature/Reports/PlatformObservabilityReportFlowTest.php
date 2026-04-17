@@ -5,6 +5,7 @@ namespace Tests\Feature\Reports;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 class PlatformObservabilityReportFlowTest extends TestCase
@@ -19,6 +20,10 @@ class PlatformObservabilityReportFlowTest extends TestCase
         ]);
 
         $admin = $this->seedUserWithRole(10, 'ADMIN');
+        $root = storage_path('framework/testing/platform-observability-recovery');
+        File::deleteDirectory($root);
+        File::ensureDirectoryExists($root.'/backups/history');
+        File::ensureDirectoryExists($root.'/restore-drills');
 
         config([
             'app.env' => 'production',
@@ -30,39 +35,59 @@ class PlatformObservabilityReportFlowTest extends TestCase
             'velmix.alerts.notifications.minimum_severity' => 'warning',
             'velmix.alerts.notifications.slack_webhook_url' => 'https://hooks.slack.example.test/services/velmix',
             'velmix.alerts.notifications.slack_channel' => '#ops-alerts',
+            'velmix.backup.enabled' => true,
+            'velmix.backup.storage_path' => $root.'/backups',
+            'velmix.backup.history_path' => $root.'/backups/history',
+            'velmix.backup.restore_drill_path' => $root.'/restore-drills',
+            'velmix.backup.encryption_passphrase' => 'test-passphrase',
         ]);
 
-        DB::table('outbox_events')->insert([
-            'tenant_id' => 10,
-            'aggregate_type' => 'electronic_voucher',
-            'aggregate_id' => 900,
-            'event_type' => 'voucher_issued',
-            'payload' => json_encode(['document_number' => 'B001-000900'], JSON_THROW_ON_ERROR),
-            'status' => 'failed',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        try {
+            DB::table('outbox_events')->insert([
+                'tenant_id' => 10,
+                'aggregate_type' => 'electronic_voucher',
+                'aggregate_id' => 900,
+                'event_type' => 'voucher_issued',
+                'payload' => json_encode(['document_number' => 'B001-000900'], JSON_THROW_ON_ERROR),
+                'status' => 'failed',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
 
-        $response = $this->actingAs($admin)
-            ->withHeader('X-Tenant-Id', '10')
-            ->getJson('/reports/platform-observability?date=2026-04-17');
+            app(\App\Services\Platform\BackupRecoveryService::class)->recordBackup(
+                's3://velmix-prod/backups/latest.sql.gz',
+                'sha256:test',
+                2048,
+                'managed-snapshot',
+                now()->subHour()->toIso8601String(),
+            );
+            app(\App\Services\Platform\BackupRecoveryService::class)->restoreDrillSummary();
 
-        $response->assertOk()
-            ->assertJsonPath('data.tenant_id', 10)
-            ->assertJsonPath('data.request_correlation.request_id_header', 'X-Request-Id')
-            ->assertJsonPath('data.notifications.slack_enabled', true)
-            ->assertJsonPath('data.delivery.minimum_severity', 'warning');
+            $response = $this->actingAs($admin)
+                ->withHeader('X-Tenant-Id', '10')
+                ->getJson('/reports/platform-observability?date=2026-04-17');
 
-        $data = $response->json('data');
-        $channels = collect($data['delivery']['channels']);
-        $logChannel = $channels->firstWhere('channel', 'log');
-        $slackChannel = $channels->firstWhere('channel', 'slack');
+            $response->assertOk()
+                ->assertJsonPath('data.tenant_id', 10)
+                ->assertJsonPath('data.request_correlation.request_id_header', 'X-Request-Id')
+                ->assertJsonPath('data.notifications.slack_enabled', true)
+                ->assertJsonPath('data.delivery.minimum_severity', 'warning')
+                ->assertJsonPath('data.recovery.backup.status', 'ok')
+                ->assertJsonPath('data.recovery.restore_drill.status', 'ok');
 
-        $this->assertSame('critical', $data['alerts']['status']);
-        $this->assertGreaterThanOrEqual(1, $data['delivery']['candidate_alert_count']);
-        $this->assertSame('ready', is_array($logChannel) ? ($logChannel['status'] ?? null) : null);
-        $this->assertSame('ready', is_array($slackChannel) ? ($slackChannel['status'] ?? null) : null);
-        $this->assertIsArray($data['recommendations']);
+            $data = $response->json('data');
+            $channels = collect($data['delivery']['channels']);
+            $logChannel = $channels->firstWhere('channel', 'log');
+            $slackChannel = $channels->firstWhere('channel', 'slack');
+
+            $this->assertSame('critical', $data['alerts']['status']);
+            $this->assertGreaterThanOrEqual(1, $data['delivery']['candidate_alert_count']);
+            $this->assertSame('ready', is_array($logChannel) ? ($logChannel['status'] ?? null) : null);
+            $this->assertSame('ready', is_array($slackChannel) ? ($slackChannel['status'] ?? null) : null);
+            $this->assertIsArray($data['recommendations']);
+        } finally {
+            File::deleteDirectory($root);
+        }
     }
 
     public function test_cashier_cannot_read_platform_observability_report(): void

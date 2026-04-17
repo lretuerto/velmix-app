@@ -67,6 +67,15 @@
         "velmix:preflight": [
             "@php artisan system:preflight --json --fail-on-warning"
         ],
+        "velmix:backup-readiness": [
+            "@php artisan system:backup-readiness --json"
+        ],
+        "velmix:record-backup:ci": [
+            "@php artisan system:record-backup ci://latest-backup --checksum=ci-placeholder --size=0 --driver=ci-placeholder --json"
+        ],
+        "velmix:restore-drill": [
+            "@php artisan system:restore-drill --json"
+        ],
         "velmix:alerts": [
             "@php artisan system:alerts --json"
         ],
@@ -103,11 +112,14 @@
             "@velmix:reset",
             "@velmix:schedule",
             "@velmix:preflight",
+            "@velmix:record-backup:ci",
+            "@velmix:backup-readiness",
             "@velmix:routes",
             "@velmix:readiness",
             "@velmix:alerts",
             "@velmix:dispatch-alerts",
             "@velmix:observability",
+            "@velmix:restore-drill",
             "@velmix:prune",
             "@velmix:outbox",
             "@velmix:reconcile"
@@ -119,11 +131,14 @@
             "@velmix:reset",
             "@velmix:schedule",
             "@velmix:preflight",
+            "@velmix:record-backup:ci",
+            "@velmix:backup-readiness",
             "@velmix:routes",
             "@velmix:readiness",
             "@velmix:alerts",
             "@velmix:dispatch-alerts",
             "@velmix:observability",
+            "@velmix:restore-drill",
             "@velmix:prune",
             "@velmix:outbox",
             "@velmix:reconcile"
