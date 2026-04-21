@@ -15,6 +15,7 @@ cd "$APP_PATH"
 "$PHP_BIN" artisan system:staging-certification --json
 "$PHP_BIN" artisan system:promotion-readiness --json
 "$PHP_BIN" artisan system:cutover-readiness --json
+"$PHP_BIN" artisan system:operational-certification --json
 "$PHP_BIN" artisan billing:dispatch-outbox --limit=20 --graceful-if-unmigrated
 "$PHP_BIN" artisan billing:reconcile-pending --limit=20 --graceful-if-unmigrated
 "$PHP_BIN" artisan schedule:list

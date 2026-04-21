@@ -137,6 +137,20 @@ paths:
             text/markdown:
               schema:
                 type: string
+  /docs/operational-certification:
+    get:
+      tags: [Reports]
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      summary: Runbook interno de certificacion operativa del release
+      responses:
+        '200':
+          description: Markdown bruto
+          content:
+            text/markdown:
+              schema:
+                type: string
   /auth/me:
     get:
       tags: [Tenant]
@@ -1430,7 +1444,7 @@ paths:
         - $ref: '#/components/parameters/ReportDate'
       responses:
         '200':
-      description: Snapshot tecnico de plataforma, canales salientes, recovery, certificacion de staging, gate de promocion y gate final de cutover del release
+          description: Snapshot tecnico de plataforma, canales salientes, recovery, certificacion de staging, gate de promocion, gate final de cutover y certificacion operativa del release
           content:
             application/json:
               schema:

@@ -12,6 +12,7 @@ class SystemObservabilityReportService
         private readonly StagingCertificationService $stagingCertification,
         private readonly ReleasePromotionService $releasePromotion,
         private readonly ReleaseCutoverService $releaseCutover,
+        private readonly OperationalCertificationService $operationalCertification,
     ) {}
 
     public function summary(?string $date = null): array
@@ -39,11 +40,19 @@ class SystemObservabilityReportService
             'recovery' => $recovery,
             'promotion' => $promotion,
         ]);
+        $operationalCertification = $this->operationalCertification->summary([
+            'date' => $date,
+            'preflight' => $preflight,
+            'alerts' => $alerts,
+            'recovery' => $recovery,
+            'promotion' => $promotion,
+            'cutover' => $cutover,
+        ]);
         $logging = $this->loggingSnapshot();
         $notificationConfig = (array) config('velmix.alerts.notifications', []);
 
         return [
-            'status' => $this->resolveStatus($preflight, $alerts, $delivery, $recovery, $certification, $promotion, $cutover),
+            'status' => $this->resolveStatus($preflight, $alerts, $delivery, $recovery, $certification, $promotion, $cutover, $operationalCertification),
             'checked_at' => now()->toIso8601String(),
             'request_correlation' => [
                 'request_id_header' => 'X-Request-Id',
@@ -89,7 +98,8 @@ class SystemObservabilityReportService
             ],
             'promotion' => $promotion,
             'cutover' => $cutover,
-            'recommendations' => $this->recommendations($preflight, $alerts, $logging, $delivery, $recovery, $certification, $promotion, $cutover),
+            'operational_certification' => $operationalCertification,
+            'recommendations' => $this->recommendations($preflight, $alerts, $logging, $delivery, $recovery, $certification, $promotion, $cutover, $operationalCertification),
         ];
     }
 
@@ -114,7 +124,7 @@ class SystemObservabilityReportService
      * @param  array<string, mixed>  $preflight
      * @param  array<string, mixed>  $alerts
      */
-    private function resolveStatus(array $preflight, array $alerts, array $delivery, array $recovery, array $certification, array $promotion, array $cutover): string
+    private function resolveStatus(array $preflight, array $alerts, array $delivery, array $recovery, array $certification, array $promotion, array $cutover, array $operationalCertification): string
     {
         $resolved = null;
         $statuses = [
@@ -125,6 +135,7 @@ class SystemObservabilityReportService
             $certification['status'] ?? 'ok',
             $promotion['status'] ?? 'ok',
             $cutover['status'] ?? 'ok',
+            $operationalCertification['status'] ?? 'ok',
         ];
 
         foreach ((array) ($delivery['channels'] ?? []) as $channel) {
@@ -151,7 +162,7 @@ class SystemObservabilityReportService
      * @param  array<string, mixed>  $delivery
      * @return array<int, string>
      */
-    private function recommendations(array $preflight, array $alerts, array $logging, array $delivery, array $recovery, array $certification, array $promotion, array $cutover): array
+    private function recommendations(array $preflight, array $alerts, array $logging, array $delivery, array $recovery, array $certification, array $promotion, array $cutover, array $operationalCertification): array
     {
         $items = [];
 
@@ -194,6 +205,10 @@ class SystemObservabilityReportService
 
         if (($cutover['status'] ?? 'ok') !== 'ok') {
             $items[] = 'Run php artisan system:cutover-readiness --json and record the final cutover decision before switching production traffic.';
+        }
+
+        if (($operationalCertification['status'] ?? 'ok') !== 'ok') {
+            $items[] = 'Run php artisan system:operational-certification --json and record operational certification evidence before treating the release as fully governed by deploy, rollback, backup, and restore proofs.';
         }
 
         return array_values(array_unique($items));

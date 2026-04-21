@@ -26,6 +26,8 @@ Contenido actual:
 - `scripts/record-release-promotion.sh`: registra la aprobacion operativa del release actual con evidencia de rollback
 - `scripts/check-cutover-readiness.sh`: valida si el release actual esta listo para la decision final de go-live
 - `scripts/record-release-cutover.sh`: registra la decision final de cutover del release actual
+- `scripts/check-operational-certification.sh`: valida si el release actual ya quedo respaldado por evidencia operativa completa
+- `scripts/record-operational-certification.sh`: registra deploy, rollback, backup, restore y monitoreo para el release actual
 
 Suposiciones deliberadas:
 

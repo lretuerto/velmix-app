@@ -27,6 +27,8 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertFileExists(base_path('ops/scripts/record-release-promotion.sh'));
         $this->assertFileExists(base_path('ops/scripts/check-cutover-readiness.sh'));
         $this->assertFileExists(base_path('ops/scripts/record-release-cutover.sh'));
+        $this->assertFileExists(base_path('ops/scripts/check-operational-certification.sh'));
+        $this->assertFileExists(base_path('ops/scripts/record-operational-certification.sh'));
 
         $envTemplate = file_get_contents(base_path('ops/systemd/velmix-app.env.example'));
         $this->assertIsString($envTemplate);
@@ -39,6 +41,7 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('VELMIX_STAGING_CERTIFICATION_STORAGE_PATH=/var/www/velmix/shared/staging-certifications', $envTemplate);
         $this->assertStringContainsString('VELMIX_RELEASE_PROMOTION_STORAGE_PATH=/var/www/velmix/shared/release-promotions', $envTemplate);
         $this->assertStringContainsString('VELMIX_RELEASE_CUTOVER_STORAGE_PATH=/var/www/velmix/shared/release-cutovers', $envTemplate);
+        $this->assertStringContainsString('VELMIX_OPERATIONAL_CERTIFICATION_STORAGE_PATH=/var/www/velmix/shared/operational-certifications', $envTemplate);
 
         $schedulerUnit = file_get_contents(base_path('ops/systemd/velmix-scheduler.service'));
         $this->assertIsString($schedulerUnit);
@@ -76,6 +79,7 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('VELMIX_STAGING_CERTIFICATION_STORAGE_PATH', $bootstrapScript);
         $this->assertStringContainsString('VELMIX_RELEASE_PROMOTION_STORAGE_PATH', $bootstrapScript);
         $this->assertStringContainsString('VELMIX_RELEASE_CUTOVER_STORAGE_PATH', $bootstrapScript);
+        $this->assertStringContainsString('VELMIX_OPERATIONAL_CERTIFICATION_STORAGE_PATH', $bootstrapScript);
 
         $checkBackupScript = file_get_contents(base_path('ops/scripts/check-backup-readiness.sh'));
         $this->assertIsString($checkBackupScript);
@@ -113,6 +117,14 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertIsString($recordReleaseCutoverScript);
         $this->assertStringContainsString('artisan system:record-release-cutover', $recordReleaseCutoverScript);
 
+        $checkOperationalCertificationScript = file_get_contents(base_path('ops/scripts/check-operational-certification.sh'));
+        $this->assertIsString($checkOperationalCertificationScript);
+        $this->assertStringContainsString('artisan system:operational-certification --json --fail-on-warning', $checkOperationalCertificationScript);
+
+        $recordOperationalCertificationScript = file_get_contents(base_path('ops/scripts/record-operational-certification.sh'));
+        $this->assertIsString($recordOperationalCertificationScript);
+        $this->assertStringContainsString('system:record-operational-certification', $recordOperationalCertificationScript);
+
         $healthScript = file_get_contents(base_path('ops/scripts/check-backend-health.sh'));
         $this->assertIsString($healthScript);
         $this->assertStringContainsString('artisan system:observability-report --json', $healthScript);
@@ -120,5 +132,6 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('artisan system:staging-certification --json', $healthScript);
         $this->assertStringContainsString('artisan system:promotion-readiness --json', $healthScript);
         $this->assertStringContainsString('artisan system:cutover-readiness --json', $healthScript);
+        $this->assertStringContainsString('artisan system:operational-certification --json', $healthScript);
     }
 }

@@ -3,6 +3,7 @@
 use App\Services\Billing\BillingReconciliationService;
 use App\Services\Billing\OutboxDispatchService;
 use App\Services\Platform\BackupRecoveryService;
+use App\Services\Platform\OperationalCertificationService;
 use App\Services\Platform\OperationalDataPruneService;
 use App\Services\Platform\ReleaseCutoverService;
 use App\Services\Platform\ReleasePromotionService;
@@ -463,6 +464,71 @@ Artisan::command(
     }
 )->purpose('Record the final go-live cutover decision for the current release.');
 
+Artisan::command('system:operational-certification {--date=} {--json} {--fail-on-critical} {--fail-on-warning}', function (OperationalCertificationService $service) {
+    $result = $service->summary([
+        'date' => $this->option('date') ?: null,
+    ]);
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf('Operational certification status: %s', $result['status']));
+        $this->line(sprintf('Operationally certified: %s', ($result['operationally_certified'] ?? false) ? 'yes' : 'no'));
+        $this->line(sprintf('Certificate recorded: %s', ($result['certificate_recorded'] ?? false) ? 'yes' : 'no'));
+    }
+
+    if ((bool) $this->option('fail-on-warning') && in_array($result['status'], ['warning', 'critical'], true)) {
+        return 1;
+    }
+
+    if ((bool) $this->option('fail-on-critical') && $result['status'] === 'critical') {
+        return 1;
+    }
+
+    return 0;
+})->purpose('Summarize whether the current release is backed by full operational certification evidence.');
+
+Artisan::command(
+    'system:record-operational-certification
+        {release}
+        {deploy_evidence}
+        {rollback_evidence}
+        {backup_artifact}
+        {restore_evidence}
+        {--monitoring-evidence=}
+        {--operator=}
+        {--notes=}
+        {--certified-at=}
+        {--date=}
+        {--allow-warning}
+        {--json}',
+    function (OperationalCertificationService $service) {
+        $result = $service->recordCertification(
+            (string) $this->argument('release'),
+            (string) $this->argument('deploy_evidence'),
+            (string) $this->argument('rollback_evidence'),
+            (string) $this->argument('backup_artifact'),
+            (string) $this->argument('restore_evidence'),
+            $this->option('monitoring-evidence') !== null ? (string) $this->option('monitoring-evidence') : null,
+            $this->option('operator') !== null ? (string) $this->option('operator') : null,
+            $this->option('notes') !== null ? (string) $this->option('notes') : null,
+            $this->option('certified-at') !== null ? (string) $this->option('certified-at') : null,
+            $this->option('date') !== null ? (string) $this->option('date') : null,
+            (bool) $this->option('allow-warning'),
+        );
+
+        if ((bool) $this->option('json')) {
+            $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        } elseif (($result['status'] ?? 'blocked') === 'recorded') {
+            $this->info(sprintf('Operational certification recorded: %s', $result['manifest_path'] ?? 'n/a'));
+        } else {
+            $this->warn(sprintf('Operational certification blocked: %s', $result['status'] ?? 'blocked'));
+        }
+
+        return ($result['status'] ?? 'blocked') === 'recorded' ? 0 : 1;
+    }
+)->purpose('Record deploy, rollback, backup, restore, promotion, and cutover evidence for the current release.');
+
 Artisan::command('system:observability-report {--date=} {--json}', function (SystemObservabilityReportService $service) {
     $result = $service->summary($this->option('date') ?: null);
 
@@ -476,6 +542,7 @@ Artisan::command('system:observability-report {--date=} {--json}', function (Sys
         $this->line(sprintf('Logging: %s', implode(', ', $result['logging']['effective_channels'] ?? [])));
         $this->line(sprintf('Promotion: %s', $result['promotion']['status'] ?? 'unknown'));
         $this->line(sprintf('Cutover: %s', $result['cutover']['status'] ?? 'unknown'));
+        $this->line(sprintf('Operational certification: %s', $result['operational_certification']['status'] ?? 'unknown'));
     }
 
     return 0;

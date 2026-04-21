@@ -26,6 +26,7 @@ class OpenApiDocsTest extends TestCase
         $this->get('/docs/staging-certification', ['Accept' => 'application/json'])->assertStatus(401);
         $this->get('/docs/release-promotion', ['Accept' => 'application/json'])->assertStatus(401);
         $this->get('/docs/release-cutover', ['Accept' => 'application/json'])->assertStatus(401);
+        $this->get('/docs/operational-certification', ['Accept' => 'application/json'])->assertStatus(401);
     }
 
     public function test_docs_endpoints_require_tenant_context_for_authenticated_session(): void
@@ -105,7 +106,8 @@ class OpenApiDocsTest extends TestCase
             ->assertJsonFragment(['path' => '/docs/backup-restore'])
             ->assertJsonFragment(['path' => '/docs/staging-certification'])
             ->assertJsonFragment(['path' => '/docs/release-promotion'])
-            ->assertJsonFragment(['path' => '/docs/release-cutover']);
+            ->assertJsonFragment(['path' => '/docs/release-cutover'])
+            ->assertJsonFragment(['path' => '/docs/operational-certification']);
     }
 
     public function test_serves_openapi_yaml_for_priority_endpoints(): void
@@ -188,6 +190,7 @@ class OpenApiDocsTest extends TestCase
         $this->assertStringContainsString('/docs/deployment-rollback', $response->getContent());
         $this->assertStringContainsString('/docs/release-promotion', $response->getContent());
         $this->assertStringContainsString('/docs/release-cutover', $response->getContent());
+        $this->assertStringContainsString('/docs/operational-certification', $response->getContent());
         $this->assertStringContainsString('security.api-token.manage', $response->getContent());
         $this->assertStringContainsString('bearerAuth', $response->getContent());
         $this->assertStringContainsString('X-Tenant-Id', $response->getContent());
@@ -280,6 +283,7 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('composer run velmix:staging-certification', false)
             ->assertSee('composer run velmix:promotion-readiness', false)
             ->assertSee('composer run velmix:cutover-readiness', false)
+            ->assertSee('composer run velmix:operational-certification', false)
             ->assertSee('phpstan analyse --configuration=phpstan.neon.dist', false)
             ->assertSee('ops/scripts/post-deploy.sh', false);
 
@@ -322,6 +326,7 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('system:staging-certification --json', false)
             ->assertSee('system:promotion-readiness --json', false)
             ->assertSee('system:cutover-readiness --json', false)
+            ->assertSee('system:operational-certification --json', false)
             ->assertSee('php artisan schedule:work', false)
             ->assertSee('ops/systemd/velmix-app.env.example', false)
             ->assertSee('ops/systemd/velmix-queue-worker.service', false)
@@ -357,6 +362,8 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('ops/scripts/record-release-promotion.sh', false)
             ->assertSee('ops/scripts/check-cutover-readiness.sh', false)
             ->assertSee('ops/scripts/record-release-cutover.sh', false)
+            ->assertSee('ops/scripts/check-operational-certification.sh', false)
+            ->assertSee('ops/scripts/record-operational-certification.sh', false)
             ->assertSee('velmix-backend.target', false);
 
         $this->actingAs($user)
@@ -395,6 +402,15 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('VELMIX_RELEASE_CUTOVER_STORAGE_PATH', false)
             ->assertSee('ops/scripts/record-release-cutover.sh', false)
             ->assertSee('ops/scripts/check-cutover-readiness.sh', false);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->get('/docs/operational-certification')
+            ->assertOk()
+            ->assertSee('system:record-operational-certification', false)
+            ->assertSee('VELMIX_OPERATIONAL_CERTIFICATION_STORAGE_PATH', false)
+            ->assertSee('ops/scripts/record-operational-certification.sh', false)
+            ->assertSee('ops/scripts/check-operational-certification.sh', false);
     }
 
     private function seedTenantUser(int $tenantId): User

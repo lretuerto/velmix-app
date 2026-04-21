@@ -51,6 +51,7 @@ Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:secu
                     ['name' => 'Staging Certification Runbook', 'path' => '/docs/staging-certification'],
                     ['name' => 'Release Promotion Runbook', 'path' => '/docs/release-promotion'],
                     ['name' => 'Release Cutover Runbook', 'path' => '/docs/release-cutover'],
+                    ['name' => 'Operational Certification Runbook', 'path' => '/docs/operational-certification'],
                 ],
                 'conventions' => [
                     'Business endpoints support Laravel session auth or Bearer token auth.',
@@ -128,6 +129,14 @@ Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:secu
     Route::get('/docs/release-cutover', function () {
         return response(
             file_get_contents(base_path('docs/operations/release-cutover-runbook.md')),
+            200,
+            ['Content-Type' => 'text/markdown; charset=UTF-8'],
+        );
+    });
+
+    Route::get('/docs/operational-certification', function () {
+        return response(
+            file_get_contents(base_path('docs/operations/operational-certification-runbook.md')),
             200,
             ['Content-Type' => 'text/markdown; charset=UTF-8'],
         );

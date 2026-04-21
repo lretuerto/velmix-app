@@ -21,6 +21,9 @@ $defaultReleasePromotionPath = $sharedPath !== ''
 $defaultReleaseCutoverPath = $sharedPath !== ''
     ? rtrim($sharedPath, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.'release-cutovers'
     : storage_path('app/release-cutovers');
+$defaultOperationalCertificationPath = $sharedPath !== ''
+    ? rtrim($sharedPath, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.'operational-certifications'
+    : storage_path('app/operational-certifications');
 $stagingCertificationRequiredEnvironments = array_values(array_filter(array_map(
     static fn ($environment) => trim((string) $environment),
     explode(',', (string) env('VELMIX_STAGING_CERTIFICATION_REQUIRED_ENVS', 'staging,production'))
@@ -32,6 +35,10 @@ $releasePromotionRequiredEnvironments = array_values(array_filter(array_map(
 $releaseCutoverRequiredEnvironments = array_values(array_filter(array_map(
     static fn ($environment) => trim((string) $environment),
     explode(',', (string) env('VELMIX_RELEASE_CUTOVER_REQUIRED_ENVS', 'production'))
+)));
+$operationalCertificationRequiredEnvironments = array_values(array_filter(array_map(
+    static fn ($environment) => trim((string) $environment),
+    explode(',', (string) env('VELMIX_OPERATIONAL_CERTIFICATION_REQUIRED_ENVS', 'production'))
 )));
 
 return [
@@ -114,6 +121,15 @@ return [
         'manifest_filename' => env('VELMIX_RELEASE_CUTOVER_MANIFEST_FILENAME', 'latest-release-cutover.json'),
         'history_path' => env('VELMIX_RELEASE_CUTOVER_HISTORY_PATH', $defaultReleaseCutoverPath.DIRECTORY_SEPARATOR.'history'),
         'freshness_hours' => env('VELMIX_RELEASE_CUTOVER_MAX_AGE_HOURS', 24),
+        'release_identifier' => env('VELMIX_RELEASE_IDENTIFIER'),
+    ],
+    'operational_certification' => [
+        'expected_environment' => env('VELMIX_OPERATIONAL_CERTIFICATION_ENV', env('VELMIX_RELEASE_CUTOVER_ENV', 'production')),
+        'required_environments' => $operationalCertificationRequiredEnvironments,
+        'storage_path' => env('VELMIX_OPERATIONAL_CERTIFICATION_STORAGE_PATH', $defaultOperationalCertificationPath),
+        'manifest_filename' => env('VELMIX_OPERATIONAL_CERTIFICATION_MANIFEST_FILENAME', 'latest-operational-certification.json'),
+        'history_path' => env('VELMIX_OPERATIONAL_CERTIFICATION_HISTORY_PATH', $defaultOperationalCertificationPath.DIRECTORY_SEPARATOR.'history'),
+        'freshness_hours' => env('VELMIX_OPERATIONAL_CERTIFICATION_MAX_AGE_HOURS', 24),
         'release_identifier' => env('VELMIX_RELEASE_IDENTIFIER'),
     ],
 ];

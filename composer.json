@@ -85,6 +85,9 @@
         "velmix:cutover-readiness": [
             "@php artisan system:cutover-readiness --json"
         ],
+        "velmix:operational-certification": [
+            "@php artisan system:operational-certification --json"
+        ],
         "velmix:alerts": [
             "@php artisan system:alerts --json"
         ],
@@ -132,6 +135,7 @@
             "@velmix:staging-certification",
             "@velmix:promotion-readiness",
             "@velmix:cutover-readiness",
+            "@velmix:operational-certification",
             "@velmix:prune",
             "@velmix:outbox",
             "@velmix:reconcile"
@@ -154,6 +158,7 @@
             "@velmix:staging-certification",
             "@velmix:promotion-readiness",
             "@velmix:cutover-readiness",
+            "@velmix:operational-certification",
             "@velmix:prune",
             "@velmix:outbox",
             "@velmix:reconcile"

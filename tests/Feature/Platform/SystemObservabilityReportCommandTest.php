@@ -20,6 +20,7 @@ class SystemObservabilityReportCommandTest extends TestCase
         File::ensureDirectoryExists($root.'/staging-certifications/history');
         File::ensureDirectoryExists($root.'/release-promotions/history');
         File::ensureDirectoryExists($root.'/release-cutovers/history');
+        File::ensureDirectoryExists($root.'/operational-certifications/history');
 
         config([
             'app.env' => 'staging',
@@ -52,6 +53,11 @@ class SystemObservabilityReportCommandTest extends TestCase
             'velmix.release_cutover.storage_path' => $root.'/release-cutovers',
             'velmix.release_cutover.history_path' => $root.'/release-cutovers/history',
             'velmix.release_cutover.release_identifier' => 'release-2026-04-21-001',
+            'velmix.operational_certification.expected_environment' => 'staging',
+            'velmix.operational_certification.required_environments' => ['staging'],
+            'velmix.operational_certification.storage_path' => $root.'/operational-certifications',
+            'velmix.operational_certification.history_path' => $root.'/operational-certifications/history',
+            'velmix.operational_certification.release_identifier' => 'release-2026-04-21-001',
         ]);
 
         try {
@@ -94,6 +100,17 @@ class SystemObservabilityReportCommandTest extends TestCase
                 '--json' => true,
             ]);
 
+            Artisan::call('system:record-operational-certification', [
+                'release' => 'release-2026-04-21-001',
+                'deploy_evidence' => 'https://staging.example.test/evidence/deploy',
+                'rollback_evidence' => 'https://staging.example.test/evidence/rollback',
+                'backup_artifact' => 's3://velmix-prod/backups/latest.sql.gz',
+                'restore_evidence' => 'https://staging.example.test/evidence/restore',
+                '--monitoring-evidence' => 'https://staging.example.test/evidence/monitoring',
+                '--operator' => 'release-bot',
+                '--json' => true,
+            ]);
+
             $exitCode = Artisan::call('system:observability-report', [
                 '--json' => true,
             ]);
@@ -124,6 +141,10 @@ class SystemObservabilityReportCommandTest extends TestCase
             $this->assertTrue($output['cutover']['ready_for_cutover']);
             $this->assertTrue($output['cutover']['decision_recorded']);
             $this->assertSame('release-2026-04-21-001', $output['cutover']['latest_decision']['release']);
+            $this->assertSame('ok', $output['operational_certification']['status']);
+            $this->assertTrue($output['operational_certification']['operationally_certified']);
+            $this->assertTrue($output['operational_certification']['certificate_recorded']);
+            $this->assertSame('release-2026-04-21-001', $output['operational_certification']['latest_certificate']['release']);
             $logChannel = collect($output['delivery']['channels'])->firstWhere('channel', 'log');
             $this->assertSame('ready', is_array($logChannel) ? ($logChannel['status'] ?? null) : null);
         } finally {
