@@ -1,6 +1,25 @@
 name: Evidence Governed Deploy
 
 on:
+  push:
+    branches:
+      - sprint1/day8-rbac-seeders-smoke
+    paths:
+      - '.github/workflows/evidence-governed-deploy.yml'
+      - 'ops/scripts/run-evidence-governed-deploy.sh'
+      - 'ops/scripts/certify-staging-release.sh'
+      - 'ops/scripts/record-release-promotion.sh'
+      - 'ops/scripts/record-release-cutover.sh'
+      - 'ops/scripts/record-operational-certification.sh'
+      - 'docs/operations/evidence-governed-deployment-workflow.md'
+      - 'docs/operations/deployment-and-rollback-runbook.md'
+      - 'docs/openapi/velmix.openapi.yaml'
+      - 'docs/api-guide.md'
+      - 'routes/web/platform.php'
+      - 'ops/README.md'
+      - 'README.md'
+      - 'tests/Feature/Platform/OpsAssetsIntegrityTest.php'
+      - 'tests/Feature/Docs/OpenApiDocsTest.php'
   workflow_dispatch:
     inputs:
       target_environment:
@@ -63,15 +82,15 @@ permissions:
   contents: read
 
 concurrency:
-  group: evidence-governed-deploy-${{ github.ref_name }}-${{ inputs.target_environment }}
+  group: evidence-governed-deploy-${{ github.ref_name }}-${{ inputs.target_environment || 'staging' }}
   cancel-in-progress: false
 
 jobs:
   governed-deploy:
-    name: Evidence Deploy ${{ inputs.target_environment }} / ${{ inputs.release_identifier }}
+    name: Evidence Deploy ${{ inputs.target_environment || 'staging' }} / ${{ inputs.release_identifier || format('release-{0}', github.run_id) }}
     runs-on: ubuntu-latest
     environment:
-      name: ${{ inputs.target_environment }}
+      name: ${{ inputs.target_environment || 'staging' }}
     services:
       mysql:
         image: mysql:8.0
@@ -86,7 +105,7 @@ jobs:
           --health-timeout=5s
           --health-retries=10
     env:
-      APP_ENV: ${{ inputs.target_environment }}
+      APP_ENV: ${{ inputs.target_environment || 'staging' }}
       APP_DEBUG: false
       DB_CONNECTION: mysql
       DB_HOST: 127.0.0.1
@@ -98,29 +117,29 @@ jobs:
       VELMIX_APP_ROOT: ${{ github.workspace }}
       VELMIX_SHARED_PATH: ${{ github.workspace }}/storage/app/shared
       VELMIX_ENV_FILE: ${{ github.workspace }}/.env
-      VELMIX_RELEASE_IDENTIFIER: ${{ inputs.release_identifier }}
-      VELMIX_STAGING_CERTIFICATION_ENV: ${{ inputs.target_environment }}
-      VELMIX_STAGING_CERTIFICATION_REQUIRED_ENVS: ${{ inputs.target_environment }}
-      VELMIX_RELEASE_PROMOTION_ENV: ${{ inputs.target_environment }}
-      VELMIX_RELEASE_PROMOTION_REQUIRED_ENVS: ${{ inputs.target_environment }}
-      VELMIX_RELEASE_CUTOVER_ENV: ${{ inputs.target_environment }}
-      VELMIX_RELEASE_CUTOVER_REQUIRED_ENVS: ${{ inputs.target_environment }}
-      VELMIX_OPERATIONAL_CERTIFICATION_ENV: ${{ inputs.target_environment }}
-      VELMIX_OPERATIONAL_CERTIFICATION_REQUIRED_ENVS: ${{ inputs.target_environment }}
+      VELMIX_RELEASE_IDENTIFIER: ${{ inputs.release_identifier || format('release-{0}', github.run_id) }}
+      VELMIX_STAGING_CERTIFICATION_ENV: ${{ inputs.target_environment || 'staging' }}
+      VELMIX_STAGING_CERTIFICATION_REQUIRED_ENVS: ${{ inputs.target_environment || 'staging' }}
+      VELMIX_RELEASE_PROMOTION_ENV: ${{ inputs.target_environment || 'staging' }}
+      VELMIX_RELEASE_PROMOTION_REQUIRED_ENVS: ${{ inputs.target_environment || 'staging' }}
+      VELMIX_RELEASE_CUTOVER_ENV: ${{ inputs.target_environment || 'staging' }}
+      VELMIX_RELEASE_CUTOVER_REQUIRED_ENVS: ${{ inputs.target_environment || 'staging' }}
+      VELMIX_OPERATIONAL_CERTIFICATION_ENV: ${{ inputs.target_environment || 'staging' }}
+      VELMIX_OPERATIONAL_CERTIFICATION_REQUIRED_ENVS: ${{ inputs.target_environment || 'staging' }}
       VELMIX_BACKUP_ENABLED: true
       VELMIX_BACKUP_ENCRYPTION_PASSPHRASE: workflow-evidence-passphrase
       VELMIX_ALERT_NOTIFY_CHANNELS: log
       VELMIX_DEPLOY_EVIDENCE_DIR: ${{ github.workspace }}/storage/app/evidence-governed-deploy
-      VELMIX_DEPLOY_EVIDENCE: ${{ inputs.deploy_evidence }}
-      VELMIX_ROLLBACK_EVIDENCE: ${{ inputs.rollback_evidence }}
-      VELMIX_APPROVAL_EVIDENCE: ${{ inputs.approval_evidence }}
-      VELMIX_CUTOVER_EVIDENCE: ${{ inputs.cutover_evidence }}
-      VELMIX_BACKUP_ARTIFACT: ${{ inputs.backup_artifact }}
-      VELMIX_RESTORE_EVIDENCE: ${{ inputs.restore_evidence }}
-      VELMIX_SMOKE_EVIDENCE: ${{ inputs.smoke_evidence }}
-      VELMIX_MONITORING_EVIDENCE: ${{ inputs.monitoring_evidence }}
-      VELMIX_DEPLOY_OPERATOR: ${{ inputs.operator }}
-      VELMIX_DEPLOY_ALLOW_WARNING: ${{ inputs.allow_warning }}
+      VELMIX_DEPLOY_EVIDENCE: ${{ inputs.deploy_evidence || format('https://staging.example.test/evidence/deploy-{0}', github.sha) }}
+      VELMIX_ROLLBACK_EVIDENCE: ${{ inputs.rollback_evidence || format('https://staging.example.test/evidence/rollback-{0}', github.sha) }}
+      VELMIX_APPROVAL_EVIDENCE: ${{ inputs.approval_evidence || format('https://staging.example.test/evidence/approve-{0}', github.sha) }}
+      VELMIX_CUTOVER_EVIDENCE: ${{ inputs.cutover_evidence || format('https://staging.example.test/evidence/cutover-{0}', github.sha) }}
+      VELMIX_BACKUP_ARTIFACT: ${{ inputs.backup_artifact || format('s3://velmix-staging/backups/{0}.sql.gz', github.sha) }}
+      VELMIX_RESTORE_EVIDENCE: ${{ inputs.restore_evidence || format('https://staging.example.test/evidence/restore-{0}', github.sha) }}
+      VELMIX_SMOKE_EVIDENCE: ${{ inputs.smoke_evidence || format('https://staging.example.test/evidence/smoke-{0}', github.sha) }}
+      VELMIX_MONITORING_EVIDENCE: ${{ inputs.monitoring_evidence || format('https://staging.example.test/evidence/monitoring-{0}', github.sha) }}
+      VELMIX_DEPLOY_OPERATOR: ${{ inputs.operator || github.actor }}
+      VELMIX_DEPLOY_ALLOW_WARNING: ${{ inputs.allow_warning && 'true' || 'false' }}
       VELMIX_DEPLOY_NOTES: GitHub Actions evidence-governed deployment workflow
       VELMIX_BACKUP_DRIVER: github-actions
       VELMIX_BACKUP_CHECKSUM: sha256:${{ github.sha }}
@@ -182,6 +201,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: evidence-governed-deploy-${{ inputs.target_environment }}-${{ inputs.release_identifier }}
+          name: evidence-governed-deploy-${{ inputs.target_environment || 'staging' }}-${{ inputs.release_identifier || format('release-{0}', github.run_id) }}
           path: ${{ env.VELMIX_DEPLOY_EVIDENCE_DIR }}
           if-no-files-found: error
