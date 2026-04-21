@@ -85,6 +85,7 @@ php artisan test
 - Runbook de backup y restore autenticado por sesión web: `GET /docs/backup-restore`
 - Runbook de certificacion de staging autenticado por sesión web: `GET /docs/staging-certification`
 - Runbook de promocion de release autenticado por sesión web: `GET /docs/release-promotion`
+- Runbook de cutover final autenticado por sesión web: `GET /docs/release-cutover`
 - El portal de docs exige `X-Tenant-Id`, membresía al tenant y permiso `security.docs.read`
 - Health y readiness:
   - `GET /health/live`
@@ -108,6 +109,7 @@ php artisan test
 - Script de restore drill no destructivo: `composer run velmix:restore-drill`
 - Script de certificacion de staging: `composer run velmix:staging-certification`
 - Script de gate de promocion de release: `composer run velmix:promotion-readiness`
+- Script de gate final de cutover: `composer run velmix:cutover-readiness`
 - Script de pruning conservador: `composer run velmix:prune`
 - Script de lint de estilo: `composer run velmix:lint`
 - Script de lint completo del repo: `composer run velmix:lint:full`
@@ -121,7 +123,8 @@ php artisan test
 - `php artisan system:restore-drill --json` genera un drill no destructivo y persiste evidencia operativa
 - `php artisan system:staging-certification --json` valida evidencia reciente de deploy, rollback y continuidad sobre staging
 - `php artisan system:promotion-readiness --json` valida si el release actual es realmente promocionable desde este entorno
-- `GET /reports/platform-observability` expone el snapshot tecnico autenticado para operacion, incluyendo `delivery`, `recovery`, `certification` y `promotion`
+- `php artisan system:cutover-readiness --json` valida si el release actual ya esta listo para la decision final de go-live
+- `GET /reports/platform-observability` expone el snapshot tecnico autenticado para operacion, incluyendo `delivery`, `recovery`, `certification`, `promotion` y `cutover`
 - Variables de observabilidad/alerting:
   - `VELMIX_ALERT_NOTIFY_CHANNELS`
   - `VELMIX_ALERT_NOTIFY_MIN_SEVERITY`
@@ -151,6 +154,12 @@ php artisan test
   - `VELMIX_RELEASE_PROMOTION_HISTORY_PATH`
   - `VELMIX_RELEASE_PROMOTION_MANIFEST_FILENAME`
   - `VELMIX_RELEASE_PROMOTION_MAX_AGE_HOURS`
+  - `VELMIX_RELEASE_CUTOVER_ENV`
+  - `VELMIX_RELEASE_CUTOVER_REQUIRED_ENVS`
+  - `VELMIX_RELEASE_CUTOVER_STORAGE_PATH`
+  - `VELMIX_RELEASE_CUTOVER_HISTORY_PATH`
+  - `VELMIX_RELEASE_CUTOVER_MANIFEST_FILENAME`
+  - `VELMIX_RELEASE_CUTOVER_MAX_AGE_HOURS`
   - `VELMIX_SCHEDULER_ALERT_DISPATCH_EVERY_MINUTES`
   - `VELMIX_SCHEDULER_ALERT_DISPATCH_OVERLAP_MINUTES`
 - Perfil/provider billing por tenant:
@@ -241,6 +250,7 @@ composer run velmix:backup-readiness
 composer run velmix:restore-drill
 composer run velmix:staging-certification
 composer run velmix:promotion-readiness
+composer run velmix:cutover-readiness
 composer run velmix:prune
 composer run velmix:lint
 composer run velmix:lint:full
@@ -273,9 +283,11 @@ composer run velmix:routes
 11. `composer run velmix:backup-readiness`
 12. `composer run velmix:restore-drill`
 13. `composer run velmix:staging-certification`
-14. `composer run velmix:prune`
-15. `composer run velmix:outbox`
-16. `composer run velmix:reconcile`
+14. `composer run velmix:promotion-readiness`
+15. `composer run velmix:cutover-readiness`
+16. `composer run velmix:prune`
+17. `composer run velmix:outbox`
+18. `composer run velmix:reconcile`
 
 `velmix:ci:mysql` reutiliza la misma secuencia sobre MySQL, agrega la suite `concurrency` y rehidrata el esquema antes del bloque operativo, para validar locks, unicidad e idempotencia en un engine mas parecido a produccion.
 

@@ -98,6 +98,12 @@ Variables asociadas:
 - `VELMIX_RELEASE_PROMOTION_HISTORY_PATH`
 - `VELMIX_RELEASE_PROMOTION_MANIFEST_FILENAME`
 - `VELMIX_RELEASE_PROMOTION_MAX_AGE_HOURS`
+- `VELMIX_RELEASE_CUTOVER_ENV`
+- `VELMIX_RELEASE_CUTOVER_REQUIRED_ENVS`
+- `VELMIX_RELEASE_CUTOVER_STORAGE_PATH`
+- `VELMIX_RELEASE_CUTOVER_HISTORY_PATH`
+- `VELMIX_RELEASE_CUTOVER_MANIFEST_FILENAME`
+- `VELMIX_RELEASE_CUTOVER_MAX_AGE_HOURS`
 
 ## Secuencia de observacion operativa
 
@@ -124,11 +130,13 @@ Variables asociadas:
    - `php artisan system:staging-certification --json`
 11. Revisar gate de promocion del release:
    - `php artisan system:promotion-readiness --json`
-12. Revisar outbox:
+12. Revisar gate final de cutover:
+   - `php artisan system:cutover-readiness --json`
+13. Revisar outbox:
    - `php artisan billing:dispatch-outbox --limit=20 --graceful-if-unmigrated`
-13. Revisar reconciliacion:
+14. Revisar reconciliacion:
    - `php artisan billing:reconcile-pending --limit=20 --graceful-if-unmigrated`
-14. Revisar housekeeping:
+15. Revisar housekeeping:
    - `php artisan platform:prune-operational-data --pretend --json`
 
 ## Politica de alertas
@@ -236,12 +244,14 @@ Contexto minimo agregado:
 - `php artisan system:restore-drill --json --fail-on-warning` genera evidencia de un drill no destructivo de restauracion
 - `php artisan system:staging-certification --json` valida frescura y release de la ultima certificacion de staging
 - `php artisan system:promotion-readiness --json` valida si el release actual es promocionable y si ya existe aprobacion operativa vigente
+- `php artisan system:cutover-readiness --json` valida si el release actual ya esta listo para la decision final de go-live
 - `GET /reports/platform-observability` publica el mismo snapshot como dashboard tecnico autenticado
   - `delivery` resume readiness por canal saliente
   - `recovery.backup` resume storage, cifrado y ultimo backup
   - `recovery.restore_drill` resume la evidencia del ultimo drill
   - `certification.staging` resume vigencia, release actual y evidencia de deploy/rollback sobre staging
   - `promotion` resume si el release actual es promocionable y si su aprobacion operativa fue registrada
+  - `cutover` resume si el release actual ya quedo aprobado para el cambio final de trafico
 
 ## Supervision recomendada
 
@@ -347,6 +357,8 @@ composer run velmix:observability
 composer run velmix:backup-readiness
 composer run velmix:restore-drill
 composer run velmix:staging-certification
+composer run velmix:promotion-readiness
+composer run velmix:cutover-readiness
 composer run velmix:preflight
 composer run velmix:alerts
 composer run velmix:prune
@@ -364,6 +376,10 @@ ops/scripts/record-backup-success.sh
 ops/scripts/run-restore-drill.sh
 ops/scripts/check-staging-certification.sh
 ops/scripts/certify-staging-release.sh
+ops/scripts/check-promotion-readiness.sh
+ops/scripts/record-release-promotion.sh
+ops/scripts/check-cutover-readiness.sh
+ops/scripts/record-release-cutover.sh
 ops/scripts/prepare-release.sh <release-path>
 ops/scripts/promote-release.sh <release-path>
 ops/scripts/rollback-to-previous-release.sh

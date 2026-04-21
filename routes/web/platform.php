@@ -50,6 +50,7 @@ Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:secu
                     ['name' => 'Backup And Restore Runbook', 'path' => '/docs/backup-restore'],
                     ['name' => 'Staging Certification Runbook', 'path' => '/docs/staging-certification'],
                     ['name' => 'Release Promotion Runbook', 'path' => '/docs/release-promotion'],
+                    ['name' => 'Release Cutover Runbook', 'path' => '/docs/release-cutover'],
                 ],
                 'conventions' => [
                     'Business endpoints support Laravel session auth or Bearer token auth.',
@@ -119,6 +120,14 @@ Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:secu
     Route::get('/docs/release-promotion', function () {
         return response(
             file_get_contents(base_path('docs/operations/release-promotion-runbook.md')),
+            200,
+            ['Content-Type' => 'text/markdown; charset=UTF-8'],
+        );
+    });
+
+    Route::get('/docs/release-cutover', function () {
+        return response(
+            file_get_contents(base_path('docs/operations/release-cutover-runbook.md')),
             200,
             ['Content-Type' => 'text/markdown; charset=UTF-8'],
         );

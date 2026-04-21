@@ -22,6 +22,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - `GET /docs/operations-runbook`
   - `GET /docs/deployment-rollback`
   - `GET /docs/release-promotion`
+  - `GET /docs/release-cutover`
 - Contexto tenant: enviar `X-Tenant-Id`
 - Formato de salida: casi todos responden `{"data": ...}`
 - La aceptacion publica `POST /team/invitations/accept` esta protegida por rate limit sensible
@@ -181,7 +182,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /audit/timeline`
 - `GET /audit/timeline/{activity}`
 - `GET /reports/platform-observability` requiere `reports.platform-observability.read`
-- `GET /reports/platform-observability` ahora incluye tambien `promotion` con el gate del release actual
+- `GET /reports/platform-observability` ahora incluye tambien `promotion` y `cutover` con el gate del release actual
 
 ## Request examples
 
@@ -255,6 +256,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - Restore drill no destructivo: `php artisan system:restore-drill --json`
 - Certificacion de staging: `php artisan system:staging-certification --json`
 - Gate de promocion del release actual: `php artisan system:promotion-readiness --json`
+- Gate final de cutover del release actual: `php artisan system:cutover-readiness --json`
 - Dashboard tecnico autenticado: `GET /reports/platform-observability`
 - Equivalentes por Composer:
   - `composer run velmix:dispatch-alerts`
@@ -263,6 +265,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - `composer run velmix:restore-drill`
   - `composer run velmix:staging-certification`
   - `composer run velmix:promotion-readiness`
+  - `composer run velmix:cutover-readiness`
 - Preflight de release y configuracion: `php artisan system:preflight --json`
 - En CI o chequeos manuales puede usarse `php artisan system:alerts --fail-on-critical`
 - En deploys se recomienda `php artisan system:preflight --json --fail-on-warning`
@@ -317,6 +320,12 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - `VELMIX_RELEASE_PROMOTION_HISTORY_PATH=/var/www/velmix/shared/release-promotions/history`
   - `VELMIX_RELEASE_PROMOTION_MANIFEST_FILENAME=latest-release-promotion.json`
   - `VELMIX_RELEASE_PROMOTION_MAX_AGE_HOURS=72`
+  - `VELMIX_RELEASE_CUTOVER_ENV=production`
+  - `VELMIX_RELEASE_CUTOVER_REQUIRED_ENVS=production`
+  - `VELMIX_RELEASE_CUTOVER_STORAGE_PATH=/var/www/velmix/shared/release-cutovers`
+  - `VELMIX_RELEASE_CUTOVER_HISTORY_PATH=/var/www/velmix/shared/release-cutovers/history`
+  - `VELMIX_RELEASE_CUTOVER_MANIFEST_FILENAME=latest-release-cutover.json`
+  - `VELMIX_RELEASE_CUTOVER_MAX_AGE_HOURS=24`
     - `VELMIX_ALERT_SLACK_CHANNEL=#ops-alerts`
     - `VELMIX_ALERT_SLACK_USERNAME=VELMiX Alerts`
     - `VELMIX_ALERT_SLACK_ICON_EMOJI=:rotating_light:`
@@ -400,7 +409,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `php artisan system:restore-drill --json` genera evidencia de un drill no destructivo de recuperacion
 - `php artisan system:staging-certification --json` valida la vigencia de la certificacion de staging y el release asociado
 - `php artisan system:promotion-readiness --json` valida si el release actual es promocionable desde el entorno actual
-- `GET /reports/platform-observability` expone snapshot tecnico autenticado de plataforma, readiness de canales salientes, postura de `recovery`, `certification` y `promotion`
+- `php artisan system:cutover-readiness --json` valida si el release actual ya esta listo para la decision final de go-live
+- `GET /reports/platform-observability` expone snapshot tecnico autenticado de plataforma, readiness de canales salientes, postura de `recovery`, `certification`, `promotion` y `cutover`
 - `php artisan platform:prune-operational-data --pretend --json` expone housekeeping conservador de datos operativos
 - el pruning conservador actual cubre `idempotency_keys`, `outbox_attempts`, `tenant_user_invitations` y `operations_control_tower_snapshots`
 - El backend puede emitir logs estructurados via `stderr_json` o `daily_json`
@@ -463,6 +473,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /docs/backup-restore` concentra backup readiness, registro de manifiestos y restore drills
 - `GET /docs/staging-certification` concentra deploy, rollback, smoke y evidencia de certificacion de staging
 - `GET /docs/release-promotion` concentra el gate final de release promocionable y el registro de aprobacion operativa
+- `GET /docs/release-cutover` concentra la decision final de go-live del release actual
 - Ademas, el repositorio versiona plantillas operativas en:
   - `ops/systemd/velmix-scheduler.service`
   - `ops/systemd/velmix-queue-restart.service`
@@ -476,6 +487,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - `ops/scripts/certify-staging-release.sh`
   - `ops/scripts/check-promotion-readiness.sh`
   - `ops/scripts/record-release-promotion.sh`
+  - `ops/scripts/check-cutover-readiness.sh`
+  - `ops/scripts/record-release-cutover.sh`
 
 ## Dashboard ejecutivo de billing
 

@@ -24,6 +24,8 @@ Contenido actual:
 - `scripts/certify-staging-release.sh`: registra evidencia de deploy, rollback y continuidad para el release certificado
 - `scripts/check-promotion-readiness.sh`: valida si el release actual es promocionable desde este entorno
 - `scripts/record-release-promotion.sh`: registra la aprobacion operativa del release actual con evidencia de rollback
+- `scripts/check-cutover-readiness.sh`: valida si el release actual esta listo para la decision final de go-live
+- `scripts/record-release-cutover.sh`: registra la decision final de cutover del release actual
 
 Suposiciones deliberadas:
 

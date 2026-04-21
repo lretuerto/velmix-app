@@ -21,6 +21,7 @@ composer run velmix:alerts
 composer run velmix:restore-drill
 composer run velmix:staging-certification
 composer run velmix:promotion-readiness
+composer run velmix:cutover-readiness
 composer run velmix:prune
 composer run velmix:outbox
 composer run velmix:reconcile
@@ -49,6 +50,8 @@ composer run velmix:ci:mysql
 - staging certification record: `ops/scripts/certify-staging-release.sh`
 - promotion readiness check: `ops/scripts/check-promotion-readiness.sh`
 - release promotion record: `ops/scripts/record-release-promotion.sh`
+- cutover readiness check: `ops/scripts/check-cutover-readiness.sh`
+- release cutover record: `ops/scripts/record-release-cutover.sh`
 - preparacion/promocion de release:
   - `ops/scripts/prepare-release.sh <release-path>`
   - `ops/scripts/promote-release.sh <release-path>`
@@ -73,7 +76,10 @@ composer run velmix:ci:mysql
 8. Validar si el release ya es promocionable:
    - `ops/scripts/check-promotion-readiness.sh`
    - `ops/scripts/record-release-promotion.sh <release> <approval-evidence> <rollback-evidence> [operator] [notes]`
-9. Verificar:
+9. Validar la decision final de go-live:
+   - `ops/scripts/check-cutover-readiness.sh`
+   - `ops/scripts/record-release-cutover.sh <release> <cutover-evidence> <rollback-evidence> [monitoring-evidence] [operator] [notes]`
+10. Verificar:
    - `GET /health/live`
    - `GET /health/ready`
    - `php artisan system:preflight --json`
@@ -82,6 +88,7 @@ composer run velmix:ci:mysql
    - `php artisan system:restore-drill --json`
    - `php artisan system:staging-certification --json --fail-on-warning`
    - `php artisan system:promotion-readiness --json --fail-on-warning`
+   - `php artisan system:cutover-readiness --json --fail-on-warning`
    - `ops/scripts/run-restore-drill.sh`
    - `php artisan schedule:list`
 
@@ -91,6 +98,7 @@ composer run velmix:ci:mysql
 - backup readiness en `ok`
 - staging certification en `ok`
 - promotion readiness en `ok`
+- cutover readiness en `ok`
 - alertas criticas en cero o conocidas
 - scheduler visible y sin comandos faltantes
 - outbox y reconcile smoke sin errores
@@ -161,6 +169,7 @@ Antes de revertir esquema revisar:
 - el restore drill es no destructivo y su evidencia debe conservarse junto al release o en storage compartido
 - la certificacion de staging debe registrar evidencia de deploy, rollback y smoke antes de promover a produccion
 - la promocion del release debe registrar aprobacion operativa y evidencia de rollback asociada al `release_identifier`
+- el cutover final debe registrar evidencia del cambio de trafico, monitoreo post-go-live y rollback asociado al `release_identifier`
 - el pruning debe comenzar en modo `--pretend` antes de activarse automatico en un entorno nuevo
 - conservar evidencia de `X-Request-Id` y logs JSON durante incidentes
 - en multi-nodo, habilitar `VELMIX_SCHEDULER_ON_ONE_SERVER=true` solo si existe cache compartido con locks atomicos
@@ -181,3 +190,4 @@ Antes de revertir esquema revisar:
 - restore drill reciente y legible
 - staging certification reciente y asociada al release actual
 - release promotion reciente y asociada al release actual
+- release cutover reciente y asociado al release actual

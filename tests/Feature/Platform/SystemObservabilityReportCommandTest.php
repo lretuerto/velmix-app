@@ -19,6 +19,7 @@ class SystemObservabilityReportCommandTest extends TestCase
         File::ensureDirectoryExists($root.'/restore-drills');
         File::ensureDirectoryExists($root.'/staging-certifications/history');
         File::ensureDirectoryExists($root.'/release-promotions/history');
+        File::ensureDirectoryExists($root.'/release-cutovers/history');
 
         config([
             'app.env' => 'staging',
@@ -46,6 +47,11 @@ class SystemObservabilityReportCommandTest extends TestCase
             'velmix.release_promotion.storage_path' => $root.'/release-promotions',
             'velmix.release_promotion.history_path' => $root.'/release-promotions/history',
             'velmix.release_promotion.release_identifier' => 'release-2026-04-21-001',
+            'velmix.release_cutover.expected_environment' => 'staging',
+            'velmix.release_cutover.required_environments' => ['staging'],
+            'velmix.release_cutover.storage_path' => $root.'/release-cutovers',
+            'velmix.release_cutover.history_path' => $root.'/release-cutovers/history',
+            'velmix.release_cutover.release_identifier' => 'release-2026-04-21-001',
         ]);
 
         try {
@@ -79,6 +85,15 @@ class SystemObservabilityReportCommandTest extends TestCase
                 '--json' => true,
             ]);
 
+            Artisan::call('system:record-release-cutover', [
+                'release' => 'release-2026-04-21-001',
+                'cutover_evidence' => 'https://staging.example.test/evidence/cutover',
+                'rollback_evidence' => 'https://staging.example.test/evidence/rollback',
+                '--monitoring-evidence' => 'https://staging.example.test/evidence/monitoring',
+                '--operator' => 'release-bot',
+                '--json' => true,
+            ]);
+
             $exitCode = Artisan::call('system:observability-report', [
                 '--json' => true,
             ]);
@@ -105,6 +120,10 @@ class SystemObservabilityReportCommandTest extends TestCase
             $this->assertTrue($output['promotion']['promotable']);
             $this->assertTrue($output['promotion']['approval_recorded']);
             $this->assertSame('release-2026-04-21-001', $output['promotion']['latest_approval']['release']);
+            $this->assertSame('ok', $output['cutover']['status']);
+            $this->assertTrue($output['cutover']['ready_for_cutover']);
+            $this->assertTrue($output['cutover']['decision_recorded']);
+            $this->assertSame('release-2026-04-21-001', $output['cutover']['latest_decision']['release']);
             $logChannel = collect($output['delivery']['channels'])->firstWhere('channel', 'log');
             $this->assertSame('ready', is_array($logChannel) ? ($logChannel['status'] ?? null) : null);
         } finally {

@@ -4,6 +4,7 @@ use App\Services\Billing\BillingReconciliationService;
 use App\Services\Billing\OutboxDispatchService;
 use App\Services\Platform\BackupRecoveryService;
 use App\Services\Platform\OperationalDataPruneService;
+use App\Services\Platform\ReleaseCutoverService;
 use App\Services\Platform\ReleasePromotionService;
 use App\Services\Platform\StagingCertificationService;
 use App\Services\Platform\SystemAlertNotificationService;
@@ -401,6 +402,67 @@ Artisan::command(
     }
 )->purpose('Record release promotion approval evidence for the current release.');
 
+Artisan::command('system:cutover-readiness {--date=} {--json} {--fail-on-critical} {--fail-on-warning}', function (ReleaseCutoverService $service) {
+    $result = $service->summary([
+        'date' => $this->option('date') ?: null,
+    ]);
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf('Release cutover status: %s', $result['status']));
+        $this->line(sprintf('Ready for cutover: %s', ($result['ready_for_cutover'] ?? false) ? 'yes' : 'no'));
+        $this->line(sprintf('Decision recorded: %s', ($result['decision_recorded'] ?? false) ? 'yes' : 'no'));
+    }
+
+    if ((bool) $this->option('fail-on-warning') && in_array($result['status'], ['warning', 'critical'], true)) {
+        return 1;
+    }
+
+    if ((bool) $this->option('fail-on-critical') && $result['status'] === 'critical') {
+        return 1;
+    }
+
+    return 0;
+})->purpose('Summarize whether the current release is ready for the final production cutover.');
+
+Artisan::command(
+    'system:record-release-cutover
+        {release}
+        {cutover_evidence}
+        {rollback_evidence}
+        {--monitoring-evidence=}
+        {--operator=}
+        {--notes=}
+        {--decided-at=}
+        {--date=}
+        {--allow-warning}
+        {--json}',
+    function (ReleaseCutoverService $service) {
+        $result = $service->recordDecision(
+            (string) $this->argument('release'),
+            (string) $this->argument('cutover_evidence'),
+            (string) $this->argument('rollback_evidence'),
+            $this->option('monitoring-evidence') !== null ? (string) $this->option('monitoring-evidence') : null,
+            $this->option('operator') !== null ? (string) $this->option('operator') : null,
+            $this->option('notes') !== null ? (string) $this->option('notes') : null,
+            $this->option('decided-at') !== null ? (string) $this->option('decided-at') : null,
+            $this->option('date') !== null ? (string) $this->option('date') : null,
+            (bool) $this->option('allow-warning'),
+        );
+
+        if ((bool) $this->option('json')) {
+            $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        } elseif (($result['status'] ?? 'blocked') === 'recorded') {
+            $this->info(sprintf('Release cutover recorded: %s', $result['manifest_path'] ?? 'n/a'));
+        } else {
+            $this->warn(sprintf('Release cutover blocked: %s', $result['status'] ?? 'blocked'));
+        }
+
+        return ($result['status'] ?? 'blocked') === 'recorded' ? 0 : 1;
+    }
+)->purpose('Record the final go-live cutover decision for the current release.');
+
 Artisan::command('system:observability-report {--date=} {--json}', function (SystemObservabilityReportService $service) {
     $result = $service->summary($this->option('date') ?: null);
 
@@ -413,6 +475,7 @@ Artisan::command('system:observability-report {--date=} {--json}', function (Sys
         $this->line(sprintf('Queue: %s', $result['queue']['connection'] ?? 'unknown'));
         $this->line(sprintf('Logging: %s', implode(', ', $result['logging']['effective_channels'] ?? [])));
         $this->line(sprintf('Promotion: %s', $result['promotion']['status'] ?? 'unknown'));
+        $this->line(sprintf('Cutover: %s', $result['cutover']['status'] ?? 'unknown'));
     }
 
     return 0;

@@ -82,6 +82,9 @@
         "velmix:promotion-readiness": [
             "@php artisan system:promotion-readiness --json"
         ],
+        "velmix:cutover-readiness": [
+            "@php artisan system:cutover-readiness --json"
+        ],
         "velmix:alerts": [
             "@php artisan system:alerts --json"
         ],
@@ -128,6 +131,7 @@
             "@velmix:restore-drill",
             "@velmix:staging-certification",
             "@velmix:promotion-readiness",
+            "@velmix:cutover-readiness",
             "@velmix:prune",
             "@velmix:outbox",
             "@velmix:reconcile"
@@ -149,6 +153,7 @@
             "@velmix:restore-drill",
             "@velmix:staging-certification",
             "@velmix:promotion-readiness",
+            "@velmix:cutover-readiness",
             "@velmix:prune",
             "@velmix:outbox",
             "@velmix:reconcile"

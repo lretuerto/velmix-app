@@ -59,9 +59,10 @@ ops/scripts/record-release-promotion.sh release-2026-04-21-001 https://staging.e
 ## Verificacion posterior
 
 - `php artisan system:promotion-readiness --json`
+- `php artisan system:cutover-readiness --json`
 - `php artisan system:observability-report --json`
 - `GET /reports/platform-observability`
-- revisar `promotion.promotable`, `promotion.approval_recorded` y `promotion.latest_approval.release`
+- revisar `promotion.promotable`, `promotion.approval_recorded`, `promotion.latest_approval.release` y luego preparar `cutover`
 
 ## Criterios de salida
 

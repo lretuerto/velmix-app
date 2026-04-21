@@ -18,6 +18,9 @@ $defaultStagingCertificationPath = $sharedPath !== ''
 $defaultReleasePromotionPath = $sharedPath !== ''
     ? rtrim($sharedPath, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.'release-promotions'
     : storage_path('app/release-promotions');
+$defaultReleaseCutoverPath = $sharedPath !== ''
+    ? rtrim($sharedPath, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.'release-cutovers'
+    : storage_path('app/release-cutovers');
 $stagingCertificationRequiredEnvironments = array_values(array_filter(array_map(
     static fn ($environment) => trim((string) $environment),
     explode(',', (string) env('VELMIX_STAGING_CERTIFICATION_REQUIRED_ENVS', 'staging,production'))
@@ -25,6 +28,10 @@ $stagingCertificationRequiredEnvironments = array_values(array_filter(array_map(
 $releasePromotionRequiredEnvironments = array_values(array_filter(array_map(
     static fn ($environment) => trim((string) $environment),
     explode(',', (string) env('VELMIX_RELEASE_PROMOTION_REQUIRED_ENVS', 'staging'))
+)));
+$releaseCutoverRequiredEnvironments = array_values(array_filter(array_map(
+    static fn ($environment) => trim((string) $environment),
+    explode(',', (string) env('VELMIX_RELEASE_CUTOVER_REQUIRED_ENVS', 'production'))
 )));
 
 return [
@@ -98,6 +105,15 @@ return [
         'manifest_filename' => env('VELMIX_RELEASE_PROMOTION_MANIFEST_FILENAME', 'latest-release-promotion.json'),
         'history_path' => env('VELMIX_RELEASE_PROMOTION_HISTORY_PATH', $defaultReleasePromotionPath.DIRECTORY_SEPARATOR.'history'),
         'freshness_hours' => env('VELMIX_RELEASE_PROMOTION_MAX_AGE_HOURS', 72),
+        'release_identifier' => env('VELMIX_RELEASE_IDENTIFIER'),
+    ],
+    'release_cutover' => [
+        'expected_environment' => env('VELMIX_RELEASE_CUTOVER_ENV', 'production'),
+        'required_environments' => $releaseCutoverRequiredEnvironments,
+        'storage_path' => env('VELMIX_RELEASE_CUTOVER_STORAGE_PATH', $defaultReleaseCutoverPath),
+        'manifest_filename' => env('VELMIX_RELEASE_CUTOVER_MANIFEST_FILENAME', 'latest-release-cutover.json'),
+        'history_path' => env('VELMIX_RELEASE_CUTOVER_HISTORY_PATH', $defaultReleaseCutoverPath.DIRECTORY_SEPARATOR.'history'),
+        'freshness_hours' => env('VELMIX_RELEASE_CUTOVER_MAX_AGE_HOURS', 24),
         'release_identifier' => env('VELMIX_RELEASE_IDENTIFIER'),
     ],
 ];

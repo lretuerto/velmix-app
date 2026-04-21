@@ -11,6 +11,7 @@ class SystemObservabilityReportService
         private readonly BackupRecoveryService $backupRecovery,
         private readonly StagingCertificationService $stagingCertification,
         private readonly ReleasePromotionService $releasePromotion,
+        private readonly ReleaseCutoverService $releaseCutover,
     ) {}
 
     public function summary(?string $date = null): array
@@ -31,11 +32,18 @@ class SystemObservabilityReportService
             'recovery' => $recovery,
             'certification' => $certification,
         ]);
+        $cutover = $this->releaseCutover->summary([
+            'date' => $date,
+            'preflight' => $preflight,
+            'alerts' => $alerts,
+            'recovery' => $recovery,
+            'promotion' => $promotion,
+        ]);
         $logging = $this->loggingSnapshot();
         $notificationConfig = (array) config('velmix.alerts.notifications', []);
 
         return [
-            'status' => $this->resolveStatus($preflight, $alerts, $delivery, $recovery, $certification, $promotion),
+            'status' => $this->resolveStatus($preflight, $alerts, $delivery, $recovery, $certification, $promotion, $cutover),
             'checked_at' => now()->toIso8601String(),
             'request_correlation' => [
                 'request_id_header' => 'X-Request-Id',
@@ -80,7 +88,8 @@ class SystemObservabilityReportService
                 'staging' => $certification,
             ],
             'promotion' => $promotion,
-            'recommendations' => $this->recommendations($preflight, $alerts, $logging, $delivery, $recovery, $certification, $promotion),
+            'cutover' => $cutover,
+            'recommendations' => $this->recommendations($preflight, $alerts, $logging, $delivery, $recovery, $certification, $promotion, $cutover),
         ];
     }
 
@@ -105,7 +114,7 @@ class SystemObservabilityReportService
      * @param  array<string, mixed>  $preflight
      * @param  array<string, mixed>  $alerts
      */
-    private function resolveStatus(array $preflight, array $alerts, array $delivery, array $recovery, array $certification, array $promotion): string
+    private function resolveStatus(array $preflight, array $alerts, array $delivery, array $recovery, array $certification, array $promotion, array $cutover): string
     {
         $resolved = null;
         $statuses = [
@@ -115,6 +124,7 @@ class SystemObservabilityReportService
             $recovery['restore_drill']['status'] ?? 'ok',
             $certification['status'] ?? 'ok',
             $promotion['status'] ?? 'ok',
+            $cutover['status'] ?? 'ok',
         ];
 
         foreach ((array) ($delivery['channels'] ?? []) as $channel) {
@@ -141,7 +151,7 @@ class SystemObservabilityReportService
      * @param  array<string, mixed>  $delivery
      * @return array<int, string>
      */
-    private function recommendations(array $preflight, array $alerts, array $logging, array $delivery, array $recovery, array $certification, array $promotion): array
+    private function recommendations(array $preflight, array $alerts, array $logging, array $delivery, array $recovery, array $certification, array $promotion, array $cutover): array
     {
         $items = [];
 
@@ -180,6 +190,10 @@ class SystemObservabilityReportService
 
         if (($promotion['status'] ?? 'ok') !== 'ok') {
             $items[] = 'Run php artisan system:promotion-readiness --json and record release promotion evidence before the production go-live decision.';
+        }
+
+        if (($cutover['status'] ?? 'ok') !== 'ok') {
+            $items[] = 'Run php artisan system:cutover-readiness --json and record the final cutover decision before switching production traffic.';
         }
 
         return array_values(array_unique($items));
