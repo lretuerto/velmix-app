@@ -20,6 +20,7 @@ composer run velmix:readiness
 composer run velmix:alerts
 composer run velmix:restore-drill
 composer run velmix:staging-certification
+composer run velmix:promotion-readiness
 composer run velmix:prune
 composer run velmix:outbox
 composer run velmix:reconcile
@@ -46,6 +47,8 @@ composer run velmix:ci:mysql
 - restore drill: `ops/scripts/run-restore-drill.sh`
 - staging certification check: `ops/scripts/check-staging-certification.sh`
 - staging certification record: `ops/scripts/certify-staging-release.sh`
+- promotion readiness check: `ops/scripts/check-promotion-readiness.sh`
+- release promotion record: `ops/scripts/record-release-promotion.sh`
 - preparacion/promocion de release:
   - `ops/scripts/prepare-release.sh <release-path>`
   - `ops/scripts/promote-release.sh <release-path>`
@@ -67,7 +70,10 @@ composer run velmix:ci:mysql
 7. Certificar staging para el release promovido:
    - `ops/scripts/check-staging-certification.sh`
    - `ops/scripts/certify-staging-release.sh <release> <deploy-evidence> <rollback-evidence> [smoke-evidence] [backup-artifact] [operator]`
-8. Verificar:
+8. Validar si el release ya es promocionable:
+   - `ops/scripts/check-promotion-readiness.sh`
+   - `ops/scripts/record-release-promotion.sh <release> <approval-evidence> <rollback-evidence> [operator] [notes]`
+9. Verificar:
    - `GET /health/live`
    - `GET /health/ready`
    - `php artisan system:preflight --json`
@@ -75,6 +81,7 @@ composer run velmix:ci:mysql
    - `php artisan system:alerts --json`
    - `php artisan system:restore-drill --json`
    - `php artisan system:staging-certification --json --fail-on-warning`
+   - `php artisan system:promotion-readiness --json --fail-on-warning`
    - `ops/scripts/run-restore-drill.sh`
    - `php artisan schedule:list`
 
@@ -83,6 +90,7 @@ composer run velmix:ci:mysql
 - readiness en `ready`
 - backup readiness en `ok`
 - staging certification en `ok`
+- promotion readiness en `ok`
 - alertas criticas en cero o conocidas
 - scheduler visible y sin comandos faltantes
 - outbox y reconcile smoke sin errores
@@ -98,6 +106,7 @@ Validacion minima:
 - backup readiness smoke
 - restore drill smoke
 - staging certification smoke
+- promotion readiness smoke
 - lectura de docs internas `/docs`
 - lectura de dashboard diario `/reports/daily`
 
@@ -151,6 +160,7 @@ Antes de revertir esquema revisar:
 - `system:backup-readiness --fail-on-warning` debe formar parte del gate antes de promover un release en entornos no locales
 - el restore drill es no destructivo y su evidencia debe conservarse junto al release o en storage compartido
 - la certificacion de staging debe registrar evidencia de deploy, rollback y smoke antes de promover a produccion
+- la promocion del release debe registrar aprobacion operativa y evidencia de rollback asociada al `release_identifier`
 - el pruning debe comenzar en modo `--pretend` antes de activarse automatico en un entorno nuevo
 - conservar evidencia de `X-Request-Id` y logs JSON durante incidentes
 - en multi-nodo, habilitar `VELMIX_SCHEDULER_ON_ONE_SERVER=true` solo si existe cache compartido con locks atomicos
@@ -170,3 +180,4 @@ Antes de revertir esquema revisar:
 - backup manifest reciente registrado
 - restore drill reciente y legible
 - staging certification reciente y asociada al release actual
+- release promotion reciente y asociada al release actual

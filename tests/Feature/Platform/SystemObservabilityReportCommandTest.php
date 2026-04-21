@@ -18,6 +18,7 @@ class SystemObservabilityReportCommandTest extends TestCase
         File::ensureDirectoryExists($root.'/backups/history');
         File::ensureDirectoryExists($root.'/restore-drills');
         File::ensureDirectoryExists($root.'/staging-certifications/history');
+        File::ensureDirectoryExists($root.'/release-promotions/history');
 
         config([
             'app.env' => 'staging',
@@ -40,6 +41,11 @@ class SystemObservabilityReportCommandTest extends TestCase
             'velmix.staging_certification.storage_path' => $root.'/staging-certifications',
             'velmix.staging_certification.history_path' => $root.'/staging-certifications/history',
             'velmix.staging_certification.release_identifier' => 'release-2026-04-21-001',
+            'velmix.release_promotion.expected_environment' => 'staging',
+            'velmix.release_promotion.required_environments' => ['staging'],
+            'velmix.release_promotion.storage_path' => $root.'/release-promotions',
+            'velmix.release_promotion.history_path' => $root.'/release-promotions/history',
+            'velmix.release_promotion.release_identifier' => 'release-2026-04-21-001',
         ]);
 
         try {
@@ -61,6 +67,14 @@ class SystemObservabilityReportCommandTest extends TestCase
                 'deploy_evidence' => 'https://staging.example.test/evidence/deploy',
                 'rollback_evidence' => 'https://staging.example.test/evidence/rollback',
                 '--smoke-evidence' => 'https://staging.example.test/evidence/smoke',
+                '--operator' => 'release-bot',
+                '--json' => true,
+            ]);
+
+            Artisan::call('system:record-release-promotion', [
+                'release' => 'release-2026-04-21-001',
+                'approval_evidence' => 'https://staging.example.test/evidence/approve',
+                'rollback_evidence' => 'https://staging.example.test/evidence/rollback',
                 '--operator' => 'release-bot',
                 '--json' => true,
             ]);
@@ -87,6 +101,10 @@ class SystemObservabilityReportCommandTest extends TestCase
             $this->assertSame('ok', $output['recovery']['restore_drill']['status']);
             $this->assertSame('ok', $output['certification']['staging']['status']);
             $this->assertSame('release-2026-04-21-001', $output['certification']['staging']['latest_certification']['release']);
+            $this->assertSame('ok', $output['promotion']['status']);
+            $this->assertTrue($output['promotion']['promotable']);
+            $this->assertTrue($output['promotion']['approval_recorded']);
+            $this->assertSame('release-2026-04-21-001', $output['promotion']['latest_approval']['release']);
             $logChannel = collect($output['delivery']['channels'])->firstWhere('channel', 'log');
             $this->assertSame('ready', is_array($logChannel) ? ($logChannel['status'] ?? null) : null);
         } finally {

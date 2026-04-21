@@ -25,6 +25,7 @@ class PlatformObservabilityReportFlowTest extends TestCase
         File::ensureDirectoryExists($root.'/backups/history');
         File::ensureDirectoryExists($root.'/restore-drills');
         File::ensureDirectoryExists($root.'/staging-certifications/history');
+        File::ensureDirectoryExists($root.'/release-promotions/history');
 
         config([
             'app.env' => 'staging',
@@ -46,6 +47,11 @@ class PlatformObservabilityReportFlowTest extends TestCase
             'velmix.staging_certification.storage_path' => $root.'/staging-certifications',
             'velmix.staging_certification.history_path' => $root.'/staging-certifications/history',
             'velmix.staging_certification.release_identifier' => 'release-2026-04-21-001',
+            'velmix.release_promotion.expected_environment' => 'staging',
+            'velmix.release_promotion.required_environments' => ['staging'],
+            'velmix.release_promotion.storage_path' => $root.'/release-promotions',
+            'velmix.release_promotion.history_path' => $root.'/release-promotions/history',
+            'velmix.release_promotion.release_identifier' => 'release-2026-04-21-001',
         ]);
 
         try {
@@ -63,6 +69,12 @@ class PlatformObservabilityReportFlowTest extends TestCase
                 'https://staging.example.test/evidence/rollback',
                 'https://staging.example.test/evidence/smoke',
                 null,
+                'release-bot',
+            );
+            app(\App\Services\Platform\ReleasePromotionService::class)->recordApproval(
+                'release-2026-04-21-001',
+                'https://staging.example.test/evidence/approve',
+                'https://staging.example.test/evidence/rollback',
                 'release-bot',
             );
 
@@ -89,7 +101,8 @@ class PlatformObservabilityReportFlowTest extends TestCase
                 ->assertJsonPath('data.recovery.backup.status', 'ok')
                 ->assertJsonPath('data.recovery.restore_drill.status', 'ok')
                 ->assertJsonPath('data.certification.staging.status', 'ok')
-                ->assertJsonPath('data.certification.staging.latest_certification.release', 'release-2026-04-21-001');
+                ->assertJsonPath('data.certification.staging.latest_certification.release', 'release-2026-04-21-001')
+                ->assertJsonPath('data.promotion.latest_approval.release', 'release-2026-04-21-001');
 
             $data = $response->json('data');
             $channels = collect($data['delivery']['channels']);
@@ -97,6 +110,7 @@ class PlatformObservabilityReportFlowTest extends TestCase
             $slackChannel = $channels->firstWhere('channel', 'slack');
 
             $this->assertSame('critical', $data['alerts']['status']);
+            $this->assertSame('critical', $data['promotion']['status']);
             $this->assertGreaterThanOrEqual(1, $data['delivery']['candidate_alert_count']);
             $this->assertSame('ready', is_array($logChannel) ? ($logChannel['status'] ?? null) : null);
             $this->assertSame('ready', is_array($slackChannel) ? ($slackChannel['status'] ?? null) : null);

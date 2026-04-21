@@ -78,6 +78,14 @@ Despues de registrar backup y restore drill, usar la evidencia dentro del runboo
 - `php artisan system:staging-certification --json`
 - `php artisan system:record-staging-certification ...`
 
+## Integracion con promocion del release
+
+Una vez que staging quede certificado, la misma evidencia de backup y restore drill alimenta el gate final de promocion:
+
+- `GET /docs/release-promotion`
+- `php artisan system:promotion-readiness --json`
+- `php artisan system:record-release-promotion ...`
+
 ## Criterios de salida
 
 - `system:backup-readiness` en `ok`

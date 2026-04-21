@@ -24,6 +24,7 @@ class OpenApiDocsTest extends TestCase
         $this->get('/docs/deployment-rollback', ['Accept' => 'application/json'])->assertStatus(401);
         $this->get('/docs/backup-restore', ['Accept' => 'application/json'])->assertStatus(401);
         $this->get('/docs/staging-certification', ['Accept' => 'application/json'])->assertStatus(401);
+        $this->get('/docs/release-promotion', ['Accept' => 'application/json'])->assertStatus(401);
     }
 
     public function test_docs_endpoints_require_tenant_context_for_authenticated_session(): void
@@ -101,7 +102,8 @@ class OpenApiDocsTest extends TestCase
             ->assertJsonFragment(['path' => '/docs/operations-runbook'])
             ->assertJsonFragment(['path' => '/docs/deployment-rollback'])
             ->assertJsonFragment(['path' => '/docs/backup-restore'])
-            ->assertJsonFragment(['path' => '/docs/staging-certification']);
+            ->assertJsonFragment(['path' => '/docs/staging-certification'])
+            ->assertJsonFragment(['path' => '/docs/release-promotion']);
     }
 
     public function test_serves_openapi_yaml_for_priority_endpoints(): void
@@ -182,6 +184,7 @@ class OpenApiDocsTest extends TestCase
         $this->assertStringContainsString('/auth/tokens', $response->getContent());
         $this->assertStringContainsString('/docs/operations-runbook', $response->getContent());
         $this->assertStringContainsString('/docs/deployment-rollback', $response->getContent());
+        $this->assertStringContainsString('/docs/release-promotion', $response->getContent());
         $this->assertStringContainsString('security.api-token.manage', $response->getContent());
         $this->assertStringContainsString('bearerAuth', $response->getContent());
         $this->assertStringContainsString('X-Tenant-Id', $response->getContent());
@@ -272,6 +275,7 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('composer run velmix:backup-readiness', false)
             ->assertSee('composer run velmix:restore-drill', false)
             ->assertSee('composer run velmix:staging-certification', false)
+            ->assertSee('composer run velmix:promotion-readiness', false)
             ->assertSee('phpstan analyse --configuration=phpstan.neon.dist', false)
             ->assertSee('ops/scripts/post-deploy.sh', false);
 
@@ -312,6 +316,7 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('system:backup-readiness --json --fail-on-warning', false)
             ->assertSee('system:restore-drill --json --fail-on-warning', false)
             ->assertSee('system:staging-certification --json', false)
+            ->assertSee('system:promotion-readiness --json', false)
             ->assertSee('php artisan schedule:work', false)
             ->assertSee('ops/systemd/velmix-app.env.example', false)
             ->assertSee('ops/systemd/velmix-queue-worker.service', false)
@@ -343,6 +348,8 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('ops/scripts/run-restore-drill.sh', false)
             ->assertSee('ops/scripts/check-staging-certification.sh', false)
             ->assertSee('ops/scripts/certify-staging-release.sh', false)
+            ->assertSee('ops/scripts/check-promotion-readiness.sh', false)
+            ->assertSee('ops/scripts/record-release-promotion.sh', false)
             ->assertSee('velmix-backend.target', false);
 
         $this->actingAs($user)
@@ -363,6 +370,15 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('VELMIX_STAGING_CERTIFICATION_STORAGE_PATH', false)
             ->assertSee('ops/scripts/certify-staging-release.sh', false)
             ->assertSee('ops/scripts/check-staging-certification.sh', false);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->get('/docs/release-promotion')
+            ->assertOk()
+            ->assertSee('system:record-release-promotion', false)
+            ->assertSee('VELMIX_RELEASE_PROMOTION_STORAGE_PATH', false)
+            ->assertSee('ops/scripts/record-release-promotion.sh', false)
+            ->assertSee('ops/scripts/check-promotion-readiness.sh', false);
     }
 
     private function seedTenantUser(int $tenantId): User

@@ -22,6 +22,8 @@ Contenido actual:
 - `scripts/run-restore-drill.sh`: ejecuta un restore drill no destructivo y persiste evidencia
 - `scripts/check-staging-certification.sh`: valida la vigencia de la certificacion de staging para el release actual
 - `scripts/certify-staging-release.sh`: registra evidencia de deploy, rollback y continuidad para el release certificado
+- `scripts/check-promotion-readiness.sh`: valida si el release actual es promocionable desde este entorno
+- `scripts/record-release-promotion.sh`: registra la aprobacion operativa del release actual con evidencia de rollback
 
 Suposiciones deliberadas:
 

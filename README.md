@@ -84,6 +84,7 @@ php artisan test
 - Runbook de despliegue y rollback autenticado por sesión web: `GET /docs/deployment-rollback`
 - Runbook de backup y restore autenticado por sesión web: `GET /docs/backup-restore`
 - Runbook de certificacion de staging autenticado por sesión web: `GET /docs/staging-certification`
+- Runbook de promocion de release autenticado por sesión web: `GET /docs/release-promotion`
 - El portal de docs exige `X-Tenant-Id`, membresía al tenant y permiso `security.docs.read`
 - Health y readiness:
   - `GET /health/live`
@@ -106,6 +107,7 @@ php artisan test
 - Script de readiness de backup: `composer run velmix:backup-readiness`
 - Script de restore drill no destructivo: `composer run velmix:restore-drill`
 - Script de certificacion de staging: `composer run velmix:staging-certification`
+- Script de gate de promocion de release: `composer run velmix:promotion-readiness`
 - Script de pruning conservador: `composer run velmix:prune`
 - Script de lint de estilo: `composer run velmix:lint`
 - Script de lint completo del repo: `composer run velmix:lint:full`
@@ -118,7 +120,8 @@ php artisan test
 - `php artisan system:backup-readiness --json` valida storage, cifrado, manifiesto y frescura del backup registrado
 - `php artisan system:restore-drill --json` genera un drill no destructivo y persiste evidencia operativa
 - `php artisan system:staging-certification --json` valida evidencia reciente de deploy, rollback y continuidad sobre staging
-- `GET /reports/platform-observability` expone el snapshot tecnico autenticado para operacion, incluyendo `delivery`, `recovery` y `certification`
+- `php artisan system:promotion-readiness --json` valida si el release actual es realmente promocionable desde este entorno
+- `GET /reports/platform-observability` expone el snapshot tecnico autenticado para operacion, incluyendo `delivery`, `recovery`, `certification` y `promotion`
 - Variables de observabilidad/alerting:
   - `VELMIX_ALERT_NOTIFY_CHANNELS`
   - `VELMIX_ALERT_NOTIFY_MIN_SEVERITY`
@@ -142,6 +145,12 @@ php artisan test
   - `VELMIX_STAGING_CERTIFICATION_HISTORY_PATH`
   - `VELMIX_STAGING_CERTIFICATION_MANIFEST_FILENAME`
   - `VELMIX_STAGING_CERTIFICATION_MAX_AGE_HOURS`
+  - `VELMIX_RELEASE_PROMOTION_ENV`
+  - `VELMIX_RELEASE_PROMOTION_REQUIRED_ENVS`
+  - `VELMIX_RELEASE_PROMOTION_STORAGE_PATH`
+  - `VELMIX_RELEASE_PROMOTION_HISTORY_PATH`
+  - `VELMIX_RELEASE_PROMOTION_MANIFEST_FILENAME`
+  - `VELMIX_RELEASE_PROMOTION_MAX_AGE_HOURS`
   - `VELMIX_SCHEDULER_ALERT_DISPATCH_EVERY_MINUTES`
   - `VELMIX_SCHEDULER_ALERT_DISPATCH_OVERLAP_MINUTES`
 - Perfil/provider billing por tenant:
@@ -231,6 +240,7 @@ composer run velmix:observability
 composer run velmix:backup-readiness
 composer run velmix:restore-drill
 composer run velmix:staging-certification
+composer run velmix:promotion-readiness
 composer run velmix:prune
 composer run velmix:lint
 composer run velmix:lint:full

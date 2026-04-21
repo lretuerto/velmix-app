@@ -15,9 +15,16 @@ $defaultRestoreDrillPath = $sharedPath !== ''
 $defaultStagingCertificationPath = $sharedPath !== ''
     ? rtrim($sharedPath, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.'staging-certifications'
     : storage_path('app/staging-certifications');
+$defaultReleasePromotionPath = $sharedPath !== ''
+    ? rtrim($sharedPath, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.'release-promotions'
+    : storage_path('app/release-promotions');
 $stagingCertificationRequiredEnvironments = array_values(array_filter(array_map(
     static fn ($environment) => trim((string) $environment),
     explode(',', (string) env('VELMIX_STAGING_CERTIFICATION_REQUIRED_ENVS', 'staging,production'))
+)));
+$releasePromotionRequiredEnvironments = array_values(array_filter(array_map(
+    static fn ($environment) => trim((string) $environment),
+    explode(',', (string) env('VELMIX_RELEASE_PROMOTION_REQUIRED_ENVS', 'staging'))
 )));
 
 return [
@@ -82,6 +89,15 @@ return [
         'manifest_filename' => env('VELMIX_STAGING_CERTIFICATION_MANIFEST_FILENAME', 'latest-staging-certification.json'),
         'history_path' => env('VELMIX_STAGING_CERTIFICATION_HISTORY_PATH', $defaultStagingCertificationPath.DIRECTORY_SEPARATOR.'history'),
         'freshness_hours' => env('VELMIX_STAGING_CERTIFICATION_MAX_AGE_HOURS', 168),
+        'release_identifier' => env('VELMIX_RELEASE_IDENTIFIER'),
+    ],
+    'release_promotion' => [
+        'expected_environment' => env('VELMIX_RELEASE_PROMOTION_ENV', env('VELMIX_STAGING_CERTIFICATION_ENV', 'staging')),
+        'required_environments' => $releasePromotionRequiredEnvironments,
+        'storage_path' => env('VELMIX_RELEASE_PROMOTION_STORAGE_PATH', $defaultReleasePromotionPath),
+        'manifest_filename' => env('VELMIX_RELEASE_PROMOTION_MANIFEST_FILENAME', 'latest-release-promotion.json'),
+        'history_path' => env('VELMIX_RELEASE_PROMOTION_HISTORY_PATH', $defaultReleasePromotionPath.DIRECTORY_SEPARATOR.'history'),
+        'freshness_hours' => env('VELMIX_RELEASE_PROMOTION_MAX_AGE_HOURS', 72),
         'release_identifier' => env('VELMIX_RELEASE_IDENTIFIER'),
     ],
 ];

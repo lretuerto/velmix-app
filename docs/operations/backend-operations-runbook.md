@@ -92,6 +92,12 @@ Variables asociadas:
 - `VELMIX_STAGING_CERTIFICATION_HISTORY_PATH`
 - `VELMIX_STAGING_CERTIFICATION_MANIFEST_FILENAME`
 - `VELMIX_STAGING_CERTIFICATION_MAX_AGE_HOURS`
+- `VELMIX_RELEASE_PROMOTION_ENV`
+- `VELMIX_RELEASE_PROMOTION_REQUIRED_ENVS`
+- `VELMIX_RELEASE_PROMOTION_STORAGE_PATH`
+- `VELMIX_RELEASE_PROMOTION_HISTORY_PATH`
+- `VELMIX_RELEASE_PROMOTION_MANIFEST_FILENAME`
+- `VELMIX_RELEASE_PROMOTION_MAX_AGE_HOURS`
 
 ## Secuencia de observacion operativa
 
@@ -116,11 +122,13 @@ Variables asociadas:
    - `php artisan system:restore-drill --json --fail-on-warning`
 10. Revisar vigencia de certificacion de staging:
    - `php artisan system:staging-certification --json`
-11. Revisar outbox:
+11. Revisar gate de promocion del release:
+   - `php artisan system:promotion-readiness --json`
+12. Revisar outbox:
    - `php artisan billing:dispatch-outbox --limit=20 --graceful-if-unmigrated`
-12. Revisar reconciliacion:
+13. Revisar reconciliacion:
    - `php artisan billing:reconcile-pending --limit=20 --graceful-if-unmigrated`
-13. Revisar housekeeping:
+14. Revisar housekeeping:
    - `php artisan platform:prune-operational-data --pretend --json`
 
 ## Politica de alertas
@@ -227,11 +235,13 @@ Contexto minimo agregado:
 - `php artisan system:backup-readiness --json` valida storage, cifrado y frescura del manifiesto registrado
 - `php artisan system:restore-drill --json --fail-on-warning` genera evidencia de un drill no destructivo de restauracion
 - `php artisan system:staging-certification --json` valida frescura y release de la ultima certificacion de staging
+- `php artisan system:promotion-readiness --json` valida si el release actual es promocionable y si ya existe aprobacion operativa vigente
 - `GET /reports/platform-observability` publica el mismo snapshot como dashboard tecnico autenticado
   - `delivery` resume readiness por canal saliente
   - `recovery.backup` resume storage, cifrado y ultimo backup
   - `recovery.restore_drill` resume la evidencia del ultimo drill
   - `certification.staging` resume vigencia, release actual y evidencia de deploy/rollback sobre staging
+  - `promotion` resume si el release actual es promocionable y si su aprobacion operativa fue registrada
 
 ## Supervision recomendada
 

@@ -109,6 +109,20 @@ paths:
             text/markdown:
               schema:
                 type: string
+  /docs/release-promotion:
+    get:
+      tags: [Reports]
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      summary: Runbook interno de promocion de release
+      responses:
+        '200':
+          description: Markdown bruto
+          content:
+            text/markdown:
+              schema:
+                type: string
   /auth/me:
     get:
       tags: [Tenant]
@@ -1402,7 +1416,7 @@ paths:
         - $ref: '#/components/parameters/ReportDate'
       responses:
         '200':
-          description: Snapshot tecnico de plataforma, canales salientes, recovery y certificacion de staging
+          description: Snapshot tecnico de plataforma, canales salientes, recovery, certificacion de staging y gate de promocion del release
           content:
             application/json:
               schema:

@@ -79,6 +79,9 @@
         "velmix:staging-certification": [
             "@php artisan system:staging-certification --json"
         ],
+        "velmix:promotion-readiness": [
+            "@php artisan system:promotion-readiness --json"
+        ],
         "velmix:alerts": [
             "@php artisan system:alerts --json"
         ],
@@ -124,6 +127,7 @@
             "@velmix:observability",
             "@velmix:restore-drill",
             "@velmix:staging-certification",
+            "@velmix:promotion-readiness",
             "@velmix:prune",
             "@velmix:outbox",
             "@velmix:reconcile"
@@ -144,6 +148,7 @@
             "@velmix:observability",
             "@velmix:restore-drill",
             "@velmix:staging-certification",
+            "@velmix:promotion-readiness",
             "@velmix:prune",
             "@velmix:outbox",
             "@velmix:reconcile"
