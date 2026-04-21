@@ -28,6 +28,8 @@ Contenido actual:
 - `scripts/record-release-cutover.sh`: registra la decision final de cutover del release actual
 - `scripts/check-operational-certification.sh`: valida si el release actual ya quedo respaldado por evidencia operativa completa
 - `scripts/record-operational-certification.sh`: registra deploy, rollback, backup, restore y monitoreo para el release actual
+- `scripts/run-evidence-governed-deploy.sh`: ejecuta la cadena completa de evidencia para un release controlado
+- `.github/workflows/evidence-governed-deploy.yml`: workflow manual de GitHub Actions que gobierna el cambio por evidencia y sube un artifact del release
 
 Suposiciones deliberadas:
 

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 if [[ $# -lt 3 ]]; then
-  echo "Usage: $0 <release> <deploy-evidence> <rollback-evidence> [smoke-evidence] [backup-artifact] [operator]" >&2
+  echo "Usage: $0 <release> <deploy-evidence> <rollback-evidence> [smoke-evidence] [backup-artifact] [operator] [--allow-warning]" >&2
   exit 1
 fi
 
@@ -16,6 +16,7 @@ ROLLBACK_EVIDENCE="$3"
 SMOKE_EVIDENCE="${4:-}"
 BACKUP_ARTIFACT="${5:-}"
 OPERATOR="${6:-}"
+ALLOW_WARNING_FLAG="${7:-}"
 
 cd "$APP_PATH"
 
@@ -37,6 +38,10 @@ fi
 
 if [[ -n "$OPERATOR" ]]; then
   COMMAND+=("--operator=$OPERATOR")
+fi
+
+if [[ "$ALLOW_WARNING_FLAG" == "--allow-warning" || "${VELMIX_ALLOW_WARNING:-false}" == "true" ]]; then
+  COMMAND+=("--allow-warning")
 fi
 
 "${COMMAND[@]}"

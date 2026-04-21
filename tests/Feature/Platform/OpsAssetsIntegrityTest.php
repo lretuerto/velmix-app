@@ -29,6 +29,8 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertFileExists(base_path('ops/scripts/record-release-cutover.sh'));
         $this->assertFileExists(base_path('ops/scripts/check-operational-certification.sh'));
         $this->assertFileExists(base_path('ops/scripts/record-operational-certification.sh'));
+        $this->assertFileExists(base_path('ops/scripts/run-evidence-governed-deploy.sh'));
+        $this->assertFileExists(base_path('.github/workflows/evidence-governed-deploy.yml'));
 
         $envTemplate = file_get_contents(base_path('ops/systemd/velmix-app.env.example'));
         $this->assertIsString($envTemplate);
@@ -124,6 +126,13 @@ class OpsAssetsIntegrityTest extends TestCase
         $recordOperationalCertificationScript = file_get_contents(base_path('ops/scripts/record-operational-certification.sh'));
         $this->assertIsString($recordOperationalCertificationScript);
         $this->assertStringContainsString('system:record-operational-certification', $recordOperationalCertificationScript);
+        $this->assertStringContainsString('--allow-warning', $recordOperationalCertificationScript);
+
+        $evidenceGovernedDeployScript = file_get_contents(base_path('ops/scripts/run-evidence-governed-deploy.sh'));
+        $this->assertIsString($evidenceGovernedDeployScript);
+        $this->assertStringContainsString('system:record-backup', $evidenceGovernedDeployScript);
+        $this->assertStringContainsString('system:record-operational-certification', $evidenceGovernedDeployScript);
+        $this->assertStringContainsString('summary.md', $evidenceGovernedDeployScript);
 
         $healthScript = file_get_contents(base_path('ops/scripts/check-backend-health.sh'));
         $this->assertIsString($healthScript);
@@ -133,5 +142,13 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('artisan system:promotion-readiness --json', $healthScript);
         $this->assertStringContainsString('artisan system:cutover-readiness --json', $healthScript);
         $this->assertStringContainsString('artisan system:operational-certification --json', $healthScript);
+
+        $workflow = file_get_contents(base_path('.github/workflows/evidence-governed-deploy.yml'));
+        $this->assertIsString($workflow);
+        $this->assertStringContainsString('workflow_dispatch:', $workflow);
+        $this->assertStringContainsString('environment:', $workflow);
+        $this->assertStringContainsString('ops/scripts/run-evidence-governed-deploy.sh', $workflow);
+        $this->assertStringContainsString('upload-artifact@v4', $workflow);
+        $this->assertStringContainsString('evidence-governed-deploy-', $workflow);
     }
 }

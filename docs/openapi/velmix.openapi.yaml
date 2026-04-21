@@ -151,6 +151,20 @@ paths:
             text/markdown:
               schema:
                 type: string
+  /docs/evidence-governed-deploy:
+    get:
+      tags: [Reports]
+      security:
+        - laravelSession: []
+          tenantHeader: []
+      summary: Workflow interno de despliegue gobernado por evidencia
+      responses:
+        '200':
+          description: Markdown bruto
+          content:
+            text/markdown:
+              schema:
+                type: string
   /auth/me:
     get:
       tags: [Tenant]

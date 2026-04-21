@@ -52,6 +52,7 @@ Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:secu
                     ['name' => 'Release Promotion Runbook', 'path' => '/docs/release-promotion'],
                     ['name' => 'Release Cutover Runbook', 'path' => '/docs/release-cutover'],
                     ['name' => 'Operational Certification Runbook', 'path' => '/docs/operational-certification'],
+                    ['name' => 'Evidence Governed Deploy Workflow', 'path' => '/docs/evidence-governed-deploy'],
                 ],
                 'conventions' => [
                     'Business endpoints support Laravel session auth or Bearer token auth.',
@@ -137,6 +138,14 @@ Route::middleware(['auth.session', 'tenant.context', 'tenant.access', 'perm:secu
     Route::get('/docs/operational-certification', function () {
         return response(
             file_get_contents(base_path('docs/operations/operational-certification-runbook.md')),
+            200,
+            ['Content-Type' => 'text/markdown; charset=UTF-8'],
+        );
+    });
+
+    Route::get('/docs/evidence-governed-deploy', function () {
+        return response(
+            file_get_contents(base_path('docs/operations/evidence-governed-deployment-workflow.md')),
             200,
             ['Content-Type' => 'text/markdown; charset=UTF-8'],
         );

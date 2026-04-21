@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -lt 5 ]]; then
-  echo "Usage: $0 <release> <deploy-evidence> <rollback-evidence> <backup-artifact> <restore-evidence> [monitoring-evidence] [operator] [notes]" >&2
+  echo "Usage: $0 <release> <deploy-evidence> <rollback-evidence> <backup-artifact> <restore-evidence> [monitoring-evidence] [operator] [notes] [--allow-warning]" >&2
   exit 1
 fi
 
@@ -17,6 +17,7 @@ RESTORE_EVIDENCE="$5"
 MONITORING_EVIDENCE="${6:-}"
 OPERATOR="${7:-}"
 NOTES="${8:-}"
+ALLOW_WARNING_FLAG="${9:-}"
 
 cd "$APP_PATH"
 
@@ -41,6 +42,10 @@ fi
 
 if [[ -n "$NOTES" ]]; then
   ARGS+=("--notes=$NOTES")
+fi
+
+if [[ "$ALLOW_WARNING_FLAG" == "--allow-warning" || "${VELMIX_ALLOW_WARNING:-false}" == "true" ]]; then
+  ARGS+=("--allow-warning")
 fi
 
 "$PHP_BIN" "${ARGS[@]}"

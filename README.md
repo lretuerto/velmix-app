@@ -87,6 +87,7 @@ php artisan test
 - Runbook de promocion de release autenticado por sesión web: `GET /docs/release-promotion`
 - Runbook de cutover final autenticado por sesión web: `GET /docs/release-cutover`
 - Runbook de certificacion operativa autenticado por sesión web: `GET /docs/operational-certification`
+- Workflow gobernado por evidencia autenticado por sesión web: `GET /docs/evidence-governed-deploy`
 - El portal de docs exige `X-Tenant-Id`, membresía al tenant y permiso `security.docs.read`
 - Health y readiness:
   - `GET /health/live`
@@ -112,6 +113,8 @@ php artisan test
 - Script de gate de promocion de release: `composer run velmix:promotion-readiness`
 - Script de gate final de cutover: `composer run velmix:cutover-readiness`
 - Script de certificacion operativa del release: `composer run velmix:operational-certification`
+- Workflow manual de despliegue gobernado por evidencia: `.github/workflows/evidence-governed-deploy.yml`
+- Wrapper de cadena operativa gobernada por evidencia: `ops/scripts/run-evidence-governed-deploy.sh`
 - Script de pruning conservador: `composer run velmix:prune`
 - Script de lint de estilo: `composer run velmix:lint`
 - Script de lint completo del repo: `composer run velmix:lint:full`

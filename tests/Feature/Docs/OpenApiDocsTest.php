@@ -27,6 +27,7 @@ class OpenApiDocsTest extends TestCase
         $this->get('/docs/release-promotion', ['Accept' => 'application/json'])->assertStatus(401);
         $this->get('/docs/release-cutover', ['Accept' => 'application/json'])->assertStatus(401);
         $this->get('/docs/operational-certification', ['Accept' => 'application/json'])->assertStatus(401);
+        $this->get('/docs/evidence-governed-deploy', ['Accept' => 'application/json'])->assertStatus(401);
     }
 
     public function test_docs_endpoints_require_tenant_context_for_authenticated_session(): void
@@ -107,7 +108,8 @@ class OpenApiDocsTest extends TestCase
             ->assertJsonFragment(['path' => '/docs/staging-certification'])
             ->assertJsonFragment(['path' => '/docs/release-promotion'])
             ->assertJsonFragment(['path' => '/docs/release-cutover'])
-            ->assertJsonFragment(['path' => '/docs/operational-certification']);
+            ->assertJsonFragment(['path' => '/docs/operational-certification'])
+            ->assertJsonFragment(['path' => '/docs/evidence-governed-deploy']);
     }
 
     public function test_serves_openapi_yaml_for_priority_endpoints(): void
@@ -191,6 +193,7 @@ class OpenApiDocsTest extends TestCase
         $this->assertStringContainsString('/docs/release-promotion', $response->getContent());
         $this->assertStringContainsString('/docs/release-cutover', $response->getContent());
         $this->assertStringContainsString('/docs/operational-certification', $response->getContent());
+        $this->assertStringContainsString('/docs/evidence-governed-deploy', $response->getContent());
         $this->assertStringContainsString('security.api-token.manage', $response->getContent());
         $this->assertStringContainsString('bearerAuth', $response->getContent());
         $this->assertStringContainsString('X-Tenant-Id', $response->getContent());
@@ -236,6 +239,7 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('GET /reports/operations-control-tower', false)
             ->assertSee('GET /reports/platform-observability', false)
             ->assertSee('reports.platform-observability.read', false)
+            ->assertSee('GET /docs/evidence-governed-deploy', false)
             ->assertSee('GET /reports/operations-control-tower/briefing', false)
             ->assertSee('GET /reports/operations-control-tower/briefing/export', false)
             ->assertSee('GET /reports/operations-control-tower/history', false)

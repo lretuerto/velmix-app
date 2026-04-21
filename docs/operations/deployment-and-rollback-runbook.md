@@ -55,6 +55,8 @@ composer run velmix:ci:mysql
 - release cutover record: `ops/scripts/record-release-cutover.sh`
 - operational certification check: `ops/scripts/check-operational-certification.sh`
 - operational certification record: `ops/scripts/record-operational-certification.sh`
+- workflow gobernado por evidencia: `.github/workflows/evidence-governed-deploy.yml`
+- wrapper de cadena completa: `ops/scripts/run-evidence-governed-deploy.sh`
 - preparacion/promocion de release:
   - `ops/scripts/prepare-release.sh <release-path>`
   - `ops/scripts/promote-release.sh <release-path>`
@@ -85,7 +87,11 @@ composer run velmix:ci:mysql
 10. Certificar operativamente el release ya activo:
    - `ops/scripts/check-operational-certification.sh`
    - `ops/scripts/record-operational-certification.sh <release> <deploy-evidence> <rollback-evidence> <backup-artifact> <restore-evidence> [monitoring-evidence] [operator] [notes]`
-11. Verificar:
+11. Si el despliegue se gobierna desde GitHub Actions:
+   - disparar `.github/workflows/evidence-governed-deploy.yml`
+   - exigir artifact `evidence-governed-deploy-<environment>-<release>`
+   - revisar `summary.md`, `operational_summary.json` y `observability.json`
+12. Verificar:
    - `GET /health/live`
    - `GET /health/ready`
    - `php artisan system:preflight --json`
@@ -179,6 +185,7 @@ Antes de revertir esquema revisar:
 - la promocion del release debe registrar aprobacion operativa y evidencia de rollback asociada al `release_identifier`
 - el cutover final debe registrar evidencia del cambio de trafico, monitoreo post-go-live y rollback asociado al `release_identifier`
 - la certificacion operativa debe registrar deploy real, rollback real, backup utilizado y restore validado para el mismo `release_identifier`
+- el workflow `Evidence Governed Deploy` debe tratarse como gate obligatorio de cambio cuando el release se gobierne desde GitHub Actions
 - el pruning debe comenzar en modo `--pretend` antes de activarse automatico en un entorno nuevo
 - conservar evidencia de `X-Request-Id` y logs JSON durante incidentes
 - en multi-nodo, habilitar `VELMIX_SCHEDULER_ON_ONE_SERVER=true` solo si existe cache compartido con locks atomicos

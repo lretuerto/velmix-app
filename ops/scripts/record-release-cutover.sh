@@ -3,7 +3,7 @@
 set -euo pipefail
 
 if [[ $# -lt 3 ]]; then
-  echo "Usage: $0 <release> <cutover-evidence> <rollback-evidence> [monitoring-evidence] [operator] [notes]" >&2
+  echo "Usage: $0 <release> <cutover-evidence> <rollback-evidence> [monitoring-evidence] [operator] [notes] [--allow-warning]" >&2
   exit 1
 fi
 
@@ -15,6 +15,7 @@ ROLLBACK_EVIDENCE="$3"
 MONITORING_EVIDENCE="${4:-}"
 OPERATOR="${5:-}"
 NOTES="${6:-}"
+ALLOW_WARNING_FLAG="${7:-}"
 
 cd "$APP_PATH"
 
@@ -36,6 +37,10 @@ fi
 
 if [[ -n "$NOTES" ]]; then
   COMMAND+=(--notes="$NOTES")
+fi
+
+if [[ "$ALLOW_WARNING_FLAG" == "--allow-warning" || "${VELMIX_ALLOW_WARNING:-false}" == "true" ]]; then
+  COMMAND+=(--allow-warning)
 fi
 
 "${COMMAND[@]}"

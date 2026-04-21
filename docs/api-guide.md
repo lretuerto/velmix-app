@@ -24,6 +24,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - `GET /docs/release-promotion`
   - `GET /docs/release-cutover`
   - `GET /docs/operational-certification`
+  - `GET /docs/evidence-governed-deploy`
 - Contexto tenant: enviar `X-Tenant-Id`
 - Formato de salida: casi todos responden `{"data": ...}`
 - La aceptacion publica `POST /team/invitations/accept` esta protegida por rate limit sensible
@@ -259,6 +260,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - Gate de promocion del release actual: `php artisan system:promotion-readiness --json`
 - Gate final de cutover del release actual: `php artisan system:cutover-readiness --json`
 - Certificacion operativa del release actual: `php artisan system:operational-certification --json`
+- Workflow manual gobernado por evidencia: `.github/workflows/evidence-governed-deploy.yml`
 - Dashboard tecnico autenticado: `GET /reports/platform-observability`
 - Equivalentes por Composer:
   - `composer run velmix:dispatch-alerts`
@@ -485,6 +487,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /docs/release-promotion` concentra el gate final de release promocionable y el registro de aprobacion operativa
 - `GET /docs/release-cutover` concentra la decision final de go-live del release actual
 - `GET /docs/operational-certification` concentra la evidencia final de deploy, rollback, backup y restore del release actual
+- `GET /docs/evidence-governed-deploy` concentra el workflow manual que ejecuta y publica la cadena completa como artifact de cambio
 - Ademas, el repositorio versiona plantillas operativas en:
   - `ops/systemd/velmix-scheduler.service`
   - `ops/systemd/velmix-queue-restart.service`
@@ -502,6 +505,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - `ops/scripts/record-release-cutover.sh`
   - `ops/scripts/check-operational-certification.sh`
   - `ops/scripts/record-operational-certification.sh`
+  - `ops/scripts/run-evidence-governed-deploy.sh`
 
 ## Dashboard ejecutivo de billing
 
