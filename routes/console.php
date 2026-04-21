@@ -4,6 +4,7 @@ use App\Services\Billing\BillingReconciliationService;
 use App\Services\Billing\OutboxDispatchService;
 use App\Services\Platform\BackupRecoveryService;
 use App\Services\Platform\OperationalDataPruneService;
+use App\Services\Platform\StagingCertificationService;
 use App\Services\Platform\SystemAlertNotificationService;
 use App\Services\Platform\SystemAlertService;
 use App\Services\Platform\SystemHealthService;
@@ -280,6 +281,65 @@ Artisan::command('system:restore-drill {--json} {--fail-on-critical} {--fail-on-
 
     return 0;
 })->purpose('Run a non-destructive restore drill and persist the drill report.');
+
+Artisan::command('system:staging-certification {--json} {--fail-on-critical} {--fail-on-warning}', function (StagingCertificationService $service) {
+    $result = $service->summary();
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf('Staging certification status: %s', $result['status']));
+        $this->line(sprintf('Required: %s', ($result['required'] ?? false) ? 'yes' : 'no'));
+        $this->line(sprintf('Latest manifest: %s', $result['manifest_path'] ?? 'n/a'));
+    }
+
+    if ((bool) $this->option('fail-on-warning') && in_array($result['status'], ['warning', 'critical'], true)) {
+        return 1;
+    }
+
+    if ((bool) $this->option('fail-on-critical') && $result['status'] === 'critical') {
+        return 1;
+    }
+
+    return 0;
+})->purpose('Summarize staging certification evidence and freshness.');
+
+Artisan::command(
+    'system:record-staging-certification
+        {release}
+        {deploy_evidence}
+        {rollback_evidence}
+        {--smoke-evidence=}
+        {--backup-artifact=}
+        {--operator=}
+        {--notes=}
+        {--certified-at=}
+        {--allow-warning}
+        {--json}',
+    function (StagingCertificationService $service) {
+        $result = $service->recordCertification(
+            (string) $this->argument('release'),
+            (string) $this->argument('deploy_evidence'),
+            (string) $this->argument('rollback_evidence'),
+            $this->option('smoke-evidence') !== null ? (string) $this->option('smoke-evidence') : null,
+            $this->option('backup-artifact') !== null ? (string) $this->option('backup-artifact') : null,
+            $this->option('operator') !== null ? (string) $this->option('operator') : null,
+            $this->option('notes') !== null ? (string) $this->option('notes') : null,
+            $this->option('certified-at') !== null ? (string) $this->option('certified-at') : null,
+            (bool) $this->option('allow-warning'),
+        );
+
+        if ((bool) $this->option('json')) {
+            $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        } elseif (($result['status'] ?? 'blocked') === 'recorded') {
+            $this->info(sprintf('Staging certification recorded: %s', $result['manifest_path'] ?? 'n/a'));
+        } else {
+            $this->warn(sprintf('Staging certification blocked: %s', $result['status'] ?? 'blocked'));
+        }
+
+        return ($result['status'] ?? 'blocked') === 'recorded' ? 0 : 1;
+    }
+)->purpose('Record staging deploy, rollback, and recovery evidence for the current release.');
 
 Artisan::command('system:observability-report {--date=} {--json}', function (SystemObservabilityReportService $service) {
     $result = $service->summary($this->option('date') ?: null);

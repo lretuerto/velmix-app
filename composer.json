@@ -76,6 +76,9 @@
         "velmix:restore-drill": [
             "@php artisan system:restore-drill --json"
         ],
+        "velmix:staging-certification": [
+            "@php artisan system:staging-certification --json"
+        ],
         "velmix:alerts": [
             "@php artisan system:alerts --json"
         ],
@@ -120,6 +123,7 @@
             "@velmix:dispatch-alerts",
             "@velmix:observability",
             "@velmix:restore-drill",
+            "@velmix:staging-certification",
             "@velmix:prune",
             "@velmix:outbox",
             "@velmix:reconcile"
@@ -139,6 +143,7 @@
             "@velmix:dispatch-alerts",
             "@velmix:observability",
             "@velmix:restore-drill",
+            "@velmix:staging-certification",
             "@velmix:prune",
             "@velmix:outbox",
             "@velmix:reconcile"

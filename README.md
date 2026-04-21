@@ -83,6 +83,7 @@ php artisan test
 - Runbook de operacion autenticado por sesión web: `GET /docs/operations-runbook`
 - Runbook de despliegue y rollback autenticado por sesión web: `GET /docs/deployment-rollback`
 - Runbook de backup y restore autenticado por sesión web: `GET /docs/backup-restore`
+- Runbook de certificacion de staging autenticado por sesión web: `GET /docs/staging-certification`
 - El portal de docs exige `X-Tenant-Id`, membresía al tenant y permiso `security.docs.read`
 - Health y readiness:
   - `GET /health/live`
@@ -104,6 +105,7 @@ php artisan test
 - Script de snapshot de observabilidad tecnica: `composer run velmix:observability`
 - Script de readiness de backup: `composer run velmix:backup-readiness`
 - Script de restore drill no destructivo: `composer run velmix:restore-drill`
+- Script de certificacion de staging: `composer run velmix:staging-certification`
 - Script de pruning conservador: `composer run velmix:prune`
 - Script de lint de estilo: `composer run velmix:lint`
 - Script de lint completo del repo: `composer run velmix:lint:full`
@@ -115,7 +117,8 @@ php artisan test
 - `php artisan system:observability-report --json` resume preflight, alertas, logging, cola, scheduler, canales de notificacion y resiliencia de recovery
 - `php artisan system:backup-readiness --json` valida storage, cifrado, manifiesto y frescura del backup registrado
 - `php artisan system:restore-drill --json` genera un drill no destructivo y persiste evidencia operativa
-- `GET /reports/platform-observability` expone el snapshot tecnico autenticado para operacion, incluyendo `delivery` y `recovery`
+- `php artisan system:staging-certification --json` valida evidencia reciente de deploy, rollback y continuidad sobre staging
+- `GET /reports/platform-observability` expone el snapshot tecnico autenticado para operacion, incluyendo `delivery`, `recovery` y `certification`
 - Variables de observabilidad/alerting:
   - `VELMIX_ALERT_NOTIFY_CHANNELS`
   - `VELMIX_ALERT_NOTIFY_MIN_SEVERITY`
@@ -132,6 +135,13 @@ php artisan test
   - `VELMIX_BACKUP_HISTORY_PATH`
   - `VELMIX_BACKUP_ENCRYPTION_PASSPHRASE`
   - `VELMIX_RESTORE_DRILL_PATH`
+  - `VELMIX_RELEASE_IDENTIFIER`
+  - `VELMIX_STAGING_CERTIFICATION_ENV`
+  - `VELMIX_STAGING_CERTIFICATION_REQUIRED_ENVS`
+  - `VELMIX_STAGING_CERTIFICATION_STORAGE_PATH`
+  - `VELMIX_STAGING_CERTIFICATION_HISTORY_PATH`
+  - `VELMIX_STAGING_CERTIFICATION_MANIFEST_FILENAME`
+  - `VELMIX_STAGING_CERTIFICATION_MAX_AGE_HOURS`
   - `VELMIX_SCHEDULER_ALERT_DISPATCH_EVERY_MINUTES`
   - `VELMIX_SCHEDULER_ALERT_DISPATCH_OVERLAP_MINUTES`
 - Perfil/provider billing por tenant:
@@ -220,6 +230,7 @@ composer run velmix:dispatch-alerts
 composer run velmix:observability
 composer run velmix:backup-readiness
 composer run velmix:restore-drill
+composer run velmix:staging-certification
 composer run velmix:prune
 composer run velmix:lint
 composer run velmix:lint:full
@@ -251,9 +262,10 @@ composer run velmix:routes
 10. `composer run velmix:observability`
 11. `composer run velmix:backup-readiness`
 12. `composer run velmix:restore-drill`
-13. `composer run velmix:prune`
-14. `composer run velmix:outbox`
-15. `composer run velmix:reconcile`
+13. `composer run velmix:staging-certification`
+14. `composer run velmix:prune`
+15. `composer run velmix:outbox`
+16. `composer run velmix:reconcile`
 
 `velmix:ci:mysql` reutiliza la misma secuencia sobre MySQL, agrega la suite `concurrency` y rehidrata el esquema antes del bloque operativo, para validar locks, unicidad e idempotencia en un engine mas parecido a produccion.
 

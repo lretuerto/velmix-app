@@ -20,6 +20,8 @@ Contenido actual:
 - `scripts/check-backup-readiness.sh`: valida posture de backup antes de una ventana de despliegue
 - `scripts/record-backup-success.sh`: registra el manifiesto del ultimo backup exitoso sin tocar datos de negocio
 - `scripts/run-restore-drill.sh`: ejecuta un restore drill no destructivo y persiste evidencia
+- `scripts/check-staging-certification.sh`: valida la vigencia de la certificacion de staging para el release actual
+- `scripts/certify-staging-release.sh`: registra evidencia de deploy, rollback y continuidad para el release certificado
 
 Suposiciones deliberadas:
 

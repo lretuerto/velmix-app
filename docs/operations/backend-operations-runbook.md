@@ -85,6 +85,13 @@ Variables asociadas:
 - `VELMIX_BACKUP_ENCRYPTION_PASSPHRASE`
 - `VELMIX_RESTORE_DRILL_PATH`
 - `VELMIX_RESTORE_DRILL_MAX_AGE_DAYS`
+- `VELMIX_RELEASE_IDENTIFIER`
+- `VELMIX_STAGING_CERTIFICATION_ENV`
+- `VELMIX_STAGING_CERTIFICATION_REQUIRED_ENVS`
+- `VELMIX_STAGING_CERTIFICATION_STORAGE_PATH`
+- `VELMIX_STAGING_CERTIFICATION_HISTORY_PATH`
+- `VELMIX_STAGING_CERTIFICATION_MANIFEST_FILENAME`
+- `VELMIX_STAGING_CERTIFICATION_MAX_AGE_HOURS`
 
 ## Secuencia de observacion operativa
 
@@ -107,11 +114,13 @@ Variables asociadas:
 9. Revisar resiliencia de recovery:
    - `php artisan system:backup-readiness --json --fail-on-warning`
    - `php artisan system:restore-drill --json --fail-on-warning`
-10. Revisar outbox:
+10. Revisar vigencia de certificacion de staging:
+   - `php artisan system:staging-certification --json`
+11. Revisar outbox:
    - `php artisan billing:dispatch-outbox --limit=20 --graceful-if-unmigrated`
-11. Revisar reconciliacion:
+12. Revisar reconciliacion:
    - `php artisan billing:reconcile-pending --limit=20 --graceful-if-unmigrated`
-12. Revisar housekeeping:
+13. Revisar housekeeping:
    - `php artisan platform:prune-operational-data --pretend --json`
 
 ## Politica de alertas
@@ -217,10 +226,12 @@ Contexto minimo agregado:
   - canales de notificacion y cooldown
 - `php artisan system:backup-readiness --json` valida storage, cifrado y frescura del manifiesto registrado
 - `php artisan system:restore-drill --json --fail-on-warning` genera evidencia de un drill no destructivo de restauracion
+- `php artisan system:staging-certification --json` valida frescura y release de la ultima certificacion de staging
 - `GET /reports/platform-observability` publica el mismo snapshot como dashboard tecnico autenticado
   - `delivery` resume readiness por canal saliente
   - `recovery.backup` resume storage, cifrado y ultimo backup
   - `recovery.restore_drill` resume la evidencia del ultimo drill
+  - `certification.staging` resume vigencia, release actual y evidencia de deploy/rollback sobre staging
 
 ## Supervision recomendada
 
@@ -280,6 +291,8 @@ WantedBy=velmix-backend.target
 - backup readiness: `ops/scripts/check-backup-readiness.sh`
 - record backup manifest: `ops/scripts/record-backup-success.sh`
 - restore drill: `ops/scripts/run-restore-drill.sh`
+- check staging certification: `ops/scripts/check-staging-certification.sh`
+- certify staging release: `ops/scripts/certify-staging-release.sh`
 - prepare/promote/rollback:
   - `ops/scripts/prepare-release.sh`
   - `ops/scripts/promote-release.sh`
@@ -323,6 +336,7 @@ composer run velmix:dispatch-alerts
 composer run velmix:observability
 composer run velmix:backup-readiness
 composer run velmix:restore-drill
+composer run velmix:staging-certification
 composer run velmix:preflight
 composer run velmix:alerts
 composer run velmix:prune
@@ -338,6 +352,8 @@ ops/scripts/bootstrap-shared-path.sh
 ops/scripts/check-backup-readiness.sh
 ops/scripts/record-backup-success.sh
 ops/scripts/run-restore-drill.sh
+ops/scripts/check-staging-certification.sh
+ops/scripts/certify-staging-release.sh
 ops/scripts/prepare-release.sh <release-path>
 ops/scripts/promote-release.sh <release-path>
 ops/scripts/rollback-to-previous-release.sh

@@ -24,9 +24,10 @@ class PlatformObservabilityReportFlowTest extends TestCase
         File::deleteDirectory($root);
         File::ensureDirectoryExists($root.'/backups/history');
         File::ensureDirectoryExists($root.'/restore-drills');
+        File::ensureDirectoryExists($root.'/staging-certifications/history');
 
         config([
-            'app.env' => 'production',
+            'app.env' => 'staging',
             'app.debug' => false,
             'queue.default' => 'database',
             'logging.default' => 'stack',
@@ -40,9 +41,31 @@ class PlatformObservabilityReportFlowTest extends TestCase
             'velmix.backup.history_path' => $root.'/backups/history',
             'velmix.backup.restore_drill_path' => $root.'/restore-drills',
             'velmix.backup.encryption_passphrase' => 'test-passphrase',
+            'velmix.staging_certification.expected_environment' => 'staging',
+            'velmix.staging_certification.required_environments' => ['staging'],
+            'velmix.staging_certification.storage_path' => $root.'/staging-certifications',
+            'velmix.staging_certification.history_path' => $root.'/staging-certifications/history',
+            'velmix.staging_certification.release_identifier' => 'release-2026-04-21-001',
         ]);
 
         try {
+            app(\App\Services\Platform\BackupRecoveryService::class)->recordBackup(
+                's3://velmix-prod/backups/latest.sql.gz',
+                'sha256:test',
+                2048,
+                'managed-snapshot',
+                now()->subHour()->toIso8601String(),
+            );
+            app(\App\Services\Platform\BackupRecoveryService::class)->restoreDrillSummary();
+            app(\App\Services\Platform\StagingCertificationService::class)->recordCertification(
+                'release-2026-04-21-001',
+                'https://staging.example.test/evidence/deploy',
+                'https://staging.example.test/evidence/rollback',
+                'https://staging.example.test/evidence/smoke',
+                null,
+                'release-bot',
+            );
+
             DB::table('outbox_events')->insert([
                 'tenant_id' => 10,
                 'aggregate_type' => 'electronic_voucher',
@@ -54,15 +77,6 @@ class PlatformObservabilityReportFlowTest extends TestCase
                 'updated_at' => now(),
             ]);
 
-            app(\App\Services\Platform\BackupRecoveryService::class)->recordBackup(
-                's3://velmix-prod/backups/latest.sql.gz',
-                'sha256:test',
-                2048,
-                'managed-snapshot',
-                now()->subHour()->toIso8601String(),
-            );
-            app(\App\Services\Platform\BackupRecoveryService::class)->restoreDrillSummary();
-
             $response = $this->actingAs($admin)
                 ->withHeader('X-Tenant-Id', '10')
                 ->getJson('/reports/platform-observability?date=2026-04-17');
@@ -73,7 +87,9 @@ class PlatformObservabilityReportFlowTest extends TestCase
                 ->assertJsonPath('data.notifications.slack_enabled', true)
                 ->assertJsonPath('data.delivery.minimum_severity', 'warning')
                 ->assertJsonPath('data.recovery.backup.status', 'ok')
-                ->assertJsonPath('data.recovery.restore_drill.status', 'ok');
+                ->assertJsonPath('data.recovery.restore_drill.status', 'ok')
+                ->assertJsonPath('data.certification.staging.status', 'ok')
+                ->assertJsonPath('data.certification.staging.latest_certification.release', 'release-2026-04-21-001');
 
             $data = $response->json('data');
             $channels = collect($data['delivery']['channels']);

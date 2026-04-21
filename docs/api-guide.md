@@ -251,12 +251,14 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - Snapshot de observabilidad tecnica: `php artisan system:observability-report --json`
 - Readiness de backup: `php artisan system:backup-readiness --json`
 - Restore drill no destructivo: `php artisan system:restore-drill --json`
+- Certificacion de staging: `php artisan system:staging-certification --json`
 - Dashboard tecnico autenticado: `GET /reports/platform-observability`
 - Equivalentes por Composer:
   - `composer run velmix:dispatch-alerts`
   - `composer run velmix:observability`
   - `composer run velmix:backup-readiness`
   - `composer run velmix:restore-drill`
+  - `composer run velmix:staging-certification`
 - Preflight de release y configuracion: `php artisan system:preflight --json`
 - En CI o chequeos manuales puede usarse `php artisan system:alerts --fail-on-critical`
 - En deploys se recomienda `php artisan system:preflight --json --fail-on-warning`
@@ -298,6 +300,13 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - `VELMIX_BACKUP_HISTORY_PATH=/var/www/velmix/shared/backups/history`
   - `VELMIX_BACKUP_ENCRYPTION_PASSPHRASE=...`
   - `VELMIX_RESTORE_DRILL_PATH=/var/www/velmix/shared/restore-drills`
+  - `VELMIX_RELEASE_IDENTIFIER=release-2026-04-21-001`
+  - `VELMIX_STAGING_CERTIFICATION_ENV=staging`
+  - `VELMIX_STAGING_CERTIFICATION_REQUIRED_ENVS=staging,production`
+  - `VELMIX_STAGING_CERTIFICATION_STORAGE_PATH=/var/www/velmix/shared/staging-certifications`
+  - `VELMIX_STAGING_CERTIFICATION_HISTORY_PATH=/var/www/velmix/shared/staging-certifications/history`
+  - `VELMIX_STAGING_CERTIFICATION_MANIFEST_FILENAME=latest-staging-certification.json`
+  - `VELMIX_STAGING_CERTIFICATION_MAX_AGE_HOURS=168`
     - `VELMIX_ALERT_SLACK_CHANNEL=#ops-alerts`
     - `VELMIX_ALERT_SLACK_USERNAME=VELMiX Alerts`
     - `VELMIX_ALERT_SLACK_ICON_EMOJI=:rotating_light:`
@@ -379,7 +388,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `php artisan system:dispatch-alerts --json` puede despachar alertas por `log`, `webhook` y `slack`
 - `php artisan system:backup-readiness --json` valida storage, cifrado, manifiesto y frescura de backup
 - `php artisan system:restore-drill --json` genera evidencia de un drill no destructivo de recuperacion
-- `GET /reports/platform-observability` expone snapshot tecnico autenticado de plataforma, readiness de canales salientes y postura de `recovery`
+- `php artisan system:staging-certification --json` valida la vigencia de la certificacion de staging y el release asociado
+- `GET /reports/platform-observability` expone snapshot tecnico autenticado de plataforma, readiness de canales salientes, postura de `recovery` y `certification`
 - `php artisan platform:prune-operational-data --pretend --json` expone housekeeping conservador de datos operativos
 - el pruning conservador actual cubre `idempotency_keys`, `outbox_attempts`, `tenant_user_invitations` y `operations_control_tower_snapshots`
 - El backend puede emitir logs estructurados via `stderr_json` o `daily_json`
@@ -418,6 +428,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - `composer run velmix:readiness`
   - `composer run velmix:alerts`
   - `composer run velmix:restore-drill`
+  - `composer run velmix:staging-certification`
   - `composer run velmix:prune`
   - `composer run velmix:outbox`
   - `composer run velmix:reconcile`
@@ -438,6 +449,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /docs/operations-runbook` concentra scheduler, alertas, retencion y respuesta operativa
 - `GET /docs/deployment-rollback` concentra pre-deploy, smoke post-deploy, rollback de aplicacion y rollback de esquema
 - `GET /docs/backup-restore` concentra backup readiness, registro de manifiestos y restore drills
+- `GET /docs/staging-certification` concentra deploy, rollback, smoke y evidencia de certificacion de staging
 - Ademas, el repositorio versiona plantillas operativas en:
   - `ops/systemd/velmix-scheduler.service`
   - `ops/systemd/velmix-queue-restart.service`
@@ -447,6 +459,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
   - `ops/scripts/check-backup-readiness.sh`
   - `ops/scripts/record-backup-success.sh`
   - `ops/scripts/run-restore-drill.sh`
+  - `ops/scripts/check-staging-certification.sh`
+  - `ops/scripts/certify-staging-release.sh`
 
 ## Dashboard ejecutivo de billing
 

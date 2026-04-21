@@ -9,6 +9,7 @@ class SystemObservabilityReportService
         private readonly SystemAlertService $alerts,
         private readonly SystemAlertNotificationService $notifications,
         private readonly BackupRecoveryService $backupRecovery,
+        private readonly StagingCertificationService $stagingCertification,
     ) {}
 
     public function summary(?string $date = null): array
@@ -17,11 +18,16 @@ class SystemObservabilityReportService
         $alerts = $this->alerts->summary($date);
         $delivery = $this->notifications->describe($date);
         $recovery = $this->backupRecovery->observabilitySummary();
+        $certification = $this->stagingCertification->summary([
+            'preflight' => $preflight,
+            'alerts' => $alerts,
+            'recovery' => $recovery,
+        ]);
         $logging = $this->loggingSnapshot();
         $notificationConfig = (array) config('velmix.alerts.notifications', []);
 
         return [
-            'status' => $this->resolveStatus($preflight, $alerts, $delivery, $recovery),
+            'status' => $this->resolveStatus($preflight, $alerts, $delivery, $recovery, $certification),
             'checked_at' => now()->toIso8601String(),
             'request_correlation' => [
                 'request_id_header' => 'X-Request-Id',
@@ -62,7 +68,10 @@ class SystemObservabilityReportService
             ],
             'delivery' => $delivery,
             'recovery' => $recovery,
-            'recommendations' => $this->recommendations($preflight, $alerts, $logging, $delivery, $recovery),
+            'certification' => [
+                'staging' => $certification,
+            ],
+            'recommendations' => $this->recommendations($preflight, $alerts, $logging, $delivery, $recovery, $certification),
         ];
     }
 
@@ -87,13 +96,15 @@ class SystemObservabilityReportService
      * @param  array<string, mixed>  $preflight
      * @param  array<string, mixed>  $alerts
      */
-    private function resolveStatus(array $preflight, array $alerts, array $delivery, array $recovery): string
+    private function resolveStatus(array $preflight, array $alerts, array $delivery, array $recovery, array $certification): string
     {
+        $resolved = null;
         $statuses = [
             $preflight['status'] ?? 'ok',
             $alerts['status'] ?? 'ok',
             $recovery['backup']['status'] ?? 'ok',
             $recovery['restore_drill']['status'] ?? 'ok',
+            $certification['status'] ?? 'ok',
         ];
 
         foreach ((array) ($delivery['channels'] ?? []) as $channel) {
@@ -120,7 +131,7 @@ class SystemObservabilityReportService
      * @param  array<string, mixed>  $delivery
      * @return array<int, string>
      */
-    private function recommendations(array $preflight, array $alerts, array $logging, array $delivery, array $recovery): array
+    private function recommendations(array $preflight, array $alerts, array $logging, array $delivery, array $recovery, array $certification): array
     {
         $items = [];
 
@@ -151,6 +162,10 @@ class SystemObservabilityReportService
 
         if (($recovery['restore_drill']['status'] ?? 'ok') !== 'ok') {
             $items[] = 'Run php artisan system:restore-drill --json and review the latest restore drill report before the next production release.';
+        }
+
+        if (($certification['status'] ?? 'ok') !== 'ok') {
+            $items[] = 'Run php artisan system:staging-certification --json and refresh the staging certification evidence before promoting the current release.';
         }
 
         return array_values(array_unique($items));

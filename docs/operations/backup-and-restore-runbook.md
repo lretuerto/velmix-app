@@ -70,6 +70,14 @@ ops/scripts/run-restore-drill.sh
 
 El comando genera un reporte en `VELMIX_RESTORE_DRILL_PATH` y no modifica tablas ni datos de negocio.
 
+## Integracion con certificacion de staging
+
+Despues de registrar backup y restore drill, usar la evidencia dentro del runbook de staging:
+
+- `GET /docs/staging-certification`
+- `php artisan system:staging-certification --json`
+- `php artisan system:record-staging-certification ...`
+
 ## Criterios de salida
 
 - `system:backup-readiness` en `ok`

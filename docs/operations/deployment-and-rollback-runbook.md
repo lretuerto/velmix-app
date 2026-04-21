@@ -19,6 +19,7 @@ composer run velmix:routes
 composer run velmix:readiness
 composer run velmix:alerts
 composer run velmix:restore-drill
+composer run velmix:staging-certification
 composer run velmix:prune
 composer run velmix:outbox
 composer run velmix:reconcile
@@ -43,6 +44,8 @@ composer run velmix:ci:mysql
 - inicializacion de shared path: `ops/scripts/bootstrap-shared-path.sh`
 - backup readiness: `ops/scripts/check-backup-readiness.sh`
 - restore drill: `ops/scripts/run-restore-drill.sh`
+- staging certification check: `ops/scripts/check-staging-certification.sh`
+- staging certification record: `ops/scripts/certify-staging-release.sh`
 - preparacion/promocion de release:
   - `ops/scripts/prepare-release.sh <release-path>`
   - `ops/scripts/promote-release.sh <release-path>`
@@ -61,13 +64,17 @@ composer run velmix:ci:mysql
    - `ops/scripts/prepare-release.sh /var/www/velmix/releases/<release>`
 6. Promover con swap atomico:
    - `ops/scripts/promote-release.sh /var/www/velmix/releases/<release>`
-7. Verificar:
+7. Certificar staging para el release promovido:
+   - `ops/scripts/check-staging-certification.sh`
+   - `ops/scripts/certify-staging-release.sh <release> <deploy-evidence> <rollback-evidence> [smoke-evidence] [backup-artifact] [operator]`
+8. Verificar:
    - `GET /health/live`
    - `GET /health/ready`
    - `php artisan system:preflight --json`
    - `php artisan system:backup-readiness --json --fail-on-warning`
    - `php artisan system:alerts --json`
    - `php artisan system:restore-drill --json`
+   - `php artisan system:staging-certification --json --fail-on-warning`
    - `ops/scripts/run-restore-drill.sh`
    - `php artisan schedule:list`
 
@@ -75,6 +82,7 @@ composer run velmix:ci:mysql
 
 - readiness en `ready`
 - backup readiness en `ok`
+- staging certification en `ok`
 - alertas criticas en cero o conocidas
 - scheduler visible y sin comandos faltantes
 - outbox y reconcile smoke sin errores
@@ -89,6 +97,7 @@ Validacion minima:
 - reconcile smoke
 - backup readiness smoke
 - restore drill smoke
+- staging certification smoke
 - lectura de docs internas `/docs`
 - lectura de dashboard diario `/reports/daily`
 
@@ -141,6 +150,7 @@ Antes de revertir esquema revisar:
 - `system:preflight --fail-on-warning` si debe usarse como gate de deploy, porque valida coherencia de plataforma y release
 - `system:backup-readiness --fail-on-warning` debe formar parte del gate antes de promover un release en entornos no locales
 - el restore drill es no destructivo y su evidencia debe conservarse junto al release o en storage compartido
+- la certificacion de staging debe registrar evidencia de deploy, rollback y smoke antes de promover a produccion
 - el pruning debe comenzar en modo `--pretend` antes de activarse automatico en un entorno nuevo
 - conservar evidencia de `X-Request-Id` y logs JSON durante incidentes
 - en multi-nodo, habilitar `VELMIX_SCHEDULER_ON_ONE_SERVER=true` solo si existe cache compartido con locks atomicos
@@ -159,3 +169,4 @@ Antes de revertir esquema revisar:
 - runbooks accesibles desde `/docs`
 - backup manifest reciente registrado
 - restore drill reciente y legible
+- staging certification reciente y asociada al release actual

@@ -12,6 +12,13 @@ $defaultBackupStoragePath = $sharedPath !== ''
 $defaultRestoreDrillPath = $sharedPath !== ''
     ? rtrim($sharedPath, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.'restore-drills'
     : storage_path('app/restore-drills');
+$defaultStagingCertificationPath = $sharedPath !== ''
+    ? rtrim($sharedPath, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.'staging-certifications'
+    : storage_path('app/staging-certifications');
+$stagingCertificationRequiredEnvironments = array_values(array_filter(array_map(
+    static fn ($environment) => trim((string) $environment),
+    explode(',', (string) env('VELMIX_STAGING_CERTIFICATION_REQUIRED_ENVS', 'staging,production'))
+)));
 
 return [
     'alerts' => [
@@ -67,5 +74,14 @@ return [
         'encryption_passphrase' => env('VELMIX_BACKUP_ENCRYPTION_PASSPHRASE'),
         'restore_drill_path' => env('VELMIX_RESTORE_DRILL_PATH', $defaultRestoreDrillPath),
         'restore_drill_max_age_days' => env('VELMIX_RESTORE_DRILL_MAX_AGE_DAYS', 30),
+    ],
+    'staging_certification' => [
+        'expected_environment' => env('VELMIX_STAGING_CERTIFICATION_ENV', 'staging'),
+        'required_environments' => $stagingCertificationRequiredEnvironments,
+        'storage_path' => env('VELMIX_STAGING_CERTIFICATION_STORAGE_PATH', $defaultStagingCertificationPath),
+        'manifest_filename' => env('VELMIX_STAGING_CERTIFICATION_MANIFEST_FILENAME', 'latest-staging-certification.json'),
+        'history_path' => env('VELMIX_STAGING_CERTIFICATION_HISTORY_PATH', $defaultStagingCertificationPath.DIRECTORY_SEPARATOR.'history'),
+        'freshness_hours' => env('VELMIX_STAGING_CERTIFICATION_MAX_AGE_HOURS', 168),
+        'release_identifier' => env('VELMIX_RELEASE_IDENTIFIER'),
     ],
 ];
