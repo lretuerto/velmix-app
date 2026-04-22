@@ -47,9 +47,6 @@ if [[ "$ALLOW_WARNING" == "true" ]]; then
   ALLOW_WARNING_OPTION="--allow-warning"
 fi
 
-run_json preflight "$PHP_BIN" artisan system:preflight --json "$FAIL_OPTION"
-run_json alerts "$PHP_BIN" artisan system:alerts --json
-
 run_json backup_record "$PHP_BIN" artisan system:record-backup \
   "$BACKUP_ARTIFACT" \
   --checksum="$BACKUP_CHECKSUM" \
@@ -57,6 +54,8 @@ run_json backup_record "$PHP_BIN" artisan system:record-backup \
   --driver="$BACKUP_DRIVER" \
   --json
 
+run_json preflight "$PHP_BIN" artisan system:preflight --json "$FAIL_OPTION"
+run_json alerts "$PHP_BIN" artisan system:alerts --json
 run_json backup_readiness "$PHP_BIN" artisan system:backup-readiness --json "$FAIL_OPTION"
 run_json restore_drill "$PHP_BIN" artisan system:restore-drill --json "$FAIL_OPTION"
 

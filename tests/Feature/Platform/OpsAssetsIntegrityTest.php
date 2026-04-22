@@ -133,6 +133,10 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('system:record-backup', $evidenceGovernedDeployScript);
         $this->assertStringContainsString('system:record-operational-certification', $evidenceGovernedDeployScript);
         $this->assertStringContainsString('summary.md', $evidenceGovernedDeployScript);
+        $this->assertTrue(
+            strpos($evidenceGovernedDeployScript, 'system:record-backup') < strpos($evidenceGovernedDeployScript, 'system:preflight'),
+            'Evidence-governed deploy should record backup evidence before preflight checks.'
+        );
 
         $healthScript = file_get_contents(base_path('ops/scripts/check-backend-health.sh'));
         $this->assertIsString($healthScript);
@@ -150,5 +154,6 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('ops/scripts/run-evidence-governed-deploy.sh', $workflow);
         $this->assertStringContainsString('upload-artifact@v4', $workflow);
         $this->assertStringContainsString('evidence-governed-deploy-', $workflow);
+        $this->assertStringContainsString('LOG_STACK: single,daily_json', $workflow);
     }
 }
