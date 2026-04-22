@@ -15,6 +15,7 @@ Este runbook describe el workflow de GitHub Actions que gobierna un despliegue p
 - nombre visible: `Evidence Governed Deploy`
 - environments soportados: `staging`, `production`
 - cadena operativa ejecutada por `ops/scripts/run-evidence-governed-deploy.sh`
+- bootstrap y validacion remota previa ejecutados por `ops/scripts/bootstrap-remote-host-over-ssh.sh`
 - despliegue remoto real ejecutado por `ops/scripts/deploy-release-over-ssh.sh`
 - bootstrap de secrets y variables ejecutable por `ops/scripts/sync-github-environment-config.sh`
 - readiness del environment auditable por `ops/scripts/check-github-environment-readiness.sh`
@@ -143,12 +144,13 @@ gh workflow run evidence-governed-deploy.yml `
 Previamente, el despliegue remoto real:
 
 1. empaqueta el release actual desde GitHub Actions
-2. lo transfiere por `scp` al host remoto
-3. ejecuta `ops/scripts/prepare-release.sh`
-4. ejecuta `ops/scripts/promote-release.sh`
-5. ejecuta `ops/scripts/check-backend-health.sh`
-6. ejecuta la cadena gobernada por evidencia en el host remoto
-7. recopila el bundle remoto hacia el artifact del workflow
+2. ejecuta `ops/scripts/bootstrap-remote-host-over-ssh.sh` para crear `REMOTE_TMP_PATH` y validar `tar`, `php`, `composer`, `systemctl` y `.env`
+3. lo transfiere por `scp` al host remoto
+4. ejecuta `ops/scripts/prepare-release.sh`
+5. ejecuta `ops/scripts/promote-release.sh`
+6. ejecuta `ops/scripts/check-backend-health.sh`
+7. ejecuta la cadena gobernada por evidencia en el host remoto
+8. recopila el bundle remoto hacia el artifact del workflow
 
 ## Artefacto esperado
 
@@ -158,6 +160,7 @@ El workflow sube un artifact llamado:
 
 Contenido minimo:
 
+- `remote-bootstrap.json` para `remote_ssh`
 - `preflight.json`
 - `alerts.json`
 - `backup_record.json`

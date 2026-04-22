@@ -29,6 +29,7 @@ Contenido actual:
 - `scripts/check-operational-certification.sh`: valida si el release actual ya quedo respaldado por evidencia operativa completa
 - `scripts/record-operational-certification.sh`: registra deploy, rollback, backup, restore y monitoreo para el release actual
 - `scripts/run-evidence-governed-deploy.sh`: ejecuta la cadena completa de evidencia para un release controlado
+- `scripts/bootstrap-remote-host-over-ssh.sh`: valida y prepara el host remoto antes de copiar el release por `scp`
 - `scripts/deploy-release-over-ssh.sh`: empaqueta el release actual, lo publica por SSH y ejecuta el gate gobernado por evidencia sobre el host remoto
 - `scripts/configure-github-environment-protection.sh`: aplica required reviewers sobre un environment de GitHub Actions via `gh api`
 - `scripts/check-github-environment-readiness.sh`: audita reviewers, bypass, secrets y variables de un environment antes del primer deploy vivo
@@ -64,7 +65,8 @@ Bootstrap recomendado para `staging`:
 3. preparar luego un archivo real a partir de `github-environments/staging.env.example`
 4. sincronizar secrets y variables con `scripts/sync-github-environment-config.sh`
 5. validar el environment con `scripts/check-github-environment-readiness.sh`
-6. recien entonces disparar `.github/workflows/evidence-governed-deploy.yml`
+6. cuando existan secrets reales, validar el host remoto con `scripts/bootstrap-remote-host-over-ssh.sh`
+7. recien entonces disparar `.github/workflows/evidence-governed-deploy.yml`
 
 Nota operativa:
 

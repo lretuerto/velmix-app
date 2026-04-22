@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/evidence-governed-deploy.yml'
       - 'ops/scripts/run-evidence-governed-deploy.sh'
+      - 'ops/scripts/bootstrap-remote-host-over-ssh.sh'
       - 'ops/scripts/certify-staging-release.sh'
       - 'ops/scripts/record-release-promotion.sh'
       - 'ops/scripts/record-release-cutover.sh'

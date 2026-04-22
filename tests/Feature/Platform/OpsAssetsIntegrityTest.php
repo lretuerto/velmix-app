@@ -30,6 +30,7 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertFileExists(base_path('ops/scripts/check-operational-certification.sh'));
         $this->assertFileExists(base_path('ops/scripts/record-operational-certification.sh'));
         $this->assertFileExists(base_path('ops/scripts/run-evidence-governed-deploy.sh'));
+        $this->assertFileExists(base_path('ops/scripts/bootstrap-remote-host-over-ssh.sh'));
         $this->assertFileExists(base_path('ops/scripts/deploy-release-over-ssh.sh'));
         $this->assertFileExists(base_path('ops/scripts/configure-github-environment-protection.sh'));
         $this->assertFileExists(base_path('ops/scripts/check-github-environment-readiness.sh'));
@@ -134,6 +135,12 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('system:record-operational-certification', $recordOperationalCertificationScript);
         $this->assertStringContainsString('--allow-warning', $recordOperationalCertificationScript);
 
+        $remoteBootstrapScript = file_get_contents(base_path('ops/scripts/bootstrap-remote-host-over-ssh.sh'));
+        $this->assertIsString($remoteBootstrapScript);
+        $this->assertStringContainsString('remote_env_file_missing', $remoteBootstrapScript);
+        $this->assertStringContainsString('REMOTE_TMP_PATH', $remoteBootstrapScript);
+        $this->assertStringContainsString('systemctl cat "$REMOTE_SYSTEMD_TARGET"', $remoteBootstrapScript);
+
         $evidenceGovernedDeployScript = file_get_contents(base_path('ops/scripts/run-evidence-governed-deploy.sh'));
         $this->assertIsString($evidenceGovernedDeployScript);
         $this->assertStringContainsString('system:record-backup', $evidenceGovernedDeployScript);
@@ -147,10 +154,16 @@ class OpsAssetsIntegrityTest extends TestCase
         $remoteDeployScript = file_get_contents(base_path('ops/scripts/deploy-release-over-ssh.sh'));
         $this->assertIsString($remoteDeployScript);
         $this->assertStringContainsString('git -C "$APP_PATH" archive', $remoteDeployScript);
+        $this->assertStringContainsString('bootstrap-remote-host-over-ssh.sh', $remoteDeployScript);
+        $this->assertStringContainsString('remote-bootstrap.json', $remoteDeployScript);
         $this->assertStringContainsString('ops/scripts/prepare-release.sh', $remoteDeployScript);
         $this->assertStringContainsString('ops/scripts/promote-release.sh', $remoteDeployScript);
         $this->assertStringContainsString('ops/scripts/run-evidence-governed-deploy.sh', $remoteDeployScript);
         $this->assertStringContainsString('rollback-to-previous-release.sh', $remoteDeployScript);
+        $this->assertTrue(
+            strpos($remoteDeployScript, 'bootstrap-remote-host-over-ssh.sh') < strpos($remoteDeployScript, 'scp "${SCP_OPTS[@]}" "$LOCAL_ARCHIVE_PATH"'),
+            'Remote host bootstrap should run before transferring the release archive.'
+        );
 
         $configureEnvironmentScript = file_get_contents(base_path('ops/scripts/configure-github-environment-protection.sh'));
         $this->assertIsString($configureEnvironmentScript);
@@ -195,6 +208,7 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('workflow_dispatch:', $workflow);
         $this->assertStringContainsString('environment:', $workflow);
         $this->assertStringContainsString('ops/scripts/run-evidence-governed-deploy.sh', $workflow);
+        $this->assertStringContainsString('ops/scripts/bootstrap-remote-host-over-ssh.sh', $workflow);
         $this->assertStringContainsString('deployment_strategy:', $workflow);
         $this->assertStringContainsString('ops/scripts/deploy-release-over-ssh.sh', $workflow);
         $this->assertStringContainsString('VELMIX_SSH_HOST', $workflow);
