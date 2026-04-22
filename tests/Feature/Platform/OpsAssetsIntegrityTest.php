@@ -30,6 +30,8 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertFileExists(base_path('ops/scripts/check-operational-certification.sh'));
         $this->assertFileExists(base_path('ops/scripts/record-operational-certification.sh'));
         $this->assertFileExists(base_path('ops/scripts/run-evidence-governed-deploy.sh'));
+        $this->assertFileExists(base_path('ops/scripts/deploy-release-over-ssh.sh'));
+        $this->assertFileExists(base_path('ops/scripts/configure-github-environment-protection.sh'));
         $this->assertFileExists(base_path('.github/workflows/evidence-governed-deploy.yml'));
 
         $envTemplate = file_get_contents(base_path('ops/systemd/velmix-app.env.example'));
@@ -138,6 +140,19 @@ class OpsAssetsIntegrityTest extends TestCase
             'Evidence-governed deploy should record backup evidence before preflight checks.'
         );
 
+        $remoteDeployScript = file_get_contents(base_path('ops/scripts/deploy-release-over-ssh.sh'));
+        $this->assertIsString($remoteDeployScript);
+        $this->assertStringContainsString('git -C "$APP_PATH" archive', $remoteDeployScript);
+        $this->assertStringContainsString('ops/scripts/prepare-release.sh', $remoteDeployScript);
+        $this->assertStringContainsString('ops/scripts/promote-release.sh', $remoteDeployScript);
+        $this->assertStringContainsString('ops/scripts/run-evidence-governed-deploy.sh', $remoteDeployScript);
+        $this->assertStringContainsString('rollback-to-previous-release.sh', $remoteDeployScript);
+
+        $configureEnvironmentScript = file_get_contents(base_path('ops/scripts/configure-github-environment-protection.sh'));
+        $this->assertIsString($configureEnvironmentScript);
+        $this->assertStringContainsString('repos/${REPOSITORY}/environments/${ENVIRONMENT}', $configureEnvironmentScript);
+        $this->assertStringContainsString('"reviewers"', $configureEnvironmentScript);
+
         $healthScript = file_get_contents(base_path('ops/scripts/check-backend-health.sh'));
         $this->assertIsString($healthScript);
         $this->assertStringContainsString('artisan system:observability-report --json', $healthScript);
@@ -152,6 +167,10 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('workflow_dispatch:', $workflow);
         $this->assertStringContainsString('environment:', $workflow);
         $this->assertStringContainsString('ops/scripts/run-evidence-governed-deploy.sh', $workflow);
+        $this->assertStringContainsString('deployment_strategy:', $workflow);
+        $this->assertStringContainsString('ops/scripts/deploy-release-over-ssh.sh', $workflow);
+        $this->assertStringContainsString('VELMIX_SSH_HOST', $workflow);
+        $this->assertStringContainsString('VELMIX_SSH_PRIVATE_KEY', $workflow);
         $this->assertStringContainsString('upload-artifact@v4', $workflow);
         $this->assertStringContainsString('evidence-governed-deploy-', $workflow);
         $this->assertStringContainsString('LOG_STACK: single,daily_json', $workflow);

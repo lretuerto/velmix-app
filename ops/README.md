@@ -29,6 +29,8 @@ Contenido actual:
 - `scripts/check-operational-certification.sh`: valida si el release actual ya quedo respaldado por evidencia operativa completa
 - `scripts/record-operational-certification.sh`: registra deploy, rollback, backup, restore y monitoreo para el release actual
 - `scripts/run-evidence-governed-deploy.sh`: ejecuta la cadena completa de evidencia para un release controlado
+- `scripts/deploy-release-over-ssh.sh`: empaqueta el release actual, lo publica por SSH y ejecuta el gate gobernado por evidencia sobre el host remoto
+- `scripts/configure-github-environment-protection.sh`: aplica required reviewers sobre un environment de GitHub Actions via `gh api`
 - `.github/workflows/evidence-governed-deploy.yml`: workflow manual de GitHub Actions que gobierna el cambio por evidencia y sube un artifact del release
 
 Suposiciones deliberadas:

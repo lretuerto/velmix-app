@@ -1,10 +1,11 @@
 ## Objetivo
 
-Este runbook describe el workflow manual de GitHub Actions que gobierna un despliegue por evidencia y lo bloquea si cualquier gate operativo queda en `warning` o `critical`.
+Este runbook describe el workflow de GitHub Actions que gobierna un despliegue por evidencia y lo bloquea si cualquier gate operativo queda en `warning` o `critical`.
 
 ## Alcance
 
-- entorno objetivo controlado via `workflow_dispatch`
+- smoke controlado via `push` sin tocar infraestructura viva
+- despliegue real via `workflow_dispatch` hacia `staging` o `production`
 - evidencia versionada para deploy, rollback, backup, restore, promotion, cutover y certificacion operativa
 - artefacto descargable por release con todos los JSON y resúmenes del gate
 
@@ -14,10 +15,18 @@ Este runbook describe el workflow manual de GitHub Actions que gobierna un despl
 - nombre visible: `Evidence Governed Deploy`
 - environments soportados: `staging`, `production`
 - cadena operativa ejecutada por `ops/scripts/run-evidence-governed-deploy.sh`
+- despliegue remoto real ejecutado por `ops/scripts/deploy-release-over-ssh.sh`
+
+## Modos de ejecución
+
+- `push`: smoke controlado sobre runner, sin environment protegido
+- `workflow_dispatch` + `deployment_strategy=remote_ssh`: despliegue remoto real y gate completo
+- `workflow_dispatch` + `deployment_strategy=control_only`: reservado para troubleshooting; no se considera certificacion viva
 
 ## Inputs obligatorios
 
 - `target_environment`
+- `deployment_strategy`
 - `release_identifier`
 - `deploy_evidence`
 - `rollback_evidence`
@@ -33,11 +42,44 @@ Este runbook describe el workflow manual de GitHub Actions que gobierna un despl
 - `operator`
 - `allow_warning`
 
+## Secrets requeridos para despliegue remoto
+
+- `VELMIX_SSH_HOST`
+- `VELMIX_SSH_USER`
+- `VELMIX_SSH_PRIVATE_KEY`
+- `VELMIX_SSH_KNOWN_HOSTS`
+
+## Secrets opcionales para topologia remota
+
+- `VELMIX_SSH_PORT`
+- `VELMIX_REMOTE_APP_ROOT`
+- `VELMIX_REMOTE_RELEASES_PATH`
+- `VELMIX_REMOTE_SHARED_PATH`
+- `VELMIX_REMOTE_ENV_FILE`
+- `VELMIX_REMOTE_TMP_PATH`
+- `VELMIX_REMOTE_USE_SYSTEMD`
+- `VELMIX_REMOTE_INSTALL_UNITS`
+- `VELMIX_REMOTE_PHP_BIN`
+- `VELMIX_REMOTE_COMPOSER_BIN`
+- `VELMIX_REMOTE_SYSTEMD_TARGET`
+- `VELMIX_REMOTE_QUEUE_RESTART_SERVICE`
+
+## Aprobación manual del environment
+
+- `staging` debe tener `required reviewers`
+- el workflow `workflow_dispatch` referencia el environment `${target_environment}` y queda pendiente hasta que se apruebe
+- la configuracion reproducible puede aplicarse con:
+
+```bash
+ops/scripts/configure-github-environment-protection.sh lretuerto/velmix-app staging <reviewer-id>
+```
+
 ## Ejecucion manual recomendada
 
 ```powershell
 gh workflow run evidence-governed-deploy.yml `
   --ref sprint1/day8-rbac-seeders-smoke `
+  -f deployment_strategy=remote_ssh `
   -f target_environment=staging `
   -f release_identifier=release-2026-04-21-001 `
   -f deploy_evidence=https://staging.example.test/evidence/deploy `
@@ -55,18 +97,27 @@ gh workflow run evidence-governed-deploy.yml `
 
 1. `system:preflight`
 2. `system:alerts`
-3. `system:record-backup`
-4. `system:backup-readiness`
-5. `system:restore-drill`
-6. `system:record-staging-certification`
-7. `system:staging-certification`
-8. `system:record-release-promotion`
-9. `system:promotion-readiness`
-10. `system:record-release-cutover`
-11. `system:cutover-readiness`
-12. `system:record-operational-certification`
-13. `system:operational-certification`
-14. `system:observability-report`
+3. `system:backup-readiness`
+4. `system:restore-drill`
+5. `system:record-staging-certification`
+6. `system:staging-certification`
+7. `system:record-release-promotion`
+8. `system:promotion-readiness`
+9. `system:record-release-cutover`
+10. `system:cutover-readiness`
+11. `system:record-operational-certification`
+12. `system:operational-certification`
+13. `system:observability-report`
+
+Previamente, el despliegue remoto real:
+
+1. empaqueta el release actual desde GitHub Actions
+2. lo transfiere por `scp` al host remoto
+3. ejecuta `ops/scripts/prepare-release.sh`
+4. ejecuta `ops/scripts/promote-release.sh`
+5. ejecuta `ops/scripts/check-backend-health.sh`
+6. ejecuta la cadena gobernada por evidencia en el host remoto
+7. recopila el bundle remoto hacia el artifact del workflow
 
 ## Artefacto esperado
 
@@ -101,7 +152,8 @@ Contenido minimo:
 - `operational_summary.json` con `status=ok`
 - `observability.json` incluye `promotion`, `cutover` y `operational_certification`
 - `release_identifier` consistente en los manifests generados
+- para `remote_ssh`, evidencia descargada desde el host remoto objetivo
 
 ## Supuesto controlado
 
-Este workflow no sustituye por si solo un deploy real a hosts productivos. Desde este repo gobierna y verifica la cadena sobre un entorno controlado de ejecución; la evidencia de infraestructura viva debe provenir del entorno staging/prod real.
+Este workflow puede gobernar un deploy remoto real si el environment tiene reviewers y secrets de SSH configurados. Sin esos secretos, el pipeline debe fallar temprano y no debe considerarse evidencia viva.

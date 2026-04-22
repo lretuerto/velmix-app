@@ -261,6 +261,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - Gate final de cutover del release actual: `php artisan system:cutover-readiness --json`
 - Certificacion operativa del release actual: `php artisan system:operational-certification --json`
 - Workflow manual gobernado por evidencia: `.github/workflows/evidence-governed-deploy.yml`
+- Despliegue remoto real gobernado por evidencia: `ops/scripts/deploy-release-over-ssh.sh`
 - Dashboard tecnico autenticado: `GET /reports/platform-observability`
 - Equivalentes por Composer:
   - `composer run velmix:dispatch-alerts`
@@ -488,6 +489,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /docs/release-cutover` concentra la decision final de go-live del release actual
 - `GET /docs/operational-certification` concentra la evidencia final de deploy, rollback, backup y restore del release actual
 - `GET /docs/evidence-governed-deploy` concentra el workflow manual que ejecuta y publica la cadena completa como artifact de cambio
+- el workflow soporta `deployment_strategy=remote_ssh` para deploy real remoto y `control_only` solo para troubleshooting
+- el environment `staging` debe usar `required reviewers` y secretos `VELMIX_SSH_HOST`, `VELMIX_SSH_USER`, `VELMIX_SSH_PRIVATE_KEY` y `VELMIX_SSH_KNOWN_HOSTS`
 - Ademas, el repositorio versiona plantillas operativas en:
   - `ops/systemd/velmix-scheduler.service`
   - `ops/systemd/velmix-queue-restart.service`
