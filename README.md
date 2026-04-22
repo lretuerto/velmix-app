@@ -115,6 +115,9 @@ php artisan test
 - Script de certificacion operativa del release: `composer run velmix:operational-certification`
 - Workflow manual de despliegue gobernado por evidencia: `.github/workflows/evidence-governed-deploy.yml`
 - Wrapper de cadena operativa gobernada por evidencia: `ops/scripts/run-evidence-governed-deploy.sh`
+- Auditoria del environment de despliegue: `ops/scripts/check-github-environment-readiness.sh`
+- Bootstrap reproducible de secrets/variables GitHub: `ops/scripts/sync-github-environment-config.sh`
+- Plantilla de configuracion del environment `staging`: `ops/github-environments/staging.env.example`
 - Script de pruning conservador: `composer run velmix:prune`
 - Script de lint de estilo: `composer run velmix:lint`
 - Script de lint completo del repo: `composer run velmix:lint:full`

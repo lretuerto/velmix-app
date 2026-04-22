@@ -16,6 +16,8 @@ Este runbook describe el workflow de GitHub Actions que gobierna un despliegue p
 - environments soportados: `staging`, `production`
 - cadena operativa ejecutada por `ops/scripts/run-evidence-governed-deploy.sh`
 - despliegue remoto real ejecutado por `ops/scripts/deploy-release-over-ssh.sh`
+- bootstrap de secrets y variables ejecutable por `ops/scripts/sync-github-environment-config.sh`
+- readiness del environment auditable por `ops/scripts/check-github-environment-readiness.sh`
 
 ## Modos de ejecución
 
@@ -49,9 +51,9 @@ Este runbook describe el workflow de GitHub Actions que gobierna un despliegue p
 - `VELMIX_SSH_PRIVATE_KEY`
 - `VELMIX_SSH_KNOWN_HOSTS`
 
-## Secrets opcionales para topologia remota
+## Variables recomendadas para topologia remota
 
-- `VELMIX_SSH_PORT`
+- `VELMIX_REMOTE_PORT`
 - `VELMIX_REMOTE_APP_ROOT`
 - `VELMIX_REMOTE_RELEASES_PATH`
 - `VELMIX_REMOTE_SHARED_PATH`
@@ -64,6 +66,29 @@ Este runbook describe el workflow de GitHub Actions que gobierna un despliegue p
 - `VELMIX_REMOTE_SYSTEMD_TARGET`
 - `VELMIX_REMOTE_QUEUE_RESTART_SERVICE`
 
+## Bootstrap reproducible del environment
+
+1. aplicar reviewers:
+
+```bash
+ops/scripts/configure-github-environment-protection.sh lretuerto/velmix-app staging <reviewer-id>
+```
+
+2. preparar un archivo real a partir de `ops/github-environments/staging.env.example`
+3. sincronizarlo:
+
+```bash
+ops/scripts/sync-github-environment-config.sh lretuerto/velmix-app staging ops/github-environments/staging.env.example
+```
+
+4. auditar el environment:
+
+```bash
+ops/scripts/check-github-environment-readiness.sh lretuerto/velmix-app staging
+```
+
+5. solo si el readiness queda `ok` o `warning` controlado, disparar el workflow
+
 ## Aprobación manual del environment
 
 - `staging` debe tener `required reviewers`
@@ -73,6 +98,9 @@ Este runbook describe el workflow de GitHub Actions que gobierna un despliegue p
 ```bash
 ops/scripts/configure-github-environment-protection.sh lretuerto/velmix-app staging <reviewer-id>
 ```
+
+- los secretos siguen siendo obligatorios para el deploy remoto vivo
+- la topologia remota no sensible ahora se consume como variables del environment, no como secretos
 
 ## Ejecucion manual recomendada
 

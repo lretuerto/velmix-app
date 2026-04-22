@@ -491,6 +491,10 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /docs/evidence-governed-deploy` concentra el workflow manual que ejecuta y publica la cadena completa como artifact de cambio
 - el workflow soporta `deployment_strategy=remote_ssh` para deploy real remoto y `control_only` solo para troubleshooting
 - el environment `staging` debe usar `required reviewers` y secretos `VELMIX_SSH_HOST`, `VELMIX_SSH_USER`, `VELMIX_SSH_PRIVATE_KEY` y `VELMIX_SSH_KNOWN_HOSTS`
+- variables remotas recomendadas para el environment: `VELMIX_REMOTE_PORT`, `VELMIX_REMOTE_APP_ROOT`, `VELMIX_REMOTE_RELEASES_PATH`, `VELMIX_REMOTE_SHARED_PATH`, `VELMIX_REMOTE_ENV_FILE`
+- la topologia remota no sensible del environment puede sincronizarse como variables con `ops/scripts/sync-github-environment-config.sh`
+- el readiness del environment antes del primer deploy vivo puede auditarse con `ops/scripts/check-github-environment-readiness.sh`
+- la plantilla versionada para bootstrap de `staging` vive en `ops/github-environments/staging.env.example`
 - Ademas, el repositorio versiona plantillas operativas en:
   - `ops/systemd/velmix-scheduler.service`
   - `ops/systemd/velmix-queue-restart.service`

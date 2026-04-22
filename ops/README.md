@@ -31,6 +31,9 @@ Contenido actual:
 - `scripts/run-evidence-governed-deploy.sh`: ejecuta la cadena completa de evidencia para un release controlado
 - `scripts/deploy-release-over-ssh.sh`: empaqueta el release actual, lo publica por SSH y ejecuta el gate gobernado por evidencia sobre el host remoto
 - `scripts/configure-github-environment-protection.sh`: aplica required reviewers sobre un environment de GitHub Actions via `gh api`
+- `scripts/check-github-environment-readiness.sh`: audita reviewers, bypass, secrets y variables de un environment antes del primer deploy vivo
+- `scripts/sync-github-environment-config.sh`: sincroniza secrets y variables desde un archivo versionable hacia un environment de GitHub
+- `github-environments/staging.env.example`: contrato de configuracion para el primer despliegue remoto real de `staging`
 - `.github/workflows/evidence-governed-deploy.yml`: workflow manual de GitHub Actions que gobierna el cambio por evidencia y sube un artifact del release
 
 Suposiciones deliberadas:
@@ -52,3 +55,11 @@ Secuencia recomendada de adopcion:
 6. revertir con `scripts/rollback-to-previous-release.sh` si la validacion post-promocion falla
 
 Estos archivos siguen siendo plantillas operativas, pero ya modelan una topologia de release reproducible y reversible para reducir configuration drift antes de activarse en producción.
+
+Bootstrap recomendado para `staging`:
+
+1. aplicar reviewers con `scripts/configure-github-environment-protection.sh`
+2. preparar un archivo real a partir de `github-environments/staging.env.example`
+3. sincronizar secrets y variables con `scripts/sync-github-environment-config.sh`
+4. validar el environment con `scripts/check-github-environment-readiness.sh`
+5. recien entonces disparar `.github/workflows/evidence-governed-deploy.yml`

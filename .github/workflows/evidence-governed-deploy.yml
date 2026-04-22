@@ -11,6 +11,9 @@ on:
       - 'ops/scripts/record-release-promotion.sh'
       - 'ops/scripts/record-release-cutover.sh'
       - 'ops/scripts/record-operational-certification.sh'
+      - 'ops/scripts/check-github-environment-readiness.sh'
+      - 'ops/scripts/sync-github-environment-config.sh'
+      - 'ops/github-environments/staging.env.example'
       - 'docs/operations/evidence-governed-deployment-workflow.md'
       - 'docs/operations/deployment-and-rollback-runbook.md'
       - 'docs/openapi/velmix.openapi.yaml'
@@ -242,20 +245,20 @@ jobs:
       VELMIX_BACKUP_SIZE: 0
       VELMIX_REMOTE_HOST: ${{ secrets.VELMIX_SSH_HOST }}
       VELMIX_REMOTE_USER: ${{ secrets.VELMIX_SSH_USER }}
-      VELMIX_REMOTE_PORT: ${{ secrets.VELMIX_SSH_PORT }}
+      VELMIX_REMOTE_PORT: ${{ vars.VELMIX_REMOTE_PORT }}
       VELMIX_SSH_PRIVATE_KEY: ${{ secrets.VELMIX_SSH_PRIVATE_KEY }}
       VELMIX_SSH_KNOWN_HOSTS: ${{ secrets.VELMIX_SSH_KNOWN_HOSTS }}
-      VELMIX_REMOTE_APP_ROOT: ${{ secrets.VELMIX_REMOTE_APP_ROOT }}
-      VELMIX_REMOTE_RELEASES_PATH: ${{ secrets.VELMIX_REMOTE_RELEASES_PATH }}
-      VELMIX_REMOTE_SHARED_PATH: ${{ secrets.VELMIX_REMOTE_SHARED_PATH }}
-      VELMIX_REMOTE_ENV_FILE: ${{ secrets.VELMIX_REMOTE_ENV_FILE }}
-      VELMIX_REMOTE_TMP_PATH: ${{ secrets.VELMIX_REMOTE_TMP_PATH }}
-      VELMIX_REMOTE_USE_SYSTEMD: ${{ secrets.VELMIX_REMOTE_USE_SYSTEMD }}
-      VELMIX_REMOTE_INSTALL_UNITS: ${{ secrets.VELMIX_REMOTE_INSTALL_UNITS }}
-      VELMIX_REMOTE_PHP_BIN: ${{ secrets.VELMIX_REMOTE_PHP_BIN }}
-      VELMIX_REMOTE_COMPOSER_BIN: ${{ secrets.VELMIX_REMOTE_COMPOSER_BIN }}
-      VELMIX_REMOTE_SYSTEMD_TARGET: ${{ secrets.VELMIX_REMOTE_SYSTEMD_TARGET }}
-      VELMIX_REMOTE_QUEUE_RESTART_SERVICE: ${{ secrets.VELMIX_REMOTE_QUEUE_RESTART_SERVICE }}
+      VELMIX_REMOTE_APP_ROOT: ${{ vars.VELMIX_REMOTE_APP_ROOT }}
+      VELMIX_REMOTE_RELEASES_PATH: ${{ vars.VELMIX_REMOTE_RELEASES_PATH }}
+      VELMIX_REMOTE_SHARED_PATH: ${{ vars.VELMIX_REMOTE_SHARED_PATH }}
+      VELMIX_REMOTE_ENV_FILE: ${{ vars.VELMIX_REMOTE_ENV_FILE }}
+      VELMIX_REMOTE_TMP_PATH: ${{ vars.VELMIX_REMOTE_TMP_PATH }}
+      VELMIX_REMOTE_USE_SYSTEMD: ${{ vars.VELMIX_REMOTE_USE_SYSTEMD }}
+      VELMIX_REMOTE_INSTALL_UNITS: ${{ vars.VELMIX_REMOTE_INSTALL_UNITS }}
+      VELMIX_REMOTE_PHP_BIN: ${{ vars.VELMIX_REMOTE_PHP_BIN }}
+      VELMIX_REMOTE_COMPOSER_BIN: ${{ vars.VELMIX_REMOTE_COMPOSER_BIN }}
+      VELMIX_REMOTE_SYSTEMD_TARGET: ${{ vars.VELMIX_REMOTE_SYSTEMD_TARGET }}
+      VELMIX_REMOTE_QUEUE_RESTART_SERVICE: ${{ vars.VELMIX_REMOTE_QUEUE_RESTART_SERVICE }}
 
     steps:
       - name: Checkout code
@@ -282,6 +285,23 @@ jobs:
               fi
               printf '    "%s"' "$name" >> "$blockers"
               missing=1
+            fi
+          done
+          for name in \
+            VELMIX_REMOTE_PORT \
+            VELMIX_REMOTE_APP_ROOT \
+            VELMIX_REMOTE_RELEASES_PATH \
+            VELMIX_REMOTE_SHARED_PATH \
+            VELMIX_REMOTE_ENV_FILE \
+            VELMIX_REMOTE_TMP_PATH \
+            VELMIX_REMOTE_USE_SYSTEMD \
+            VELMIX_REMOTE_INSTALL_UNITS \
+            VELMIX_REMOTE_PHP_BIN \
+            VELMIX_REMOTE_COMPOSER_BIN \
+            VELMIX_REMOTE_SYSTEMD_TARGET \
+            VELMIX_REMOTE_QUEUE_RESTART_SERVICE; do
+            if [ -z "${!name}" ]; then
+              echo "::warning::Remote deploy setting $name is not configured in the GitHub environment. Workflow defaults will be used."
             fi
           done
           if [ "$missing" -ne 0 ]; then

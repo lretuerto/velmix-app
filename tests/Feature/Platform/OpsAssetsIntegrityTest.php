@@ -32,6 +32,9 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertFileExists(base_path('ops/scripts/run-evidence-governed-deploy.sh'));
         $this->assertFileExists(base_path('ops/scripts/deploy-release-over-ssh.sh'));
         $this->assertFileExists(base_path('ops/scripts/configure-github-environment-protection.sh'));
+        $this->assertFileExists(base_path('ops/scripts/check-github-environment-readiness.sh'));
+        $this->assertFileExists(base_path('ops/scripts/sync-github-environment-config.sh'));
+        $this->assertFileExists(base_path('ops/github-environments/staging.env.example'));
         $this->assertFileExists(base_path('.github/workflows/evidence-governed-deploy.yml'));
 
         $envTemplate = file_get_contents(base_path('ops/systemd/velmix-app.env.example'));
@@ -153,6 +156,23 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('repos/${REPOSITORY}/environments/${ENVIRONMENT}', $configureEnvironmentScript);
         $this->assertStringContainsString('"reviewers"', $configureEnvironmentScript);
 
+        $environmentReadinessScript = file_get_contents(base_path('ops/scripts/check-github-environment-readiness.sh'));
+        $this->assertIsString($environmentReadinessScript);
+        $this->assertStringContainsString('gh secret list --env', $environmentReadinessScript);
+        $this->assertStringContainsString('gh variable list --env', $environmentReadinessScript);
+        $this->assertStringContainsString('"required_reviewers"', $environmentReadinessScript);
+
+        $syncEnvironmentScript = file_get_contents(base_path('ops/scripts/sync-github-environment-config.sh'));
+        $this->assertIsString($syncEnvironmentScript);
+        $this->assertStringContainsString('gh secret set', $syncEnvironmentScript);
+        $this->assertStringContainsString('gh variable set', $syncEnvironmentScript);
+        $this->assertStringContainsString('FILE:', $syncEnvironmentScript);
+
+        $stagingEnvironmentTemplate = file_get_contents(base_path('ops/github-environments/staging.env.example'));
+        $this->assertIsString($stagingEnvironmentTemplate);
+        $this->assertStringContainsString('VELMIX_SSH_PRIVATE_KEY=FILE:', $stagingEnvironmentTemplate);
+        $this->assertStringContainsString('VELMIX_REMOTE_APP_ROOT=/var/www/velmix', $stagingEnvironmentTemplate);
+
         $healthScript = file_get_contents(base_path('ops/scripts/check-backend-health.sh'));
         $this->assertIsString($healthScript);
         $this->assertStringContainsString('artisan system:observability-report --json', $healthScript);
@@ -171,6 +191,8 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('ops/scripts/deploy-release-over-ssh.sh', $workflow);
         $this->assertStringContainsString('VELMIX_SSH_HOST', $workflow);
         $this->assertStringContainsString('VELMIX_SSH_PRIVATE_KEY', $workflow);
+        $this->assertStringContainsString('vars.VELMIX_REMOTE_APP_ROOT', $workflow);
+        $this->assertStringContainsString('ops/scripts/check-github-environment-readiness.sh', $workflow);
         $this->assertStringContainsString('upload-artifact@v4', $workflow);
         $this->assertStringContainsString('evidence-governed-deploy-', $workflow);
         $this->assertStringContainsString('LOG_STACK: single,daily_json', $workflow);
