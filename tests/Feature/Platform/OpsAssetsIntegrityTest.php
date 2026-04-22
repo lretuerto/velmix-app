@@ -34,9 +34,12 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertFileExists(base_path('ops/scripts/deploy-release-over-ssh.sh'));
         $this->assertFileExists(base_path('ops/scripts/configure-github-environment-protection.sh'));
         $this->assertFileExists(base_path('ops/scripts/check-github-environment-readiness.sh'));
+        $this->assertFileExists(base_path('ops/scripts/check-production-go-no-go.sh'));
         $this->assertFileExists(base_path('ops/scripts/sync-github-environment-config.sh'));
         $this->assertFileExists(base_path('ops/github-environments/staging.env.example'));
         $this->assertFileExists(base_path('ops/github-environments/staging.variables.env.example'));
+        $this->assertFileExists(base_path('ops/github-environments/production.env.example'));
+        $this->assertFileExists(base_path('ops/github-environments/production.variables.env.example'));
         $this->assertFileExists(base_path('.github/workflows/evidence-governed-deploy.yml'));
 
         $envTemplate = file_get_contents(base_path('ops/systemd/velmix-app.env.example'));
@@ -174,8 +177,15 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertIsString($environmentReadinessScript);
         $this->assertStringContainsString('gh secret list --env', $environmentReadinessScript);
         $this->assertStringContainsString('gh variable list --env', $environmentReadinessScript);
+        $this->assertStringContainsString('"environment_missing"', $environmentReadinessScript);
         $this->assertStringContainsString('"invalid"', $environmentReadinessScript);
         $this->assertStringContainsString('"required_reviewers"', $environmentReadinessScript);
+
+        $goNoGoScript = file_get_contents(base_path('ops/scripts/check-production-go-no-go.sh'));
+        $this->assertIsString($goNoGoScript);
+        $this->assertStringContainsString('check-github-environment-readiness.sh', $goNoGoScript);
+        $this->assertStringContainsString('"production"', $goNoGoScript);
+        $this->assertStringContainsString('"release_candidate"', $goNoGoScript);
 
         $syncEnvironmentScript = file_get_contents(base_path('ops/scripts/sync-github-environment-config.sh'));
         $this->assertIsString($syncEnvironmentScript);
@@ -193,6 +203,16 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertIsString($stagingVariablesTemplate);
         $this->assertStringContainsString('VELMIX_REMOTE_APP_ROOT=/var/www/velmix', $stagingVariablesTemplate);
         $this->assertStringNotContainsString('VELMIX_SSH_PRIVATE_KEY', $stagingVariablesTemplate);
+
+        $productionEnvironmentTemplate = file_get_contents(base_path('ops/github-environments/production.env.example'));
+        $this->assertIsString($productionEnvironmentTemplate);
+        $this->assertStringContainsString('VELMIX_SSH_PRIVATE_KEY=FILE:', $productionEnvironmentTemplate);
+        $this->assertStringContainsString('production.example.internal', $productionEnvironmentTemplate);
+
+        $productionVariablesTemplate = file_get_contents(base_path('ops/github-environments/production.variables.env.example'));
+        $this->assertIsString($productionVariablesTemplate);
+        $this->assertStringContainsString('VELMIX_REMOTE_APP_ROOT=/var/www/velmix', $productionVariablesTemplate);
+        $this->assertStringNotContainsString('VELMIX_SSH_PRIVATE_KEY', $productionVariablesTemplate);
 
         $healthScript = file_get_contents(base_path('ops/scripts/check-backend-health.sh'));
         $this->assertIsString($healthScript);
@@ -213,6 +233,8 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('ops/scripts/deploy-release-over-ssh.sh', $workflow);
         $this->assertStringContainsString('VELMIX_SSH_HOST', $workflow);
         $this->assertStringContainsString('VELMIX_SSH_PRIVATE_KEY', $workflow);
+        $this->assertStringContainsString('ops/scripts/check-production-go-no-go.sh', $workflow);
+        $this->assertStringContainsString('ops/github-environments/production.env.example', $workflow);
         $this->assertStringContainsString('vars.VELMIX_REMOTE_APP_ROOT', $workflow);
         $this->assertStringContainsString('ops/scripts/check-github-environment-readiness.sh', $workflow);
         $this->assertStringContainsString('upload-artifact@v4', $workflow);

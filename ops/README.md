@@ -33,9 +33,12 @@ Contenido actual:
 - `scripts/deploy-release-over-ssh.sh`: empaqueta el release actual, lo publica por SSH y ejecuta el gate gobernado por evidencia sobre el host remoto
 - `scripts/configure-github-environment-protection.sh`: aplica required reviewers sobre un environment de GitHub Actions via `gh api`
 - `scripts/check-github-environment-readiness.sh`: audita reviewers, bypass, secrets y variables de un environment antes del primer deploy vivo
+- `scripts/check-production-go-no-go.sh`: consolida branch limpia y readiness de `staging`/`production` antes del paso a produccion
 - `scripts/sync-github-environment-config.sh`: sincroniza secrets y variables desde un archivo versionable hacia un environment de GitHub
 - `github-environments/staging.env.example`: contrato de configuracion para el primer despliegue remoto real de `staging`
 - `github-environments/staging.variables.env.example`: bootstrap seguro de solo variables no sensibles para `staging`
+- `github-environments/production.env.example`: contrato espejo para el primer despliegue remoto real de `production`
+- `github-environments/production.variables.env.example`: bootstrap seguro de solo variables no sensibles para `production`
 - `.github/workflows/evidence-governed-deploy.yml`: workflow manual de GitHub Actions que gobierna el cambio por evidencia y sube un artifact del release
 
 Suposiciones deliberadas:
@@ -66,7 +69,9 @@ Bootstrap recomendado para `staging`:
 4. sincronizar secrets y variables con `scripts/sync-github-environment-config.sh`
 5. validar el environment con `scripts/check-github-environment-readiness.sh`
 6. cuando existan secrets reales, validar el host remoto con `scripts/bootstrap-remote-host-over-ssh.sh`
-7. recien entonces disparar `.github/workflows/evidence-governed-deploy.yml`
+7. repetir el bootstrap espejo para `production`
+8. ejecutar `scripts/check-production-go-no-go.sh`
+9. recien entonces disparar `.github/workflows/evidence-governed-deploy.yml`
 
 Nota operativa:
 

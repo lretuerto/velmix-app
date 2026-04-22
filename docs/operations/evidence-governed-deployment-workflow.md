@@ -19,6 +19,7 @@ Este runbook describe el workflow de GitHub Actions que gobierna un despliegue p
 - despliegue remoto real ejecutado por `ops/scripts/deploy-release-over-ssh.sh`
 - bootstrap de secrets y variables ejecutable por `ops/scripts/sync-github-environment-config.sh`
 - readiness del environment auditable por `ops/scripts/check-github-environment-readiness.sh`
+- go/no-go consolidado antes de produccion ejecutable por `ops/scripts/check-production-go-no-go.sh`
 
 ## Modos de ejecución
 
@@ -89,7 +90,14 @@ ops/scripts/sync-github-environment-config.sh lretuerto/velmix-app staging ops/g
 ops/scripts/check-github-environment-readiness.sh lretuerto/velmix-app staging
 ```
 
-6. solo si el readiness queda `ok` o `warning` controlado, disparar el workflow
+6. repetir el bootstrap espejo para `production` con `ops/github-environments/production.env.example`
+7. ejecutar el gate consolidado:
+
+```bash
+ops/scripts/check-production-go-no-go.sh lretuerto/velmix-app
+```
+
+8. solo si el readiness queda `ok` o `warning` controlado, disparar el workflow
 
 ## Aprobación manual del environment
 

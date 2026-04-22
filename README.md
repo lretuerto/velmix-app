@@ -116,9 +116,12 @@ php artisan test
 - Workflow manual de despliegue gobernado por evidencia: `.github/workflows/evidence-governed-deploy.yml`
 - Wrapper de cadena operativa gobernada por evidencia: `ops/scripts/run-evidence-governed-deploy.sh`
 - Auditoria del environment de despliegue: `ops/scripts/check-github-environment-readiness.sh`
+- Gate consolidado de Go/No-Go productivo: `ops/scripts/check-production-go-no-go.sh`
 - Bootstrap reproducible de secrets/variables GitHub: `ops/scripts/sync-github-environment-config.sh`
 - Plantilla de configuracion del environment `staging`: `ops/github-environments/staging.env.example`
 - Bootstrap seguro de variables no sensibles: `ops/github-environments/staging.variables.env.example`
+- Plantilla de configuracion del environment `production`: `ops/github-environments/production.env.example`
+- Bootstrap seguro de variables no sensibles para `production`: `ops/github-environments/production.variables.env.example`
 - Script de pruning conservador: `composer run velmix:prune`
 - Script de lint de estilo: `composer run velmix:lint`
 - Script de lint completo del repo: `composer run velmix:lint:full`

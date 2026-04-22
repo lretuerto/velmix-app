@@ -494,8 +494,11 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - variables remotas recomendadas para el environment: `VELMIX_REMOTE_PORT`, `VELMIX_REMOTE_APP_ROOT`, `VELMIX_REMOTE_RELEASES_PATH`, `VELMIX_REMOTE_SHARED_PATH`, `VELMIX_REMOTE_ENV_FILE`
 - la topologia remota no sensible del environment puede sincronizarse como variables con `ops/scripts/sync-github-environment-config.sh`
 - el readiness del environment antes del primer deploy vivo puede auditarse con `ops/scripts/check-github-environment-readiness.sh`
+- el gate consolidado previo a produccion puede ejecutarse con `ops/scripts/check-production-go-no-go.sh`
 - la plantilla versionada para bootstrap de `staging` vive en `ops/github-environments/staging.env.example`
 - el bootstrap seguro de solo variables no sensibles vive en `ops/github-environments/staging.variables.env.example`
+- la plantilla espejo de `production` vive en `ops/github-environments/production.env.example`
+- el bootstrap seguro de `production` vive en `ops/github-environments/production.variables.env.example`
 - Ademas, el repositorio versiona plantillas operativas en:
   - `ops/systemd/velmix-scheduler.service`
   - `ops/systemd/velmix-queue-restart.service`

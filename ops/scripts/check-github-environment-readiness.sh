@@ -70,6 +70,36 @@ windows_path_value() {
   [[ "$value" =~ ^[A-Za-z]:[\\/] ]]
 }
 
+if ! gh api "repos/${REPOSITORY}/environments/${ENVIRONMENT}" >/dev/null 2>&1; then
+  printf '{\n'
+  printf '  "status": "blocked",\n'
+  printf '  "repository": "%s",\n' "$REPOSITORY"
+  printf '  "environment": "%s",\n' "$ENVIRONMENT"
+  printf '  "exists": false,\n'
+  printf '  "required_reviewers": {\n'
+  printf '    "count": 0,\n'
+  printf '    "prevent_self_review": false,\n'
+  printf '    "reviewers": []\n'
+  printf '  },\n'
+  printf '  "bypass": {\n'
+  printf '    "can_admins_bypass": false\n'
+  printf '  },\n'
+  printf '  "secrets": {\n'
+  printf '    "required": %s,\n' "$(json_array "${required_secrets[@]}")"
+  printf '    "configured": [],\n'
+  printf '    "missing": %s\n' "$(json_array "${required_secrets[@]}")"
+  printf '  },\n'
+  printf '  "variables": {\n'
+  printf '    "recommended": %s,\n' "$(json_array "${recommended_variables[@]}")"
+  printf '    "configured": [],\n'
+  printf '    "missing": %s,\n' "$(json_array "${recommended_variables[@]}")"
+  printf '    "invalid": []\n'
+  printf '  },\n'
+  printf '  "issues": ["environment_missing"]\n'
+  printf '}\n'
+  exit 1
+fi
+
 mapfile -t configured_secrets < <(gh secret list --env "$ENVIRONMENT" -R "$REPOSITORY" --json name --jq '.[].name')
 mapfile -t configured_variable_records < <(gh variable list --env "$ENVIRONMENT" -R "$REPOSITORY" --json name,value --jq '.[] | "\(.name)=\(.value)"')
 mapfile -t reviewer_logins < <(gh api "repos/${REPOSITORY}/environments/${ENVIRONMENT}" --jq '.protection_rules[]? | select(.type == "required_reviewers") | .reviewers[]?.reviewer.login')
@@ -138,6 +168,7 @@ printf '{\n'
 printf '  "status": "%s",\n' "$status"
 printf '  "repository": "%s",\n' "$REPOSITORY"
 printf '  "environment": "%s",\n' "$ENVIRONMENT"
+printf '  "exists": true,\n'
 printf '  "required_reviewers": {\n'
 printf '    "count": %s,\n' "$reviewer_count"
 printf '    "prevent_self_review": %s,\n' "$prevent_self_review"
@@ -156,7 +187,8 @@ printf '    "recommended": %s,\n' "$(json_array "${recommended_variables[@]}")"
 printf '    "configured": %s,\n' "$(json_array "${configured_variables[@]}")"
 printf '    "missing": %s,\n' "$(json_array "${missing_variables[@]}")"
 printf '    "invalid": %s\n' "$(json_array "${invalid_variables[@]}")"
-printf '  }\n'
+printf '  },\n'
+printf '  "issues": []\n'
 printf '}\n'
 
 if [[ "$status" == "blocked" ]]; then
