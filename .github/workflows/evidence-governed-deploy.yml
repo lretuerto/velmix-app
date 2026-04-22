@@ -261,19 +261,47 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Initialize evidence workspace
+        run: mkdir -p "$VELMIX_DEPLOY_EVIDENCE_DIR"
+
       - name: Validate remote deploy configuration
         if: ${{ inputs.deployment_strategy == 'remote_ssh' }}
         run: |
           missing=0
+          blockers="$VELMIX_DEPLOY_EVIDENCE_DIR/blockers.json"
+          summary="$VELMIX_DEPLOY_EVIDENCE_DIR/summary.md"
+          printf '{\n  "status": "blocked",\n  "release": "%s",\n  "environment": "%s",\n  "missing_secrets": [\n' "$VELMIX_RELEASE_IDENTIFIER" "${{ inputs.target_environment }}" > "$blockers"
+          first=true
           for name in VELMIX_REMOTE_HOST VELMIX_REMOTE_USER VELMIX_SSH_PRIVATE_KEY VELMIX_SSH_KNOWN_HOSTS; do
             if [ -z "${!name}" ]; then
               echo "::error::Missing required staging environment secret: $name"
+              if [ "$first" = true ]; then
+                first=false
+              else
+                printf ',\n' >> "$blockers"
+              fi
+              printf '    "%s"' "$name" >> "$blockers"
               missing=1
             fi
           done
           if [ "$missing" -ne 0 ]; then
+            printf '\n  ]\n}\n' >> "$blockers"
+            cat > "$summary" <<EOF
+          # Evidence Governed Deploy Blocked
+
+          - Release: \`$VELMIX_RELEASE_IDENTIFIER\`
+          - Environment: \`${{ inputs.target_environment }}\`
+          - Status: \`blocked\`
+          - Reason: missing required SSH environment secrets for live remote deploy
+          - Required secrets:
+            - \`VELMIX_REMOTE_HOST\`
+            - \`VELMIX_REMOTE_USER\`
+            - \`VELMIX_SSH_PRIVATE_KEY\`
+            - \`VELMIX_SSH_KNOWN_HOSTS\`
+          EOF
             exit 1
           fi
+          printf '\n  ]\n}\n' >> "$blockers"
 
       - name: Configure SSH access
         if: ${{ inputs.deployment_strategy == 'remote_ssh' }}
