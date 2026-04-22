@@ -34,6 +34,7 @@ Contenido actual:
 - `scripts/check-github-environment-readiness.sh`: audita reviewers, bypass, secrets y variables de un environment antes del primer deploy vivo
 - `scripts/sync-github-environment-config.sh`: sincroniza secrets y variables desde un archivo versionable hacia un environment de GitHub
 - `github-environments/staging.env.example`: contrato de configuracion para el primer despliegue remoto real de `staging`
+- `github-environments/staging.variables.env.example`: bootstrap seguro de solo variables no sensibles para `staging`
 - `.github/workflows/evidence-governed-deploy.yml`: workflow manual de GitHub Actions que gobierna el cambio por evidencia y sube un artifact del release
 
 Suposiciones deliberadas:
@@ -59,7 +60,12 @@ Estos archivos siguen siendo plantillas operativas, pero ya modelan una topologi
 Bootstrap recomendado para `staging`:
 
 1. aplicar reviewers con `scripts/configure-github-environment-protection.sh`
-2. preparar un archivo real a partir de `github-environments/staging.env.example`
-3. sincronizar secrets y variables con `scripts/sync-github-environment-config.sh`
-4. validar el environment con `scripts/check-github-environment-readiness.sh`
-5. recien entonces disparar `.github/workflows/evidence-governed-deploy.yml`
+2. sincronizar primero variables no sensibles con `github-environments/staging.variables.env.example`
+3. preparar luego un archivo real a partir de `github-environments/staging.env.example`
+4. sincronizar secrets y variables con `scripts/sync-github-environment-config.sh`
+5. validar el environment con `scripts/check-github-environment-readiness.sh`
+6. recien entonces disparar `.github/workflows/evidence-governed-deploy.yml`
+
+Nota operativa:
+
+- si el bootstrap corre desde Git Bash sobre Windows, `scripts/sync-github-environment-config.sh` desactiva path conversion para evitar que rutas Linux terminen convertidas a paths locales de Windows

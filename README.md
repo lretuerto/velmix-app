@@ -118,6 +118,7 @@ php artisan test
 - Auditoria del environment de despliegue: `ops/scripts/check-github-environment-readiness.sh`
 - Bootstrap reproducible de secrets/variables GitHub: `ops/scripts/sync-github-environment-config.sh`
 - Plantilla de configuracion del environment `staging`: `ops/github-environments/staging.env.example`
+- Bootstrap seguro de variables no sensibles: `ops/github-environments/staging.variables.env.example`
 - Script de pruning conservador: `composer run velmix:prune`
 - Script de lint de estilo: `composer run velmix:lint`
 - Script de lint completo del repo: `composer run velmix:lint:full`

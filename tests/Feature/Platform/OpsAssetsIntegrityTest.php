@@ -35,6 +35,7 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertFileExists(base_path('ops/scripts/check-github-environment-readiness.sh'));
         $this->assertFileExists(base_path('ops/scripts/sync-github-environment-config.sh'));
         $this->assertFileExists(base_path('ops/github-environments/staging.env.example'));
+        $this->assertFileExists(base_path('ops/github-environments/staging.variables.env.example'));
         $this->assertFileExists(base_path('.github/workflows/evidence-governed-deploy.yml'));
 
         $envTemplate = file_get_contents(base_path('ops/systemd/velmix-app.env.example'));
@@ -160,6 +161,7 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertIsString($environmentReadinessScript);
         $this->assertStringContainsString('gh secret list --env', $environmentReadinessScript);
         $this->assertStringContainsString('gh variable list --env', $environmentReadinessScript);
+        $this->assertStringContainsString('"invalid"', $environmentReadinessScript);
         $this->assertStringContainsString('"required_reviewers"', $environmentReadinessScript);
 
         $syncEnvironmentScript = file_get_contents(base_path('ops/scripts/sync-github-environment-config.sh'));
@@ -167,11 +169,17 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('gh secret set', $syncEnvironmentScript);
         $this->assertStringContainsString('gh variable set', $syncEnvironmentScript);
         $this->assertStringContainsString('FILE:', $syncEnvironmentScript);
+        $this->assertStringContainsString('MSYS_NO_PATHCONV=1', $syncEnvironmentScript);
 
         $stagingEnvironmentTemplate = file_get_contents(base_path('ops/github-environments/staging.env.example'));
         $this->assertIsString($stagingEnvironmentTemplate);
         $this->assertStringContainsString('VELMIX_SSH_PRIVATE_KEY=FILE:', $stagingEnvironmentTemplate);
         $this->assertStringContainsString('VELMIX_REMOTE_APP_ROOT=/var/www/velmix', $stagingEnvironmentTemplate);
+
+        $stagingVariablesTemplate = file_get_contents(base_path('ops/github-environments/staging.variables.env.example'));
+        $this->assertIsString($stagingVariablesTemplate);
+        $this->assertStringContainsString('VELMIX_REMOTE_APP_ROOT=/var/www/velmix', $stagingVariablesTemplate);
+        $this->assertStringNotContainsString('VELMIX_SSH_PRIVATE_KEY', $stagingVariablesTemplate);
 
         $healthScript = file_get_contents(base_path('ops/scripts/check-backend-health.sh'));
         $this->assertIsString($healthScript);

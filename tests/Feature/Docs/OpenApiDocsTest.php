@@ -244,6 +244,7 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('ops/scripts/check-github-environment-readiness.sh', false)
             ->assertSee('ops/scripts/sync-github-environment-config.sh', false)
             ->assertSee('ops/github-environments/staging.env.example', false)
+            ->assertSee('ops/github-environments/staging.variables.env.example', false)
             ->assertSee('deployment_strategy=remote_ssh', false)
             ->assertSee('VELMIX_SSH_HOST', false)
             ->assertSee('VELMIX_REMOTE_APP_ROOT', false)

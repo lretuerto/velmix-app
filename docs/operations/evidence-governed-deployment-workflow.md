@@ -74,20 +74,21 @@ Este runbook describe el workflow de GitHub Actions que gobierna un despliegue p
 ops/scripts/configure-github-environment-protection.sh lretuerto/velmix-app staging <reviewer-id>
 ```
 
-2. preparar un archivo real a partir de `ops/github-environments/staging.env.example`
-3. sincronizarlo:
+2. sincronizar primero variables no sensibles con:
 
 ```bash
-ops/scripts/sync-github-environment-config.sh lretuerto/velmix-app staging ops/github-environments/staging.env.example
+ops/scripts/sync-github-environment-config.sh lretuerto/velmix-app staging ops/github-environments/staging.variables.env.example
 ```
 
-4. auditar el environment:
+3. preparar un archivo real a partir de `ops/github-environments/staging.env.example` para los secretos
+4. sincronizarlo con el mismo script solo cuando ya existan los valores reales
+5. auditar el environment:
 
 ```bash
 ops/scripts/check-github-environment-readiness.sh lretuerto/velmix-app staging
 ```
 
-5. solo si el readiness queda `ok` o `warning` controlado, disparar el workflow
+6. solo si el readiness queda `ok` o `warning` controlado, disparar el workflow
 
 ## Aprobación manual del environment
 
@@ -101,6 +102,8 @@ ops/scripts/configure-github-environment-protection.sh lretuerto/velmix-app stag
 
 - los secretos siguen siendo obligatorios para el deploy remoto vivo
 - la topologia remota no sensible ahora se consume como variables del environment, no como secretos
+- `ops/github-environments/staging.variables.env.example` permite bootstrapear la topologia sin exponer ni inventar secretos
+- si el bootstrap corre desde Git Bash sobre Windows, `ops/scripts/sync-github-environment-config.sh` desactiva path conversion para preservar rutas Linux como `/var/www/velmix`
 
 ## Ejecucion manual recomendada
 

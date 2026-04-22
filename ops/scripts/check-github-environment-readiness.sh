@@ -64,17 +64,39 @@ json_array() {
   printf ']'
 }
 
+windows_path_value() {
+  local value="$1"
+
+  [[ "$value" =~ ^[A-Za-z]:[\\/] ]]
+}
+
 mapfile -t configured_secrets < <(gh secret list --env "$ENVIRONMENT" -R "$REPOSITORY" --json name --jq '.[].name')
-mapfile -t configured_variables < <(gh variable list --env "$ENVIRONMENT" -R "$REPOSITORY" --json name --jq '.[].name')
+mapfile -t configured_variable_records < <(gh variable list --env "$ENVIRONMENT" -R "$REPOSITORY" --json name,value --jq '.[] | "\(.name)=\(.value)"')
 mapfile -t reviewer_logins < <(gh api "repos/${REPOSITORY}/environments/${ENVIRONMENT}" --jq '.protection_rules[]? | select(.type == "required_reviewers") | .reviewers[]?.reviewer.login')
 
 can_admins_bypass="$(gh api "repos/${REPOSITORY}/environments/${ENVIRONMENT}" --jq '.can_admins_bypass')"
 prevent_self_review="$(gh api "repos/${REPOSITORY}/environments/${ENVIRONMENT}" --jq '([.protection_rules[]? | select(.type == "required_reviewers") | .prevent_self_review] | first) // false')"
 reviewer_count="${#reviewer_logins[@]}"
 
+configured_variables=()
 missing_secrets=()
 missing_variables=()
+invalid_variables=()
 status="ok"
+
+for record in "${configured_variable_records[@]}"; do
+  name="${record%%=*}"
+  value="${record#*=}"
+  configured_variables+=("$name")
+
+  case "$name" in
+    VELMIX_REMOTE_APP_ROOT|VELMIX_REMOTE_RELEASES_PATH|VELMIX_REMOTE_SHARED_PATH|VELMIX_REMOTE_ENV_FILE|VELMIX_REMOTE_TMP_PATH)
+      if windows_path_value "$value"; then
+        invalid_variables+=("$name")
+      fi
+      ;;
+  esac
+done
 
 for name in "${required_secrets[@]}"; do
   if ! contains_name "$name" "${configured_secrets[@]}"; then
@@ -98,6 +120,10 @@ fi
 
 if [[ "$status" != "blocked" && ${#missing_variables[@]} -gt 0 ]]; then
   status="warning"
+fi
+
+if (( ${#invalid_variables[@]} > 0 )); then
+  status="blocked"
 fi
 
 if [[ "$status" != "blocked" && "$can_admins_bypass" == "true" ]]; then
@@ -128,7 +154,8 @@ printf '  },\n'
 printf '  "variables": {\n'
 printf '    "recommended": %s,\n' "$(json_array "${recommended_variables[@]}")"
 printf '    "configured": %s,\n' "$(json_array "${configured_variables[@]}")"
-printf '    "missing": %s\n' "$(json_array "${missing_variables[@]}")"
+printf '    "missing": %s,\n' "$(json_array "${missing_variables[@]}")"
+printf '    "invalid": %s\n' "$(json_array "${invalid_variables[@]}")"
 printf '  }\n'
 printf '}\n'
 

@@ -42,6 +42,10 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
   exit 1
 fi
 
+run_gh() {
+  MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' gh "$@"
+}
+
 contains_name() {
   local needle="$1"
   shift
@@ -89,12 +93,12 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   value="$(resolve_value "$raw_value")"
 
   if contains_name "$name" "${secret_names[@]}"; then
-    printf '%s' "$value" | gh secret set "$name" --env "$ENVIRONMENT" -R "$REPOSITORY"
+    printf '%s' "$value" | run_gh secret set "$name" --env "$ENVIRONMENT" -R "$REPOSITORY"
     continue
   fi
 
   if contains_name "$name" "${variable_names[@]}"; then
-    gh variable set "$name" --env "$ENVIRONMENT" -R "$REPOSITORY" --body "$value"
+    run_gh variable set "$name" --env "$ENVIRONMENT" -R "$REPOSITORY" --body "$value"
     continue
   fi
 
