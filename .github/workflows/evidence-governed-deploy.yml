@@ -277,17 +277,32 @@ jobs:
           missing=0
           blockers="$VELMIX_DEPLOY_EVIDENCE_DIR/blockers.json"
           summary="$VELMIX_DEPLOY_EVIDENCE_DIR/summary.md"
+          required_secret_names=(
+            VELMIX_SSH_HOST
+            VELMIX_SSH_USER
+            VELMIX_SSH_PRIVATE_KEY
+            VELMIX_SSH_KNOWN_HOSTS
+          )
+          required_secret_runtime_names=(
+            VELMIX_REMOTE_HOST
+            VELMIX_REMOTE_USER
+            VELMIX_SSH_PRIVATE_KEY
+            VELMIX_SSH_KNOWN_HOSTS
+          )
           printf '{\n  "status": "blocked",\n  "release": "%s",\n  "environment": "%s",\n  "missing_secrets": [\n' "$VELMIX_RELEASE_IDENTIFIER" "${{ inputs.target_environment }}" > "$blockers"
           first=true
-          for name in VELMIX_REMOTE_HOST VELMIX_REMOTE_USER VELMIX_SSH_PRIVATE_KEY VELMIX_SSH_KNOWN_HOSTS; do
-            if [ -z "${!name}" ]; then
-              echo "::error::Missing required staging environment secret: $name"
+          for idx in "${!required_secret_names[@]}"; do
+            secret_name="${required_secret_names[$idx]}"
+            runtime_name="${required_secret_runtime_names[$idx]}"
+            if [ -z "${!runtime_name}" ]; then
+              echo "::error::Missing required ${{ inputs.target_environment }} environment secret: $secret_name"
+              echo "::notice::GitHub Actions maps $secret_name into runtime variable $runtime_name for the remote deploy wrapper."
               if [ "$first" = true ]; then
                 first=false
               else
                 printf ',\n' >> "$blockers"
               fi
-              printf '    "%s"' "$name" >> "$blockers"
+              printf '    "%s"' "$secret_name" >> "$blockers"
               missing=1
             fi
           done
@@ -318,10 +333,13 @@ jobs:
           - Status: \`blocked\`
           - Reason: missing required SSH environment secrets for live remote deploy
           - Required secrets:
-            - \`VELMIX_REMOTE_HOST\`
-            - \`VELMIX_REMOTE_USER\`
+            - \`VELMIX_SSH_HOST\`
+            - \`VELMIX_SSH_USER\`
             - \`VELMIX_SSH_PRIVATE_KEY\`
             - \`VELMIX_SSH_KNOWN_HOSTS\`
+          - Runtime mapping:
+            - \`VELMIX_SSH_HOST -> VELMIX_REMOTE_HOST\`
+            - \`VELMIX_SSH_USER -> VELMIX_REMOTE_USER\`
           EOF
             exit 1
           fi

@@ -240,5 +240,13 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('upload-artifact@v4', $workflow);
         $this->assertStringContainsString('evidence-governed-deploy-', $workflow);
         $this->assertStringContainsString('LOG_STACK: single,daily_json', $workflow);
+        $this->assertStringContainsString('Missing required ${{ inputs.target_environment }} environment secret: $secret_name', $workflow);
+        $this->assertStringContainsString('GitHub Actions maps $secret_name into runtime variable $runtime_name', $workflow);
+        $this->assertStringContainsString('\`VELMIX_SSH_HOST\`', $workflow);
+        $this->assertStringContainsString('\`VELMIX_SSH_USER\`', $workflow);
+        $this->assertStringContainsString('\`VELMIX_SSH_HOST -> VELMIX_REMOTE_HOST\`', $workflow);
+        $this->assertStringContainsString('\`VELMIX_SSH_USER -> VELMIX_REMOTE_USER\`', $workflow);
+        $this->assertStringNotContainsString('\`VELMIX_REMOTE_HOST\`', $workflow);
+        $this->assertStringNotContainsString('\`VELMIX_REMOTE_USER\`', $workflow);
     }
 }

@@ -53,6 +53,8 @@ Este runbook describe el workflow de GitHub Actions que gobierna un despliegue p
 - `VELMIX_SSH_PRIVATE_KEY`
 - `VELMIX_SSH_KNOWN_HOSTS`
 
+El workflow carga esos secrets del environment y los expone en runtime como `VELMIX_REMOTE_HOST` y `VELMIX_REMOTE_USER` para los wrappers SSH. Los nombres que debes configurar en GitHub siguen siendo `VELMIX_SSH_*`.
+
 ## Variables recomendadas para topologia remota
 
 - `VELMIX_REMOTE_PORT`
@@ -199,3 +201,5 @@ Contenido minimo:
 ## Supuesto controlado
 
 Este workflow puede gobernar un deploy remoto real si el environment tiene reviewers y secrets de SSH configurados. Sin esos secretos, el pipeline debe fallar temprano y no debe considerarse evidencia viva.
+
+Cuando ese fail-fast ocurra, `blockers.json` y `summary.md` deben listar los nombres reales de GitHub Environment Secrets (`VELMIX_SSH_HOST`, `VELMIX_SSH_USER`, `VELMIX_SSH_PRIVATE_KEY`, `VELMIX_SSH_KNOWN_HOSTS`) y no solo las variables runtime derivadas.
