@@ -106,6 +106,7 @@ Para `production`, el gate consolidado debe tratar como `blocked` estos casos de
 - menos de 2 reviewers reales
 - `prevent_self_review=false`
 - `can_admins_bypass=true`
+- el script `ops/scripts/configure-github-environment-protection.sh` ya acepta reviewers separados por coma para dejar esa gobernanza aplicada de forma reproducible
 
 ## Aprobación manual del environment
 
@@ -116,6 +117,16 @@ Para `production`, el gate consolidado debe tratar como `blocked` estos casos de
 
 ```bash
 ops/scripts/configure-github-environment-protection.sh lretuerto/velmix-app staging <reviewer-id>
+```
+
+Ejemplo para `production` con dos reviewers:
+
+```bash
+VELMIX_PREVENT_SELF_REVIEW=true \
+ops/scripts/configure-github-environment-protection.sh \
+  lretuerto/velmix-app \
+  production \
+  "<reviewer-id-1>,<reviewer-id-2>"
 ```
 
 - los secretos siguen siendo obligatorios para el deploy remoto vivo

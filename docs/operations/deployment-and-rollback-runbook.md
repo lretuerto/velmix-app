@@ -187,6 +187,7 @@ Antes de revertir esquema revisar:
 - la certificacion operativa debe registrar deploy real, rollback real, backup utilizado y restore validado para el mismo `release_identifier`
 - el workflow `Evidence Governed Deploy` debe tratarse como gate obligatorio de cambio cuando el release se gobierne desde GitHub Actions
 - `ops/scripts/check-production-go-no-go.sh` debe bloquear `production` si hay menos de 2 reviewers reales, si existe self-review o si el environment permite bypass administrativo
+- `ops/scripts/configure-github-environment-protection.sh` admite reviewers separados por coma para versionar la proteccion de `production` con al menos dos aprobadores
 - el pruning debe comenzar en modo `--pretend` antes de activarse automatico en un entorno nuevo
 - conservar evidencia de `X-Request-Id` y logs JSON durante incidentes
 - en multi-nodo, habilitar `VELMIX_SCHEDULER_ON_ONE_SERVER=true` solo si existe cache compartido con locks atomicos

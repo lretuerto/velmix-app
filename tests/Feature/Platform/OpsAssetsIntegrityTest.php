@@ -172,6 +172,10 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertIsString($configureEnvironmentScript);
         $this->assertStringContainsString('repos/${REPOSITORY}/environments/${ENVIRONMENT}', $configureEnvironmentScript);
         $this->assertStringContainsString('"reviewers"', $configureEnvironmentScript);
+        $this->assertStringContainsString('VELMIX_ENVIRONMENT_REVIEWER_IDS', $configureEnvironmentScript);
+        $this->assertStringContainsString('reviewer-id[,reviewer-id...]', $configureEnvironmentScript);
+        $this->assertStringContainsString('IFS=\',\' read -r -a reviewers', $configureEnvironmentScript);
+        $this->assertStringContainsString('At least one numeric reviewer id is required.', $configureEnvironmentScript);
 
         $environmentReadinessScript = file_get_contents(base_path('ops/scripts/check-github-environment-readiness.sh'));
         $this->assertIsString($environmentReadinessScript);
