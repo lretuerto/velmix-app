@@ -16,6 +16,7 @@ Este runbook describe el workflow de GitHub Actions que gobierna un despliegue p
 - environments soportados: `staging`, `production`
 - cadena operativa ejecutada por `ops/scripts/run-evidence-governed-deploy.sh`
 - bootstrap y validacion remota previa ejecutados por `ops/scripts/bootstrap-remote-host-over-ssh.sh`
+- el workflow fuerza `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` para evitar deprecaciones del runtime Node 20 en actions JavaScript como `actions/upload-artifact`
 - despliegue remoto real ejecutado por `ops/scripts/deploy-release-over-ssh.sh`
 - bootstrap de secrets y variables ejecutable por `ops/scripts/sync-github-environment-config.sh`
 - readiness del environment auditable por `ops/scripts/check-github-environment-readiness.sh`

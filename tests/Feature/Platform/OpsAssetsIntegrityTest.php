@@ -251,6 +251,7 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('vars.VELMIX_REMOTE_APP_ROOT', $workflow);
         $this->assertStringContainsString('ops/scripts/check-github-environment-readiness.sh', $workflow);
         $this->assertStringContainsString('upload-artifact@v4', $workflow);
+        $this->assertStringContainsString('FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true', $workflow);
         $this->assertStringContainsString('evidence-governed-deploy-', $workflow);
         $this->assertStringContainsString('LOG_STACK: single,daily_json', $workflow);
         $this->assertStringContainsString('Missing required ${{ inputs.target_environment }} environment secret: $secret_name', $workflow);

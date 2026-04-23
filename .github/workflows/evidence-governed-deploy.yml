@@ -100,6 +100,9 @@ concurrency:
   group: evidence-governed-deploy-${{ github.ref_name }}-${{ inputs.target_environment || 'staging' }}
   cancel-in-progress: false
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   controlled-smoke:
     if: github.event_name == 'push'
