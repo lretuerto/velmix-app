@@ -186,6 +186,7 @@ Antes de revertir esquema revisar:
 - el cutover final debe registrar evidencia del cambio de trafico, monitoreo post-go-live y rollback asociado al `release_identifier`
 - la certificacion operativa debe registrar deploy real, rollback real, backup utilizado y restore validado para el mismo `release_identifier`
 - el workflow `Evidence Governed Deploy` debe tratarse como gate obligatorio de cambio cuando el release se gobierne desde GitHub Actions
+- `ops/scripts/check-production-go-no-go.sh` debe bloquear `production` si hay menos de 2 reviewers reales, si existe self-review o si el environment permite bypass administrativo
 - el pruning debe comenzar en modo `--pretend` antes de activarse automatico en un entorno nuevo
 - conservar evidencia de `X-Request-Id` y logs JSON durante incidentes
 - en multi-nodo, habilitar `VELMIX_SCHEDULER_ON_ONE_SERVER=true` solo si existe cache compartido con locks atomicos

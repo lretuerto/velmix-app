@@ -101,9 +101,16 @@ ops/scripts/check-production-go-no-go.sh lretuerto/velmix-app
 
 8. solo si el readiness queda `ok` o `warning` controlado, disparar el workflow
 
+Para `production`, el gate consolidado debe tratar como `blocked` estos casos de gobernanza:
+
+- menos de 2 reviewers reales
+- `prevent_self_review=false`
+- `can_admins_bypass=true`
+
 ## Aprobación manual del environment
 
 - `staging` debe tener `required reviewers`
+- `production` debe tener al menos 2 reviewers independientes para considerarse `GO` serio
 - el workflow `workflow_dispatch` referencia el environment `${target_environment}` y queda pendiente hasta que se apruebe
 - la configuracion reproducible puede aplicarse con:
 

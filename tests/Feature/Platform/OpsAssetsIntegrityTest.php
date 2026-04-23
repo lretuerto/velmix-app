@@ -180,12 +180,21 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('"environment_missing"', $environmentReadinessScript);
         $this->assertStringContainsString('"invalid"', $environmentReadinessScript);
         $this->assertStringContainsString('"required_reviewers"', $environmentReadinessScript);
+        $this->assertStringContainsString('VELMIX_MIN_REQUIRED_REVIEWERS', $environmentReadinessScript);
+        $this->assertStringContainsString('VELMIX_FAIL_ON_SELF_REVIEW', $environmentReadinessScript);
+        $this->assertStringContainsString('VELMIX_FAIL_ON_ADMIN_BYPASS', $environmentReadinessScript);
+        $this->assertStringContainsString('"insufficient_required_reviewers"', $environmentReadinessScript);
+        $this->assertStringContainsString('"admin_bypass_allowed"', $environmentReadinessScript);
+        $this->assertStringContainsString('"self_review_allowed"', $environmentReadinessScript);
 
         $goNoGoScript = file_get_contents(base_path('ops/scripts/check-production-go-no-go.sh'));
         $this->assertIsString($goNoGoScript);
         $this->assertStringContainsString('check-github-environment-readiness.sh', $goNoGoScript);
         $this->assertStringContainsString('"production"', $goNoGoScript);
         $this->assertStringContainsString('"release_candidate"', $goNoGoScript);
+        $this->assertStringContainsString('VELMIX_MIN_REQUIRED_REVIEWERS=2', $goNoGoScript);
+        $this->assertStringContainsString('VELMIX_FAIL_ON_SELF_REVIEW=true', $goNoGoScript);
+        $this->assertStringContainsString('VELMIX_FAIL_ON_ADMIN_BYPASS=true', $goNoGoScript);
 
         $syncEnvironmentScript = file_get_contents(base_path('ops/scripts/sync-github-environment-config.sh'));
         $this->assertIsString($syncEnvironmentScript);

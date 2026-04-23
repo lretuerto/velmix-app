@@ -4,6 +4,9 @@ set -euo pipefail
 REPOSITORY="${1:-}"
 ENVIRONMENT="${2:-}"
 FAIL_ON_WARNING="${VELMIX_FAIL_ON_WARNING:-false}"
+MIN_REQUIRED_REVIEWERS="${VELMIX_MIN_REQUIRED_REVIEWERS:-1}"
+FAIL_ON_SELF_REVIEW="${VELMIX_FAIL_ON_SELF_REVIEW:-false}"
+FAIL_ON_ADMIN_BYPASS="${VELMIX_FAIL_ON_ADMIN_BYPASS:-false}"
 
 required_secrets=(
   VELMIX_SSH_HOST
@@ -76,6 +79,11 @@ if ! gh api "repos/${REPOSITORY}/environments/${ENVIRONMENT}" >/dev/null 2>&1; t
   printf '  "repository": "%s",\n' "$REPOSITORY"
   printf '  "environment": "%s",\n' "$ENVIRONMENT"
   printf '  "exists": false,\n'
+  printf '  "policy": {\n'
+  printf '    "min_required_reviewers": %s,\n' "$MIN_REQUIRED_REVIEWERS"
+  printf '    "fail_on_self_review": %s,\n' "$FAIL_ON_SELF_REVIEW"
+  printf '    "fail_on_admin_bypass": %s\n' "$FAIL_ON_ADMIN_BYPASS"
+  printf '  },\n'
   printf '  "required_reviewers": {\n'
   printf '    "count": 0,\n'
   printf '    "prevent_self_review": false,\n'
@@ -112,6 +120,7 @@ configured_variables=()
 missing_secrets=()
 missing_variables=()
 invalid_variables=()
+issues=()
 status="ok"
 
 for record in "${configured_variable_records[@]}"; do
@@ -141,27 +150,46 @@ for name in "${recommended_variables[@]}"; do
 done
 
 if (( reviewer_count == 0 )); then
+  issues+=("required_reviewers_missing")
+  status="blocked"
+fi
+
+if (( reviewer_count < MIN_REQUIRED_REVIEWERS )); then
+  issues+=("insufficient_required_reviewers")
   status="blocked"
 fi
 
 if (( ${#missing_secrets[@]} > 0 )); then
+  issues+=("missing_required_secrets")
   status="blocked"
 fi
 
 if [[ "$status" != "blocked" && ${#missing_variables[@]} -gt 0 ]]; then
+  issues+=("missing_recommended_variables")
   status="warning"
 fi
 
 if (( ${#invalid_variables[@]} > 0 )); then
+  issues+=("invalid_remote_variables")
   status="blocked"
 fi
 
-if [[ "$status" != "blocked" && "$can_admins_bypass" == "true" ]]; then
-  status="warning"
+if [[ "$can_admins_bypass" == "true" ]]; then
+  issues+=("admin_bypass_allowed")
+  if [[ "$FAIL_ON_ADMIN_BYPASS" == "true" ]]; then
+    status="blocked"
+  elif [[ "$status" != "blocked" ]]; then
+    status="warning"
+  fi
 fi
 
-if [[ "$status" != "blocked" && "$prevent_self_review" != "true" ]]; then
-  status="warning"
+if [[ "$prevent_self_review" != "true" ]]; then
+  issues+=("self_review_allowed")
+  if [[ "$FAIL_ON_SELF_REVIEW" == "true" ]]; then
+    status="blocked"
+  elif [[ "$status" != "blocked" ]]; then
+    status="warning"
+  fi
 fi
 
 printf '{\n'
@@ -169,6 +197,11 @@ printf '  "status": "%s",\n' "$status"
 printf '  "repository": "%s",\n' "$REPOSITORY"
 printf '  "environment": "%s",\n' "$ENVIRONMENT"
 printf '  "exists": true,\n'
+printf '  "policy": {\n'
+printf '    "min_required_reviewers": %s,\n' "$MIN_REQUIRED_REVIEWERS"
+printf '    "fail_on_self_review": %s,\n' "$FAIL_ON_SELF_REVIEW"
+printf '    "fail_on_admin_bypass": %s\n' "$FAIL_ON_ADMIN_BYPASS"
+printf '  },\n'
 printf '  "required_reviewers": {\n'
 printf '    "count": %s,\n' "$reviewer_count"
 printf '    "prevent_self_review": %s,\n' "$prevent_self_review"
@@ -188,7 +221,7 @@ printf '    "configured": %s,\n' "$(json_array "${configured_variables[@]}")"
 printf '    "missing": %s,\n' "$(json_array "${missing_variables[@]}")"
 printf '    "invalid": %s\n' "$(json_array "${invalid_variables[@]}")"
 printf '  },\n'
-printf '  "issues": []\n'
+printf '  "issues": %s\n' "$(json_array "${issues[@]}")"
 printf '}\n'
 
 if [[ "$status" == "blocked" ]]; then

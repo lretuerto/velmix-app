@@ -30,8 +30,18 @@ fi
 
 readiness_script="$SCRIPT_DIR/check-github-environment-readiness.sh"
 
-staging_payload="$("$readiness_script" "$REPOSITORY" "$STAGING_ENV" 2>/dev/null || true)"
-production_payload="$("$readiness_script" "$REPOSITORY" "$PRODUCTION_ENV" 2>/dev/null || true)"
+staging_payload="$(
+  VELMIX_MIN_REQUIRED_REVIEWERS=1 \
+  VELMIX_FAIL_ON_SELF_REVIEW=false \
+  VELMIX_FAIL_ON_ADMIN_BYPASS=false \
+  "$readiness_script" "$REPOSITORY" "$STAGING_ENV" 2>/dev/null || true
+)"
+production_payload="$(
+  VELMIX_MIN_REQUIRED_REVIEWERS=2 \
+  VELMIX_FAIL_ON_SELF_REVIEW=true \
+  VELMIX_FAIL_ON_ADMIN_BYPASS=true \
+  "$readiness_script" "$REPOSITORY" "$PRODUCTION_ENV" 2>/dev/null || true
+)"
 
 if [[ -z "$staging_payload" ]]; then
   staging_payload='{"status":"blocked","issues":["staging_readiness_failed"]}'
