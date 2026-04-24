@@ -72,6 +72,14 @@ El workflow carga esos secrets del environment y los expone en runtime como `VEL
 - `VELMIX_REMOTE_QUEUE_RESTART_SERVICE`
 
 Si se activa `VELMIX_REMOTE_USE_SYSTEMD=true`, el nodo remoto debe tener `/etc/velmix/velmix.env` con prioridad real sobre los defaults de las units; el objetivo es que `staging` no herede `APP_ENV=production` ni defaults de cola que no correspondan al entorno activo.
+Cuando el nodo ya tenga `/var/www/velmix/shared/.env` validado, el camino mas seguro es sincronizar ese archivo a `/etc/velmix/velmix.env` con:
+
+```bash
+VELMIX_SYNC_SYSTEMD_ENV=true \
+VELMIX_SYSTEMD_SOURCE_ENV_FILE=/var/www/velmix/shared/.env \
+VELMIX_APP_PATH=/var/www/velmix/current \
+bash ops/scripts/install-systemd-units.sh
+```
 
 ## Bootstrap reproducible del environment
 

@@ -67,6 +67,8 @@ composer run velmix:ci:mysql
 1. Publicar artefacto o release candidato bajo `releases/<timestamp-o-version>`
 2. Instalar o actualizar units si el nodo es nuevo o si cambiaron los assets operativos:
    - `ops/scripts/install-systemd-units.sh`
+   - si el nodo ya tiene un `.env` vivo validado en `shared/.env`, usar:
+     - `VELMIX_SYNC_SYSTEMD_ENV=true VELMIX_SYSTEMD_SOURCE_ENV_FILE=/var/www/velmix/shared/.env VELMIX_APP_PATH=/var/www/velmix/current bash ops/scripts/install-systemd-units.sh`
 3. Inicializar estructura compartida si el nodo es nuevo:
    - `ops/scripts/bootstrap-shared-path.sh`
 4. Validar backup posture antes de preparar el release:
@@ -193,6 +195,7 @@ Antes de revertir esquema revisar:
 - en multi-nodo, habilitar `VELMIX_SCHEDULER_ON_ONE_SERVER=true` solo si existe cache compartido con locks atomicos
 - si se usa `systemd`, cargar `/etc/velmix/velmix.env` a partir de `ops/systemd/velmix-app.env.example`
 - las units versionadas deben cargar `EnvironmentFile` despues de sus defaults para que `APP_ENV`, cola y scheduler puedan sobreescribirse por entorno sin forzar `production`
+- si ya existe `shared/.env` validado en el nodo, preferir sincronizarlo a `/etc/velmix/velmix.env` con `VELMIX_SYNC_SYSTEMD_ENV=true` antes de habilitar `velmix-backend.target`
 - el target recomendado para restart coordinado es `velmix-backend.target`
 
 ## Checklist de cierre

@@ -103,6 +103,9 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('systemctl daemon-reload', $installUnitsScript);
         $this->assertStringContainsString('systemctl enable velmix-backend.target', $installUnitsScript);
         $this->assertStringContainsString('velmix-app.env.example', $installUnitsScript);
+        $this->assertStringContainsString('VELMIX_SYSTEMD_SOURCE_ENV_FILE', $installUnitsScript);
+        $this->assertStringContainsString('VELMIX_SYNC_SYSTEMD_ENV', $installUnitsScript);
+        $this->assertStringContainsString('Synchronized environment file from $SOURCE_ENV_FILE to $SYSTEMD_ENV_FILE', $installUnitsScript);
 
         $bootstrapScript = file_get_contents(base_path('ops/scripts/bootstrap-shared-path.sh'));
         $this->assertIsString($bootstrapScript);
