@@ -24,5 +24,5 @@ cd "$APP_PATH"
 "$PHP_BIN" artisan schedule:list
 
 if velmix_systemctl_bin >/dev/null 2>&1; then
-  velmix_run_systemctl --no-pager --full status "$BACKEND_TARGET" || true
+  velmix_run_systemctl status "$BACKEND_TARGET" || true
 fi

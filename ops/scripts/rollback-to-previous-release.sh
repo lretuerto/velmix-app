@@ -37,7 +37,7 @@ if [[ "$USE_SYSTEMD" == "true" ]] && velmix_systemctl_bin >/dev/null 2>&1; then
   velmix_run_systemctl daemon-reload
   velmix_run_systemctl restart "$SYSTEMD_TARGET"
   velmix_run_systemctl start "$QUEUE_RESTART_SERVICE"
-  velmix_run_systemctl --no-pager --full status "$SYSTEMD_TARGET"
+  velmix_run_systemctl status "$SYSTEMD_TARGET"
 else
   "$PHP_BIN" artisan queue:restart
 fi
