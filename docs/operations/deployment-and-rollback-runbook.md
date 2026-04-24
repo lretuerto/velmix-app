@@ -44,6 +44,7 @@ composer run velmix:ci:mysql
 - queue worker service: `ops/systemd/velmix-queue-worker.service`
 - queue restart hook: `ops/systemd/velmix-queue-restart.service`
 - instalacion de units: `ops/scripts/install-systemd-units.sh`
+- activacion segura de nodo `systemd`: `ops/scripts/enable-systemd-managed-node.sh`
 - inicializacion de shared path: `ops/scripts/bootstrap-shared-path.sh`
 - backup readiness: `ops/scripts/check-backup-readiness.sh`
 - restore drill: `ops/scripts/run-restore-drill.sh`
@@ -69,6 +70,8 @@ composer run velmix:ci:mysql
    - `ops/scripts/install-systemd-units.sh`
    - si el nodo ya tiene un `.env` vivo validado en `shared/.env`, usar:
      - `VELMIX_SYNC_SYSTEMD_ENV=true VELMIX_SYSTEMD_SOURCE_ENV_FILE=/var/www/velmix/shared/.env VELMIX_APP_PATH=/var/www/velmix/current bash ops/scripts/install-systemd-units.sh`
+   - para activar `systemd` como `root` en un solo paso controlado y con chequeo de salud integrado, preferir:
+     - `VELMIX_APP_PATH=/var/www/velmix/current bash ops/scripts/enable-systemd-managed-node.sh`
 3. Inicializar estructura compartida si el nodo es nuevo:
    - `ops/scripts/bootstrap-shared-path.sh`
 4. Validar backup posture antes de preparar el release:
@@ -196,6 +199,7 @@ Antes de revertir esquema revisar:
 - si se usa `systemd`, cargar `/etc/velmix/velmix.env` a partir de `ops/systemd/velmix-app.env.example`
 - las units versionadas deben cargar `EnvironmentFile` despues de sus defaults para que `APP_ENV`, cola y scheduler puedan sobreescribirse por entorno sin forzar `production`
 - si ya existe `shared/.env` validado en el nodo, preferir sincronizarlo a `/etc/velmix/velmix.env` con `VELMIX_SYNC_SYSTEMD_ENV=true` antes de habilitar `velmix-backend.target`
+- si el paso lo ejecuta `root` manualmente, `ops/scripts/enable-systemd-managed-node.sh` reduce el riesgo humano porque sincroniza el `.env`, ajusta permisos y valida el target junto con scheduler y worker
 - el target recomendado para restart coordinado es `velmix-backend.target`
 
 ## Checklist de cierre

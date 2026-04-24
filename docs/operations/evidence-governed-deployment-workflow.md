@@ -18,6 +18,7 @@ Este runbook describe el workflow de GitHub Actions que gobierna un despliegue p
 - bootstrap y validacion remota previa ejecutados por `ops/scripts/bootstrap-remote-host-over-ssh.sh`
 - el workflow fuerza `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` para evitar deprecaciones del runtime Node 20 en actions JavaScript como `actions/upload-artifact`
 - despliegue remoto real ejecutado por `ops/scripts/deploy-release-over-ssh.sh`
+- activacion controlada de `systemd` en el host vivo: `ops/scripts/enable-systemd-managed-node.sh`
 - bootstrap de secrets y variables ejecutable por `ops/scripts/sync-github-environment-config.sh`
 - readiness del environment auditable por `ops/scripts/check-github-environment-readiness.sh`
 - go/no-go consolidado antes de produccion ejecutable por `ops/scripts/check-production-go-no-go.sh`
@@ -80,6 +81,15 @@ VELMIX_SYSTEMD_SOURCE_ENV_FILE=/var/www/velmix/shared/.env \
 VELMIX_APP_PATH=/var/www/velmix/current \
 bash ops/scripts/install-systemd-units.sh
 ```
+
+Si el paso se ejecuta manualmente como `root` sobre un nodo vivo ya validado, preferir el wrapper controlado:
+
+```bash
+VELMIX_APP_PATH=/var/www/velmix/current \
+bash ops/scripts/enable-systemd-managed-node.sh
+```
+
+Ese wrapper sincroniza el `.env` vivo, instala las units versionadas, ajusta permisos del environment file, habilita `velmix-backend.target` y corre el health check del backend antes de devolver control.
 
 ## Bootstrap reproducible del environment
 

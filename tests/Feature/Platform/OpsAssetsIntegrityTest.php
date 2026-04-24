@@ -14,6 +14,7 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertFileExists(base_path('ops/systemd/velmix-queue-restart.service'));
         $this->assertFileExists(base_path('ops/systemd/velmix-backend.target'));
         $this->assertFileExists(base_path('ops/scripts/install-systemd-units.sh'));
+        $this->assertFileExists(base_path('ops/scripts/enable-systemd-managed-node.sh'));
         $this->assertFileExists(base_path('ops/scripts/bootstrap-shared-path.sh'));
         $this->assertFileExists(base_path('ops/scripts/prepare-release.sh'));
         $this->assertFileExists(base_path('ops/scripts/promote-release.sh'));
@@ -106,6 +107,14 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('VELMIX_SYSTEMD_SOURCE_ENV_FILE', $installUnitsScript);
         $this->assertStringContainsString('VELMIX_SYNC_SYSTEMD_ENV', $installUnitsScript);
         $this->assertStringContainsString('Synchronized environment file from $SOURCE_ENV_FILE to $SYSTEMD_ENV_FILE', $installUnitsScript);
+
+        $enableManagedNodeScript = file_get_contents(base_path('ops/scripts/enable-systemd-managed-node.sh'));
+        $this->assertIsString($enableManagedNodeScript);
+        $this->assertStringContainsString('This script must run as root.', $enableManagedNodeScript);
+        $this->assertStringContainsString('VELMIX_SYNC_SYSTEMD_ENV=true', $enableManagedNodeScript);
+        $this->assertStringContainsString('chown root:"$SYSTEMD_ENV_GROUP" "$SYSTEMD_ENV_FILE"', $enableManagedNodeScript);
+        $this->assertStringContainsString('systemctl enable --now "$SYSTEMD_TARGET"', $enableManagedNodeScript);
+        $this->assertStringContainsString('bash "$HEALTH_SCRIPT"', $enableManagedNodeScript);
 
         $bootstrapScript = file_get_contents(base_path('ops/scripts/bootstrap-shared-path.sh'));
         $this->assertIsString($bootstrapScript);

@@ -10,6 +10,7 @@ Contenido actual:
 - `systemd/velmix-queue-restart.service`: hook one-shot para reinicio controlado de workers de cola
 - `systemd/velmix-backend.target`: grupo de procesos backend para start/stop/restart coordinado
 - `scripts/install-systemd-units.sh`: instala y habilita las unidades versionadas en `systemd`
+- `scripts/enable-systemd-managed-node.sh`: wrapper `root` para sincronizar el `.env` vivo, instalar las units, habilitar `velmix-backend.target` y validar salud del nodo
 - `scripts/bootstrap-shared-path.sh`: inicializa estructura compartida (`shared`, `releases`, `storage`, `bootstrap/cache`)
 - `scripts/prepare-release.sh`: prepara un release candidato sin promoverlo aun
 - `scripts/promote-release.sh`: promueve un release preparado con swap atomico de symlink y rollback defensivo
@@ -54,6 +55,8 @@ Secuencia recomendada de adopcion:
 
 1. instalar environment file real basado en `systemd/velmix-app.env.example`
 2. instalar units con `scripts/install-systemd-units.sh`
+   - o, si el nodo ya tiene `shared/.env` validado y se quiere activar `systemd` con un paso unico y defensivo:
+   - `VELMIX_APP_PATH=/var/www/velmix/current bash ops/scripts/enable-systemd-managed-node.sh`
 3. inicializar estructura compartida con `scripts/bootstrap-shared-path.sh`
 4. preparar cada release con `scripts/prepare-release.sh`
 5. promover con `scripts/promote-release.sh`
