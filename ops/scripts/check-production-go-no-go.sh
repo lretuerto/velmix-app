@@ -21,6 +21,25 @@ if ! command -v php >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v gh >/dev/null 2>&1; then
+  echo "gh CLI is required to inspect environment topology metadata." >&2
+  exit 1
+fi
+
+json_array() {
+  local first=true
+  printf '['
+  for value in "$@"; do
+    if [[ "$first" == true ]]; then
+      first=false
+    else
+      printf ','
+    fi
+    printf '"%s"' "$value"
+  done
+  printf ']'
+}
+
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'unknown')"
 worktree_clean=true
 
@@ -59,6 +78,37 @@ staging_status="$(printf '%s' "$staging_payload" | json_status)"
 production_status="$(printf '%s' "$production_payload" | json_status)"
 
 status="ok"
+issues=()
+
+get_environment_variable() {
+  local environment="$1"
+  local variable_name="$2"
+
+  gh variable list --env "$environment" -R "$REPOSITORY" --json name,value --jq ".[] | select(.name == \"$variable_name\") | .value" 2>/dev/null || true
+}
+
+staging_topology_id="$(get_environment_variable "$STAGING_ENV" "VELMIX_REMOTE_TOPOLOGY_ID")"
+production_topology_id="$(get_environment_variable "$PRODUCTION_ENV" "VELMIX_REMOTE_TOPOLOGY_ID")"
+topology_isolated=false
+
+if [[ -z "$staging_topology_id" ]]; then
+  issues+=("staging_topology_id_missing")
+  status="blocked"
+fi
+
+if [[ -z "$production_topology_id" ]]; then
+  issues+=("production_topology_id_missing")
+  status="blocked"
+fi
+
+if [[ -n "$staging_topology_id" && -n "$production_topology_id" ]]; then
+  if [[ "$staging_topology_id" == "$production_topology_id" ]]; then
+    issues+=("shared_topology_id_between_staging_and_production")
+    status="blocked"
+  else
+    topology_isolated=true
+  fi
+fi
 
 if [[ "$worktree_clean" != "true" || "$staging_status" == "blocked" || "$production_status" == "blocked" ]]; then
   status="blocked"
@@ -76,10 +126,16 @@ printf '    "workflow_file": ".github/workflows/evidence-governed-deploy.yml",\n
 printf '    "local_quality_gate": "composer run velmix:ci",\n'
 printf '    "mysql_quality_gate": "composer run velmix:ci:mysql"\n'
 printf '  },\n'
+printf '  "topology": {\n'
+printf '    "staging_topology_id": "%s",\n' "$staging_topology_id"
+printf '    "production_topology_id": "%s",\n' "$production_topology_id"
+printf '    "isolated": %s\n' "$topology_isolated"
+printf '  },\n'
 printf '  "environments": {\n'
 printf '    "staging": %s,\n' "$staging_payload"
 printf '    "production": %s\n' "$production_payload"
-printf '  }\n'
+printf '  },\n'
+printf '  "issues": %s\n' "$(json_array "${issues[@]}")"
 printf '}\n'
 
 if [[ "$status" == "blocked" ]]; then

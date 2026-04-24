@@ -60,6 +60,7 @@ El workflow carga esos secrets del environment y los expone en runtime como `VEL
 ## Variables recomendadas para topologia remota
 
 - `VELMIX_REMOTE_PORT`
+- `VELMIX_REMOTE_TOPOLOGY_ID`
 - `VELMIX_REMOTE_APP_ROOT`
 - `VELMIX_REMOTE_RELEASES_PATH`
 - `VELMIX_REMOTE_SHARED_PATH`
@@ -105,6 +106,7 @@ visudo -cf /etc/sudoers.d/velmix-deploy-systemd
 ```
 
 Sin esa autorizacion minima, `ops/scripts/bootstrap-remote-host-over-ssh.sh` debe bloquear el release con `remote_systemd_control_privileges_missing` antes de intentar la promocion.
+Ademas, `staging` y `production` deben declarar `VELMIX_REMOTE_TOPOLOGY_ID` con valores distintos; `ops/scripts/check-production-go-no-go.sh` debe bloquear `production` si ambos entornos comparten el mismo identificador o si `production` no declara uno.
 
 ## Bootstrap reproducible del environment
 

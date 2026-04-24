@@ -213,6 +213,7 @@ Antes de revertir esquema revisar:
 - si ya existe `shared/.env` validado en el nodo, preferir sincronizarlo a `/etc/velmix/velmix.env` con `VELMIX_SYNC_SYSTEMD_ENV=true` antes de habilitar `velmix-backend.target`
 - si el paso lo ejecuta `root` manualmente, `ops/scripts/enable-systemd-managed-node.sh` reduce el riesgo humano porque sincroniza el `.env`, ajusta permisos y valida el target junto con scheduler y worker
 - si el deploy remoto usa `systemd` con un usuario no root, el host debe conceder `sudo -n` solo para `daemon-reload`, `restart velmix-backend.target`, `start velmix-queue-restart.service` y `status velmix-backend.target`; sin eso el bootstrap remoto debe bloquear antes de promover el release
+- `staging` y `production` deben declarar `VELMIX_REMOTE_TOPOLOGY_ID` distinto para impedir que el gate de produccion apruebe accidentalmente una topologia compartida
 - el target recomendado para restart coordinado es `velmix-backend.target`
 
 ## Checklist de cierre

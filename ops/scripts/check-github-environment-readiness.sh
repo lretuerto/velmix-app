@@ -16,6 +16,7 @@ required_secrets=(
 )
 
 recommended_variables=(
+  VELMIX_REMOTE_TOPOLOGY_ID
   VELMIX_REMOTE_PORT
   VELMIX_REMOTE_APP_ROOT
   VELMIX_REMOTE_RELEASES_PATH
