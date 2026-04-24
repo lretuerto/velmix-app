@@ -7,8 +7,8 @@ Type=simple
 User=www-data
 Group=www-data
 WorkingDirectory=/var/www/velmix/current
-EnvironmentFile=-/etc/velmix/velmix.env
 Environment=APP_ENV=production
+EnvironmentFile=-/etc/velmix/velmix.env
 ExecStartPre=/usr/bin/php artisan system:preflight --json --fail-on-critical
 ExecStart=/usr/bin/php artisan schedule:work
 ExecStop=/usr/bin/php artisan schedule:interrupt

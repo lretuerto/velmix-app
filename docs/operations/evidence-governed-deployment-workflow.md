@@ -71,6 +71,8 @@ El workflow carga esos secrets del environment y los expone en runtime como `VEL
 - `VELMIX_REMOTE_SYSTEMD_TARGET`
 - `VELMIX_REMOTE_QUEUE_RESTART_SERVICE`
 
+Si se activa `VELMIX_REMOTE_USE_SYSTEMD=true`, el nodo remoto debe tener `/etc/velmix/velmix.env` con prioridad real sobre los defaults de las units; el objetivo es que `staging` no herede `APP_ENV=production` ni defaults de cola que no correspondan al entorno activo.
+
 ## Bootstrap reproducible del environment
 
 1. aplicar reviewers:

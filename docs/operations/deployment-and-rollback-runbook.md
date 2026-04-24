@@ -192,6 +192,7 @@ Antes de revertir esquema revisar:
 - conservar evidencia de `X-Request-Id` y logs JSON durante incidentes
 - en multi-nodo, habilitar `VELMIX_SCHEDULER_ON_ONE_SERVER=true` solo si existe cache compartido con locks atomicos
 - si se usa `systemd`, cargar `/etc/velmix/velmix.env` a partir de `ops/systemd/velmix-app.env.example`
+- las units versionadas deben cargar `EnvironmentFile` despues de sus defaults para que `APP_ENV`, cola y scheduler puedan sobreescribirse por entorno sin forzar `production`
 - el target recomendado para restart coordinado es `velmix-backend.target`
 
 ## Checklist de cierre

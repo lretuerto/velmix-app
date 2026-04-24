@@ -58,14 +58,34 @@ class OpsAssetsIntegrityTest extends TestCase
         $schedulerUnit = file_get_contents(base_path('ops/systemd/velmix-scheduler.service'));
         $this->assertIsString($schedulerUnit);
         $this->assertStringContainsString('EnvironmentFile=-/etc/velmix/velmix.env', $schedulerUnit);
+        $this->assertStringContainsString('Environment=APP_ENV=production', $schedulerUnit);
         $this->assertStringContainsString('ExecStartPre=/usr/bin/php artisan system:preflight --json --fail-on-critical', $schedulerUnit);
         $this->assertStringContainsString('WantedBy=velmix-backend.target', $schedulerUnit);
+        $this->assertTrue(
+            strpos($schedulerUnit, 'Environment=APP_ENV=production') < strpos($schedulerUnit, 'EnvironmentFile=-/etc/velmix/velmix.env'),
+            'Scheduler unit should load the environment file after defaults so staging and production can override APP_ENV safely.'
+        );
 
         $queueWorkerUnit = file_get_contents(base_path('ops/systemd/velmix-queue-worker.service'));
         $this->assertIsString($queueWorkerUnit);
+        $this->assertStringContainsString('Environment=APP_ENV=production', $queueWorkerUnit);
+        $this->assertStringContainsString('EnvironmentFile=-/etc/velmix/velmix.env', $queueWorkerUnit);
         $this->assertStringContainsString('ExecStart=/usr/bin/php artisan queue:work', $queueWorkerUnit);
         $this->assertStringContainsString('ExecReload=/usr/bin/php artisan queue:restart', $queueWorkerUnit);
         $this->assertStringContainsString('WantedBy=velmix-backend.target', $queueWorkerUnit);
+        $this->assertTrue(
+            strpos($queueWorkerUnit, 'Environment=VELMIX_QUEUE_MAX_TIME=3600') < strpos($queueWorkerUnit, 'EnvironmentFile=-/etc/velmix/velmix.env'),
+            'Queue worker unit should load the environment file after queue defaults so per-environment overrides can take effect.'
+        );
+
+        $queueRestartUnit = file_get_contents(base_path('ops/systemd/velmix-queue-restart.service'));
+        $this->assertIsString($queueRestartUnit);
+        $this->assertStringContainsString('Environment=APP_ENV=production', $queueRestartUnit);
+        $this->assertStringContainsString('EnvironmentFile=-/etc/velmix/velmix.env', $queueRestartUnit);
+        $this->assertTrue(
+            strpos($queueRestartUnit, 'Environment=APP_ENV=production') < strpos($queueRestartUnit, 'EnvironmentFile=-/etc/velmix/velmix.env'),
+            'Queue restart unit should load the environment file after defaults so the target environment is not forced to production.'
+        );
 
         $promoteScript = file_get_contents(base_path('ops/scripts/promote-release.sh'));
         $this->assertIsString($promoteScript);
