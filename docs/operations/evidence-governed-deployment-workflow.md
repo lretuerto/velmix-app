@@ -95,17 +95,14 @@ Ese wrapper sincroniza el `.env` vivo, instala las units versionadas, ajusta per
 Si el workflow remoto va a reiniciar servicios `systemd` como `deploy`, el host debe conceder `sudo -n` solo para los comandos minimos que usa el pipeline:
 
 ```bash
-cat >/etc/sudoers.d/velmix-deploy-systemd <<'EOF'
-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl daemon-reload
-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart velmix-backend.target
-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl start velmix-queue-restart.service
-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl status velmix-backend.target
-EOF
-chmod 440 /etc/sudoers.d/velmix-deploy-systemd
-visudo -cf /etc/sudoers.d/velmix-deploy-systemd
+VELMIX_DEPLOY_USER=deploy \
+VELMIX_SYSTEMD_TARGET=velmix-backend.target \
+VELMIX_QUEUE_RESTART_SERVICE=velmix-queue-restart.service \
+bash ops/scripts/install-deploy-systemd-sudoers.sh
 ```
 
 Sin esa autorizacion minima, `ops/scripts/bootstrap-remote-host-over-ssh.sh` debe bloquear el release con `remote_systemd_control_privileges_missing` antes de intentar la promocion.
+El script `ops/scripts/install-deploy-systemd-sudoers.sh` deja esa politica versionada, la valida con `visudo` y evita drift manual entre `staging` y `production`.
 Ademas, `staging` y `production` deben declarar `VELMIX_REMOTE_TOPOLOGY_ID` con valores distintos; `ops/scripts/check-production-go-no-go.sh` debe bloquear `production` si ambos entornos comparten el mismo identificador o si `production` no declara uno.
 
 ## Bootstrap reproducible del environment

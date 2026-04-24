@@ -75,14 +75,10 @@ composer run velmix:ci:mysql
    - si el workflow remoto operara como `deploy` y `VELMIX_REMOTE_USE_SYSTEMD=true`, conceder solo `sudo -n` para los comandos minimos de `systemd`:
 
 ```bash
-cat >/etc/sudoers.d/velmix-deploy-systemd <<'EOF'
-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl daemon-reload
-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart velmix-backend.target
-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl start velmix-queue-restart.service
-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl status velmix-backend.target
-EOF
-chmod 440 /etc/sudoers.d/velmix-deploy-systemd
-visudo -cf /etc/sudoers.d/velmix-deploy-systemd
+VELMIX_DEPLOY_USER=deploy \
+VELMIX_SYSTEMD_TARGET=velmix-backend.target \
+VELMIX_QUEUE_RESTART_SERVICE=velmix-queue-restart.service \
+bash ops/scripts/install-deploy-systemd-sudoers.sh
 ```
 3. Inicializar estructura compartida si el nodo es nuevo:
    - `ops/scripts/bootstrap-shared-path.sh`
@@ -213,6 +209,7 @@ Antes de revertir esquema revisar:
 - si ya existe `shared/.env` validado en el nodo, preferir sincronizarlo a `/etc/velmix/velmix.env` con `VELMIX_SYNC_SYSTEMD_ENV=true` antes de habilitar `velmix-backend.target`
 - si el paso lo ejecuta `root` manualmente, `ops/scripts/enable-systemd-managed-node.sh` reduce el riesgo humano porque sincroniza el `.env`, ajusta permisos y valida el target junto con scheduler y worker
 - si el deploy remoto usa `systemd` con un usuario no root, el host debe conceder `sudo -n` solo para `daemon-reload`, `restart velmix-backend.target`, `start velmix-queue-restart.service` y `status velmix-backend.target`; sin eso el bootstrap remoto debe bloquear antes de promover el release
+- `ops/scripts/install-deploy-systemd-sudoers.sh` permite versionar esa politica minima y validarla con `visudo` antes de escribir `/etc/sudoers.d/velmix-deploy-systemd`
 - `staging` y `production` deben declarar `VELMIX_REMOTE_TOPOLOGY_ID` distinto para impedir que el gate de produccion apruebe accidentalmente una topologia compartida
 - el target recomendado para restart coordinado es `velmix-backend.target`
 

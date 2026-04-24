@@ -14,6 +14,7 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertFileExists(base_path('ops/systemd/velmix-queue-restart.service'));
         $this->assertFileExists(base_path('ops/systemd/velmix-backend.target'));
         $this->assertFileExists(base_path('ops/scripts/install-systemd-units.sh'));
+        $this->assertFileExists(base_path('ops/scripts/install-deploy-systemd-sudoers.sh'));
         $this->assertFileExists(base_path('ops/scripts/enable-systemd-managed-node.sh'));
         $this->assertFileExists(base_path('ops/scripts/systemctl-helpers.sh'));
         $this->assertFileExists(base_path('ops/scripts/bootstrap-shared-path.sh'));
@@ -110,6 +111,16 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('VELMIX_SYSTEMD_SOURCE_ENV_FILE', $installUnitsScript);
         $this->assertStringContainsString('VELMIX_SYNC_SYSTEMD_ENV', $installUnitsScript);
         $this->assertStringContainsString('Synchronized environment file from $SOURCE_ENV_FILE to $SYSTEMD_ENV_FILE', $installUnitsScript);
+
+        $installSystemdSudoersScript = file_get_contents(base_path('ops/scripts/install-deploy-systemd-sudoers.sh'));
+        $this->assertIsString($installSystemdSudoersScript);
+        $this->assertStringContainsString('This script must run as root.', $installSystemdSudoersScript);
+        $this->assertStringContainsString('visudo is required to validate the generated sudoers file.', $installSystemdSudoersScript);
+        $this->assertStringContainsString('NOPASSWD: $SYSTEMCTL_BIN daemon-reload', $installSystemdSudoersScript);
+        $this->assertStringContainsString('NOPASSWD: $SYSTEMCTL_BIN restart $SYSTEMD_TARGET', $installSystemdSudoersScript);
+        $this->assertStringContainsString('NOPASSWD: $SYSTEMCTL_BIN start $QUEUE_RESTART_SERVICE', $installSystemdSudoersScript);
+        $this->assertStringContainsString('NOPASSWD: $SYSTEMCTL_BIN status $SYSTEMD_TARGET', $installSystemdSudoersScript);
+        $this->assertStringContainsString('"$VISUDO_BIN" -cf "$tmp_file"', $installSystemdSudoersScript);
 
         $enableManagedNodeScript = file_get_contents(base_path('ops/scripts/enable-systemd-managed-node.sh'));
         $this->assertIsString($enableManagedNodeScript);
