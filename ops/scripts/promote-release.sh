@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/systemctl-helpers.sh"
+
 RELEASE_PATH="${1:-${VELMIX_RELEASE_PATH:-}}"
 APP_ROOT="${VELMIX_APP_ROOT:-/var/www/velmix}"
 CURRENT_LINK="${VELMIX_CURRENT_LINK:-$APP_ROOT/current}"
@@ -31,10 +34,10 @@ rollback() {
     mv -Tf "${CURRENT_LINK}.next" "$CURRENT_LINK"
     ln -sfn "$PREVIOUS_TARGET" "$PREVIOUS_LINK"
 
-    if [[ "$USE_SYSTEMD" == "true" ]] && command -v systemctl >/dev/null 2>&1; then
-      systemctl daemon-reload
-      systemctl restart "$SYSTEMD_TARGET" || true
-      systemctl start "$QUEUE_RESTART_SERVICE" || true
+    if [[ "$USE_SYSTEMD" == "true" ]] && velmix_systemctl_bin >/dev/null 2>&1; then
+      velmix_run_systemctl daemon-reload
+      velmix_run_systemctl restart "$SYSTEMD_TARGET" || true
+      velmix_run_systemctl start "$QUEUE_RESTART_SERVICE" || true
     fi
   fi
 }
@@ -51,11 +54,11 @@ fi
 cd "$CURRENT_LINK"
 "$PHP_BIN" artisan system:preflight --json --fail-on-warning
 
-if [[ "$USE_SYSTEMD" == "true" ]] && command -v systemctl >/dev/null 2>&1; then
-  systemctl daemon-reload
-  systemctl restart "$SYSTEMD_TARGET"
-  systemctl start "$QUEUE_RESTART_SERVICE"
-  systemctl --no-pager --full status "$SYSTEMD_TARGET"
+if [[ "$USE_SYSTEMD" == "true" ]] && velmix_systemctl_bin >/dev/null 2>&1; then
+  velmix_run_systemctl daemon-reload
+  velmix_run_systemctl restart "$SYSTEMD_TARGET"
+  velmix_run_systemctl start "$QUEUE_RESTART_SERVICE"
+  velmix_run_systemctl --no-pager --full status "$SYSTEMD_TARGET"
 else
   "$PHP_BIN" artisan queue:restart
 fi

@@ -15,6 +15,7 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertFileExists(base_path('ops/systemd/velmix-backend.target'));
         $this->assertFileExists(base_path('ops/scripts/install-systemd-units.sh'));
         $this->assertFileExists(base_path('ops/scripts/enable-systemd-managed-node.sh'));
+        $this->assertFileExists(base_path('ops/scripts/systemctl-helpers.sh'));
         $this->assertFileExists(base_path('ops/scripts/bootstrap-shared-path.sh'));
         $this->assertFileExists(base_path('ops/scripts/prepare-release.sh'));
         $this->assertFileExists(base_path('ops/scripts/promote-release.sh'));
@@ -90,12 +91,14 @@ class OpsAssetsIntegrityTest extends TestCase
 
         $promoteScript = file_get_contents(base_path('ops/scripts/promote-release.sh'));
         $this->assertIsString($promoteScript);
+        $this->assertStringContainsString('source "$SCRIPT_DIR/systemctl-helpers.sh"', $promoteScript);
         $this->assertStringContainsString('mv -Tf "${CURRENT_LINK}.next" "$CURRENT_LINK"', $promoteScript);
         $this->assertStringContainsString('artisan system:preflight --json --fail-on-warning', $promoteScript);
-        $this->assertStringContainsString('systemctl restart "$SYSTEMD_TARGET"', $promoteScript);
+        $this->assertStringContainsString('velmix_run_systemctl restart "$SYSTEMD_TARGET"', $promoteScript);
 
         $rollbackScript = file_get_contents(base_path('ops/scripts/rollback-to-previous-release.sh'));
         $this->assertIsString($rollbackScript);
+        $this->assertStringContainsString('source "$SCRIPT_DIR/systemctl-helpers.sh"', $rollbackScript);
         $this->assertStringContainsString('artisan system:preflight --json --fail-on-critical', $rollbackScript);
         $this->assertStringContainsString('mv -Tf "${CURRENT_LINK}.rollback" "$CURRENT_LINK"', $rollbackScript);
 
@@ -175,6 +178,8 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('remote_env_file_missing', $remoteBootstrapScript);
         $this->assertStringContainsString('REMOTE_TMP_PATH', $remoteBootstrapScript);
         $this->assertStringContainsString('systemctl cat "$REMOTE_SYSTEMD_TARGET"', $remoteBootstrapScript);
+        $this->assertStringContainsString('remote_systemd_control_privileges_missing', $remoteBootstrapScript);
+        $this->assertStringContainsString('sudo -n -l "$systemctl_bin" daemon-reload', $remoteBootstrapScript);
 
         $evidenceGovernedDeployScript = file_get_contents(base_path('ops/scripts/run-evidence-governed-deploy.sh'));
         $this->assertIsString($evidenceGovernedDeployScript);
@@ -261,12 +266,20 @@ class OpsAssetsIntegrityTest extends TestCase
 
         $healthScript = file_get_contents(base_path('ops/scripts/check-backend-health.sh'));
         $this->assertIsString($healthScript);
+        $this->assertStringContainsString('source "$SCRIPT_DIR/systemctl-helpers.sh"', $healthScript);
         $this->assertStringContainsString('artisan system:observability-report --json', $healthScript);
         $this->assertStringContainsString('artisan system:backup-readiness --json', $healthScript);
         $this->assertStringContainsString('artisan system:staging-certification --json', $healthScript);
         $this->assertStringContainsString('artisan system:promotion-readiness --json', $healthScript);
         $this->assertStringContainsString('artisan system:cutover-readiness --json', $healthScript);
         $this->assertStringContainsString('artisan system:operational-certification --json', $healthScript);
+
+        $systemctlHelpersScript = file_get_contents(base_path('ops/scripts/systemctl-helpers.sh'));
+        $this->assertIsString($systemctlHelpersScript);
+        $this->assertStringContainsString('velmix_run_privileged', $systemctlHelpersScript);
+        $this->assertStringContainsString('sudo -n "$@"', $systemctlHelpersScript);
+        $this->assertStringContainsString('velmix_run_systemctl', $systemctlHelpersScript);
+        $this->assertStringContainsString('velmix_systemctl_requires_privilege', $systemctlHelpersScript);
 
         $workflow = file_get_contents(base_path('.github/workflows/evidence-governed-deploy.yml'));
         $this->assertIsString($workflow);

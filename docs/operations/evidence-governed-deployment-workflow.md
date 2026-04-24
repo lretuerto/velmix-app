@@ -91,6 +91,21 @@ bash ops/scripts/enable-systemd-managed-node.sh
 
 Ese wrapper sincroniza el `.env` vivo, instala las units versionadas, ajusta permisos del environment file, habilita `velmix-backend.target` y corre el health check del backend antes de devolver control.
 
+Si el workflow remoto va a reiniciar servicios `systemd` como `deploy`, el host debe conceder `sudo -n` solo para los comandos minimos que usa el pipeline:
+
+```bash
+cat >/etc/sudoers.d/velmix-deploy-systemd <<'EOF'
+deploy ALL=(root) NOPASSWD: /usr/bin/systemctl daemon-reload
+deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart velmix-backend.target
+deploy ALL=(root) NOPASSWD: /usr/bin/systemctl start velmix-queue-restart.service
+deploy ALL=(root) NOPASSWD: /usr/bin/systemctl status velmix-backend.target
+EOF
+chmod 440 /etc/sudoers.d/velmix-deploy-systemd
+visudo -cf /etc/sudoers.d/velmix-deploy-systemd
+```
+
+Sin esa autorizacion minima, `ops/scripts/bootstrap-remote-host-over-ssh.sh` debe bloquear el release con `remote_systemd_control_privileges_missing` antes de intentar la promocion.
+
 ## Bootstrap reproducible del environment
 
 1. aplicar reviewers:

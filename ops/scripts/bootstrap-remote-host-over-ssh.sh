@@ -99,6 +99,7 @@ tar_available=false
 php_available=false
 composer_available=false
 systemctl_available=false
+systemd_control_available=false
 systemd_target_present=false
 queue_restart_service_present=false
 systemd_install_path_writable=false
@@ -132,6 +133,21 @@ if [[ "$REMOTE_USE_SYSTEMD" == "true" ]]; then
     systemctl_available=true
   else
     add_issue "remote_systemctl_missing"
+  fi
+
+  if [[ "$systemctl_available" == "true" ]]; then
+    systemctl_bin="$(command -v systemctl)"
+
+    if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+      systemd_control_available=true
+    elif command -v sudo >/dev/null 2>&1 \
+      && sudo -n -l "$systemctl_bin" daemon-reload >/dev/null 2>&1 \
+      && sudo -n -l "$systemctl_bin" restart "$REMOTE_SYSTEMD_TARGET" >/dev/null 2>&1 \
+      && sudo -n -l "$systemctl_bin" start "$REMOTE_QUEUE_RESTART_SERVICE" >/dev/null 2>&1; then
+      systemd_control_available=true
+    else
+      add_issue "remote_systemd_control_privileges_missing"
+    fi
   fi
 
   if [[ "$REMOTE_INSTALL_UNITS" == "true" ]]; then
@@ -174,6 +190,7 @@ printf '    "tar_available": %s,\n' "$tar_available"
 printf '    "php_available": %s,\n' "$php_available"
 printf '    "composer_available": %s,\n' "$composer_available"
 printf '    "systemctl_available": %s,\n' "$systemctl_available"
+printf '    "systemd_control_available": %s,\n' "$systemd_control_available"
 printf '    "systemd_target_present": %s,\n' "$systemd_target_present"
 printf '    "queue_restart_service_present": %s,\n' "$queue_restart_service_present"
 printf '    "systemd_install_path_writable": %s\n' "$systemd_install_path_writable"

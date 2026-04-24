@@ -72,6 +72,18 @@ composer run velmix:ci:mysql
      - `VELMIX_SYNC_SYSTEMD_ENV=true VELMIX_SYSTEMD_SOURCE_ENV_FILE=/var/www/velmix/shared/.env VELMIX_APP_PATH=/var/www/velmix/current bash ops/scripts/install-systemd-units.sh`
    - para activar `systemd` como `root` en un solo paso controlado y con chequeo de salud integrado, preferir:
      - `VELMIX_APP_PATH=/var/www/velmix/current bash ops/scripts/enable-systemd-managed-node.sh`
+   - si el workflow remoto operara como `deploy` y `VELMIX_REMOTE_USE_SYSTEMD=true`, conceder solo `sudo -n` para los comandos minimos de `systemd`:
+
+```bash
+cat >/etc/sudoers.d/velmix-deploy-systemd <<'EOF'
+deploy ALL=(root) NOPASSWD: /usr/bin/systemctl daemon-reload
+deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart velmix-backend.target
+deploy ALL=(root) NOPASSWD: /usr/bin/systemctl start velmix-queue-restart.service
+deploy ALL=(root) NOPASSWD: /usr/bin/systemctl status velmix-backend.target
+EOF
+chmod 440 /etc/sudoers.d/velmix-deploy-systemd
+visudo -cf /etc/sudoers.d/velmix-deploy-systemd
+```
 3. Inicializar estructura compartida si el nodo es nuevo:
    - `ops/scripts/bootstrap-shared-path.sh`
 4. Validar backup posture antes de preparar el release:
@@ -200,6 +212,7 @@ Antes de revertir esquema revisar:
 - las units versionadas deben cargar `EnvironmentFile` despues de sus defaults para que `APP_ENV`, cola y scheduler puedan sobreescribirse por entorno sin forzar `production`
 - si ya existe `shared/.env` validado en el nodo, preferir sincronizarlo a `/etc/velmix/velmix.env` con `VELMIX_SYNC_SYSTEMD_ENV=true` antes de habilitar `velmix-backend.target`
 - si el paso lo ejecuta `root` manualmente, `ops/scripts/enable-systemd-managed-node.sh` reduce el riesgo humano porque sincroniza el `.env`, ajusta permisos y valida el target junto con scheduler y worker
+- si el deploy remoto usa `systemd` con un usuario no root, el host debe conceder `sudo -n` solo para `daemon-reload`, `restart velmix-backend.target`, `start velmix-queue-restart.service` y `status velmix-backend.target`; sin eso el bootstrap remoto debe bloquear antes de promover el release
 - el target recomendado para restart coordinado es `velmix-backend.target`
 
 ## Checklist de cierre
