@@ -46,6 +46,7 @@ composer run velmix:ci:mysql
 - provision inicial de Ubuntu 24.04: `ops/scripts/provision-ubuntu-node.sh`
 - instalacion de units: `ops/scripts/install-systemd-units.sh`
 - activacion segura de nodo `systemd`: `ops/scripts/enable-systemd-managed-node.sh`
+- cutover controlado de `single-host` hacia `production`: `ops/scripts/cutover-single-host-production.sh`
 - inicializacion de shared path: `ops/scripts/bootstrap-shared-path.sh`
 - backup readiness: `ops/scripts/check-backup-readiness.sh`
 - restore drill: `ops/scripts/run-restore-drill.sh`
@@ -212,6 +213,7 @@ Antes de revertir esquema revisar:
 - las units versionadas deben cargar `EnvironmentFile` despues de sus defaults para que `APP_ENV`, cola y scheduler puedan sobreescribirse por entorno sin forzar `production`
 - si ya existe `shared/.env` validado en el nodo, preferir sincronizarlo a `/etc/velmix/velmix.env` con `VELMIX_SYNC_SYSTEMD_ENV=true` antes de habilitar `velmix-backend.target`
 - si el paso lo ejecuta `root` manualmente, `ops/scripts/enable-systemd-managed-node.sh` reduce el riesgo humano porque sincroniza el `.env`, ajusta permisos y valida el target junto con scheduler y worker
+- si se acepta una topologia `single-host` y el mismo nodo vivo debe reclasificarse desde `staging` hacia `production`, preferir `ops/scripts/cutover-single-host-production.sh`; el wrapper respalda el `.env` compartido y `/etc/velmix/velmix.env`, fija `APP_ENV=production`, sincroniza `APP_URL`, refuerza las variables de cutover/operational certification y reinicia `velmix-backend.target` con health check integrado
 - para un host Ubuntu 24.04 nuevo, `ops/scripts/provision-ubuntu-node.sh` deja versionado el baseline de paquetes, servicios, `deploy`, `ufw` y layout base antes de cualquier release
 - si el deploy remoto usa `systemd` con un usuario no root, el host debe conceder `sudo -n` solo para `daemon-reload`, `restart velmix-backend.target`, `start velmix-queue-restart.service` y `status velmix-backend.target`; sin eso el bootstrap remoto debe bloquear antes de promover el release
 - `ops/scripts/install-deploy-systemd-sudoers.sh` permite versionar esa politica minima y validarla con `visudo` antes de escribir `/etc/sudoers.d/velmix-deploy-systemd`

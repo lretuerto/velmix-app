@@ -17,6 +17,7 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertFileExists(base_path('ops/scripts/install-systemd-units.sh'));
         $this->assertFileExists(base_path('ops/scripts/install-deploy-systemd-sudoers.sh'));
         $this->assertFileExists(base_path('ops/scripts/enable-systemd-managed-node.sh'));
+        $this->assertFileExists(base_path('ops/scripts/cutover-single-host-production.sh'));
         $this->assertFileExists(base_path('ops/scripts/systemctl-helpers.sh'));
         $this->assertFileExists(base_path('ops/scripts/bootstrap-shared-path.sh'));
         $this->assertFileExists(base_path('ops/scripts/prepare-release.sh'));
@@ -141,6 +142,18 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('chown root:"$SYSTEMD_ENV_GROUP" "$SYSTEMD_ENV_FILE"', $enableManagedNodeScript);
         $this->assertStringContainsString('systemctl enable --now "$SYSTEMD_TARGET"', $enableManagedNodeScript);
         $this->assertStringContainsString('bash "$HEALTH_SCRIPT"', $enableManagedNodeScript);
+
+        $singleHostCutoverScript = file_get_contents(base_path('ops/scripts/cutover-single-host-production.sh'));
+        $this->assertIsString($singleHostCutoverScript);
+        $this->assertStringContainsString('This script must run as root.', $singleHostCutoverScript);
+        $this->assertStringContainsString('upsert_env "APP_ENV" "production"', $singleHostCutoverScript);
+        $this->assertStringContainsString('upsert_env "APP_URL" "$TARGET_APP_URL"', $singleHostCutoverScript);
+        $this->assertStringContainsString('upsert_env "VELMIX_RELEASE_CUTOVER_ENV" "production"', $singleHostCutoverScript);
+        $this->assertStringContainsString('upsert_env "VELMIX_OPERATIONAL_CERTIFICATION_ENV" "production"', $singleHostCutoverScript);
+        $this->assertStringContainsString('cp "$SHARED_ENV_FILE" "$SHARED_ENV_BACKUP"', $singleHostCutoverScript);
+        $this->assertStringContainsString('install -m 0640 "$SHARED_ENV_FILE" "$SYSTEMD_ENV_FILE"', $singleHostCutoverScript);
+        $this->assertStringContainsString('systemctl restart "$SYSTEMD_TARGET"', $singleHostCutoverScript);
+        $this->assertStringContainsString('Single-host production cutover completed successfully.', $singleHostCutoverScript);
 
         $bootstrapScript = file_get_contents(base_path('ops/scripts/bootstrap-shared-path.sh'));
         $this->assertIsString($bootstrapScript);

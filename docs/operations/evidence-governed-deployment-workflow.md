@@ -19,6 +19,7 @@ Este runbook describe el workflow de GitHub Actions que gobierna un despliegue p
 - el workflow fuerza `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` para evitar deprecaciones del runtime Node 20 en actions JavaScript como `actions/upload-artifact`
 - despliegue remoto real ejecutado por `ops/scripts/deploy-release-over-ssh.sh`
 - activacion controlada de `systemd` en el host vivo: `ops/scripts/enable-systemd-managed-node.sh`
+- cutover controlado de `single-host` a `production`: `ops/scripts/cutover-single-host-production.sh`
 - provision inicial del host Ubuntu 24.04: `ops/scripts/provision-ubuntu-node.sh`
 - bootstrap de secrets y variables ejecutable por `ops/scripts/sync-github-environment-config.sh`
 - readiness del environment auditable por `ops/scripts/check-github-environment-readiness.sh`
@@ -94,6 +95,16 @@ bash ops/scripts/enable-systemd-managed-node.sh
 ```
 
 Ese wrapper sincroniza el `.env` vivo, instala las units versionadas, ajusta permisos del environment file, habilita `velmix-backend.target` y corre el health check del backend antes de devolver control.
+
+Si la operacion entra en modo pragmatico `single-host` y el mismo nodo debe pasar de `staging` a `production`, preferir:
+
+```bash
+VELMIX_APP_PATH=/var/www/velmix/current \
+VELMIX_TARGET_APP_URL=https://velmix.gacicorporacion.com \
+bash ops/scripts/cutover-single-host-production.sh
+```
+
+Ese wrapper respalda el `.env` compartido y `/etc/velmix/velmix.env`, fuerza `APP_ENV=production`, mantiene la postura de staging/promotion evidence, sincroniza `APP_URL`, refuerza las variables de cutover y certificacion operativa para `production`, reinicia `velmix-backend.target` y corre el health check versionado antes del `workflow_dispatch` final.
 
 Si el host de `production` todavia no existe o es un Ubuntu 24.04 recien entregado, el baseline reproducible recomendado es:
 
