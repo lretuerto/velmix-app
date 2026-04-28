@@ -19,6 +19,7 @@ Este runbook describe el workflow de GitHub Actions que gobierna un despliegue p
 - el workflow fuerza `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` para evitar deprecaciones del runtime Node 20 en actions JavaScript como `actions/upload-artifact`
 - despliegue remoto real ejecutado por `ops/scripts/deploy-release-over-ssh.sh`
 - activacion controlada de `systemd` en el host vivo: `ops/scripts/enable-systemd-managed-node.sh`
+- provision inicial del host Ubuntu 24.04: `ops/scripts/provision-ubuntu-node.sh`
 - bootstrap de secrets y variables ejecutable por `ops/scripts/sync-github-environment-config.sh`
 - readiness del environment auditable por `ops/scripts/check-github-environment-readiness.sh`
 - go/no-go consolidado antes de produccion ejecutable por `ops/scripts/check-production-go-no-go.sh`
@@ -91,6 +92,16 @@ bash ops/scripts/enable-systemd-managed-node.sh
 ```
 
 Ese wrapper sincroniza el `.env` vivo, instala las units versionadas, ajusta permisos del environment file, habilita `velmix-backend.target` y corre el health check del backend antes de devolver control.
+
+Si el host de `production` todavia no existe o es un Ubuntu 24.04 recien entregado, el baseline reproducible recomendado es:
+
+```bash
+VELMIX_SSH_PORT=22 \
+VELMIX_APP_ROOT=/var/www/velmix \
+bash ops/scripts/provision-ubuntu-node.sh
+```
+
+Ese script instala paquetes base, habilita servicios, crea `deploy`, prepara `ufw` y deja listo el layout compartido que el workflow remoto espera encontrar.
 
 Si el workflow remoto va a reiniciar servicios `systemd` como `deploy`, el host debe conceder `sudo -n` solo para los comandos minimos que usa el pipeline:
 

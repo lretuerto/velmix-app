@@ -43,6 +43,7 @@ composer run velmix:ci:mysql
 - scheduler service: `ops/systemd/velmix-scheduler.service`
 - queue worker service: `ops/systemd/velmix-queue-worker.service`
 - queue restart hook: `ops/systemd/velmix-queue-restart.service`
+- provision inicial de Ubuntu 24.04: `ops/scripts/provision-ubuntu-node.sh`
 - instalacion de units: `ops/scripts/install-systemd-units.sh`
 - activacion segura de nodo `systemd`: `ops/scripts/enable-systemd-managed-node.sh`
 - inicializacion de shared path: `ops/scripts/bootstrap-shared-path.sh`
@@ -66,7 +67,10 @@ composer run velmix:ci:mysql
 ### Secuencia controlada
 
 1. Publicar artefacto o release candidato bajo `releases/<timestamp-o-version>`
-2. Instalar o actualizar units si el nodo es nuevo o si cambiaron los assets operativos:
+2. Si el host es nuevo, provisionar primero el sistema base:
+   - `VELMIX_SSH_PORT=<port> VELMIX_APP_ROOT=/var/www/velmix bash ops/scripts/provision-ubuntu-node.sh`
+   - el script instala paquetes base, habilita servicios, crea `deploy`, prepara `ufw` y bootstrappea `/var/www/velmix`
+3. Instalar o actualizar units si el nodo es nuevo o si cambiaron los assets operativos:
    - `ops/scripts/install-systemd-units.sh`
    - si el nodo ya tiene un `.env` vivo validado en `shared/.env`, usar:
      - `VELMIX_SYNC_SYSTEMD_ENV=true VELMIX_SYSTEMD_SOURCE_ENV_FILE=/var/www/velmix/shared/.env VELMIX_APP_PATH=/var/www/velmix/current bash ops/scripts/install-systemd-units.sh`
@@ -80,31 +84,31 @@ VELMIX_SYSTEMD_TARGET=velmix-backend.target \
 VELMIX_QUEUE_RESTART_SERVICE=velmix-queue-restart.service \
 bash ops/scripts/install-deploy-systemd-sudoers.sh
 ```
-3. Inicializar estructura compartida si el nodo es nuevo:
+4. Inicializar estructura compartida si el nodo es nuevo:
    - `ops/scripts/bootstrap-shared-path.sh`
-4. Validar backup posture antes de preparar el release:
+5. Validar backup posture antes de preparar el release:
    - `ops/scripts/check-backup-readiness.sh`
-5. Preparar el release sin exponer trafico:
+6. Preparar el release sin exponer trafico:
    - `ops/scripts/prepare-release.sh /var/www/velmix/releases/<release>`
-6. Promover con swap atomico:
+7. Promover con swap atomico:
    - `ops/scripts/promote-release.sh /var/www/velmix/releases/<release>`
-7. Certificar staging para el release promovido:
+8. Certificar staging para el release promovido:
    - `ops/scripts/check-staging-certification.sh`
    - `ops/scripts/certify-staging-release.sh <release> <deploy-evidence> <rollback-evidence> [smoke-evidence] [backup-artifact] [operator]`
-8. Validar si el release ya es promocionable:
+9. Validar si el release ya es promocionable:
    - `ops/scripts/check-promotion-readiness.sh`
    - `ops/scripts/record-release-promotion.sh <release> <approval-evidence> <rollback-evidence> [operator] [notes]`
-9. Validar la decision final de go-live:
+10. Validar la decision final de go-live:
    - `ops/scripts/check-cutover-readiness.sh`
    - `ops/scripts/record-release-cutover.sh <release> <cutover-evidence> <rollback-evidence> [monitoring-evidence] [operator] [notes]`
-10. Certificar operativamente el release ya activo:
+11. Certificar operativamente el release ya activo:
    - `ops/scripts/check-operational-certification.sh`
    - `ops/scripts/record-operational-certification.sh <release> <deploy-evidence> <rollback-evidence> <backup-artifact> <restore-evidence> [monitoring-evidence] [operator] [notes]`
-11. Si el despliegue se gobierna desde GitHub Actions:
+12. Si el despliegue se gobierna desde GitHub Actions:
    - disparar `.github/workflows/evidence-governed-deploy.yml`
    - exigir artifact `evidence-governed-deploy-<environment>-<release>`
    - revisar `summary.md`, `operational_summary.json` y `observability.json`
-12. Verificar:
+13. Verificar:
    - `GET /health/live`
    - `GET /health/ready`
    - `php artisan system:preflight --json`
@@ -208,6 +212,7 @@ Antes de revertir esquema revisar:
 - las units versionadas deben cargar `EnvironmentFile` despues de sus defaults para que `APP_ENV`, cola y scheduler puedan sobreescribirse por entorno sin forzar `production`
 - si ya existe `shared/.env` validado en el nodo, preferir sincronizarlo a `/etc/velmix/velmix.env` con `VELMIX_SYNC_SYSTEMD_ENV=true` antes de habilitar `velmix-backend.target`
 - si el paso lo ejecuta `root` manualmente, `ops/scripts/enable-systemd-managed-node.sh` reduce el riesgo humano porque sincroniza el `.env`, ajusta permisos y valida el target junto con scheduler y worker
+- para un host Ubuntu 24.04 nuevo, `ops/scripts/provision-ubuntu-node.sh` deja versionado el baseline de paquetes, servicios, `deploy`, `ufw` y layout base antes de cualquier release
 - si el deploy remoto usa `systemd` con un usuario no root, el host debe conceder `sudo -n` solo para `daemon-reload`, `restart velmix-backend.target`, `start velmix-queue-restart.service` y `status velmix-backend.target`; sin eso el bootstrap remoto debe bloquear antes de promover el release
 - `ops/scripts/install-deploy-systemd-sudoers.sh` permite versionar esa politica minima y validarla con `visudo` antes de escribir `/etc/sudoers.d/velmix-deploy-systemd`
 - `staging` y `production` deben declarar `VELMIX_REMOTE_TOPOLOGY_ID` distinto para impedir que el gate de produccion apruebe accidentalmente una topologia compartida

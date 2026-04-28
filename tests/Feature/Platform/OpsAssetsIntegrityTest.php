@@ -13,6 +13,7 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertFileExists(base_path('ops/systemd/velmix-queue-worker.service'));
         $this->assertFileExists(base_path('ops/systemd/velmix-queue-restart.service'));
         $this->assertFileExists(base_path('ops/systemd/velmix-backend.target'));
+        $this->assertFileExists(base_path('ops/scripts/provision-ubuntu-node.sh'));
         $this->assertFileExists(base_path('ops/scripts/install-systemd-units.sh'));
         $this->assertFileExists(base_path('ops/scripts/install-deploy-systemd-sudoers.sh'));
         $this->assertFileExists(base_path('ops/scripts/enable-systemd-managed-node.sh'));
@@ -111,6 +112,17 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('VELMIX_SYSTEMD_SOURCE_ENV_FILE', $installUnitsScript);
         $this->assertStringContainsString('VELMIX_SYNC_SYSTEMD_ENV', $installUnitsScript);
         $this->assertStringContainsString('Synchronized environment file from $SOURCE_ENV_FILE to $SYSTEMD_ENV_FILE', $installUnitsScript);
+
+        $provisionUbuntuNodeScript = file_get_contents(base_path('ops/scripts/provision-ubuntu-node.sh'));
+        $this->assertIsString($provisionUbuntuNodeScript);
+        $this->assertStringContainsString('This script must run as root.', $provisionUbuntuNodeScript);
+        $this->assertStringContainsString('This script currently supports Debian/Ubuntu hosts with apt-get.', $provisionUbuntuNodeScript);
+        $this->assertStringContainsString('apt-get install -y "${base_packages[@]}" "${php_packages[@]}"', $provisionUbuntuNodeScript);
+        $this->assertStringContainsString('systemctl enable --now "$service"', $provisionUbuntuNodeScript);
+        $this->assertStringContainsString('adduser --disabled-password --gecos "" "$DEPLOY_USER"', $provisionUbuntuNodeScript);
+        $this->assertStringContainsString('VELMIX_INIT_ENV_TEMPLATE', $provisionUbuntuNodeScript);
+        $this->assertStringContainsString('bootstrap-shared-path.sh', $provisionUbuntuNodeScript);
+        $this->assertStringContainsString('ufw allow "${SSH_PORT}/tcp"', $provisionUbuntuNodeScript);
 
         $installSystemdSudoersScript = file_get_contents(base_path('ops/scripts/install-deploy-systemd-sudoers.sh'));
         $this->assertIsString($installSystemdSudoersScript);
