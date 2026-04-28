@@ -89,7 +89,10 @@ get_environment_variable() {
 
 staging_topology_id="$(get_environment_variable "$STAGING_ENV" "VELMIX_REMOTE_TOPOLOGY_ID")"
 production_topology_id="$(get_environment_variable "$PRODUCTION_ENV" "VELMIX_REMOTE_TOPOLOGY_ID")"
+staging_topology_mode="$(get_environment_variable "$STAGING_ENV" "VELMIX_REMOTE_TOPOLOGY_MODE")"
+production_topology_mode="$(get_environment_variable "$PRODUCTION_ENV" "VELMIX_REMOTE_TOPOLOGY_MODE")"
 topology_isolated=false
+shared_topology_allowed=false
 
 if [[ -z "$staging_topology_id" ]]; then
   issues+=("staging_topology_id_missing")
@@ -101,10 +104,28 @@ if [[ -z "$production_topology_id" ]]; then
   status="blocked"
 fi
 
+if [[ -z "$staging_topology_mode" ]]; then
+  issues+=("staging_topology_mode_missing")
+  status="blocked"
+fi
+
+if [[ -z "$production_topology_mode" ]]; then
+  issues+=("production_topology_mode_missing")
+  status="blocked"
+fi
+
 if [[ -n "$staging_topology_id" && -n "$production_topology_id" ]]; then
   if [[ "$staging_topology_id" == "$production_topology_id" ]]; then
-    issues+=("shared_topology_id_between_staging_and_production")
-    status="blocked"
+    if [[ "$staging_topology_mode" == "single-host" && "$production_topology_mode" == "single-host" ]]; then
+      shared_topology_allowed=true
+      issues+=("shared_topology_single_host_acknowledged")
+      if [[ "$status" != "blocked" ]]; then
+        status="warning"
+      fi
+    else
+      issues+=("shared_topology_id_between_staging_and_production")
+      status="blocked"
+    fi
   else
     topology_isolated=true
   fi
@@ -129,7 +150,10 @@ printf '  },\n'
 printf '  "topology": {\n'
 printf '    "staging_topology_id": "%s",\n' "$staging_topology_id"
 printf '    "production_topology_id": "%s",\n' "$production_topology_id"
-printf '    "isolated": %s\n' "$topology_isolated"
+printf '    "staging_topology_mode": "%s",\n' "$staging_topology_mode"
+printf '    "production_topology_mode": "%s",\n' "$production_topology_mode"
+printf '    "isolated": %s,\n' "$topology_isolated"
+printf '    "shared_topology_allowed": %s\n' "$shared_topology_allowed"
 printf '  },\n'
 printf '  "environments": {\n'
 printf '    "staging": %s,\n' "$staging_payload"

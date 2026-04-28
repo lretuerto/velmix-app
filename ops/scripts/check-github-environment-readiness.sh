@@ -17,6 +17,7 @@ required_secrets=(
 
 recommended_variables=(
   VELMIX_REMOTE_TOPOLOGY_ID
+  VELMIX_REMOTE_TOPOLOGY_MODE
   VELMIX_REMOTE_PORT
   VELMIX_REMOTE_APP_ROOT
   VELMIX_REMOTE_RELEASES_PATH
@@ -130,6 +131,11 @@ for record in "${configured_variable_records[@]}"; do
   configured_variables+=("$name")
 
   case "$name" in
+    VELMIX_REMOTE_TOPOLOGY_MODE)
+      if [[ "$value" != "isolated" && "$value" != "single-host" ]]; then
+        invalid_variables+=("$name")
+      fi
+      ;;
     VELMIX_REMOTE_APP_ROOT|VELMIX_REMOTE_RELEASES_PATH|VELMIX_REMOTE_SHARED_PATH|VELMIX_REMOTE_ENV_FILE|VELMIX_REMOTE_TMP_PATH)
       if windows_path_value "$value"; then
         invalid_variables+=("$name")

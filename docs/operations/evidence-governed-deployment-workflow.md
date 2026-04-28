@@ -62,6 +62,7 @@ El workflow carga esos secrets del environment y los expone en runtime como `VEL
 
 - `VELMIX_REMOTE_PORT`
 - `VELMIX_REMOTE_TOPOLOGY_ID`
+- `VELMIX_REMOTE_TOPOLOGY_MODE`
 - `VELMIX_REMOTE_APP_ROOT`
 - `VELMIX_REMOTE_RELEASES_PATH`
 - `VELMIX_REMOTE_SHARED_PATH`
@@ -115,6 +116,7 @@ bash ops/scripts/install-deploy-systemd-sudoers.sh
 Sin esa autorizacion minima, `ops/scripts/bootstrap-remote-host-over-ssh.sh` debe bloquear el release con `remote_systemd_control_privileges_missing` antes de intentar la promocion.
 El script `ops/scripts/install-deploy-systemd-sudoers.sh` deja esa politica versionada, la valida con `visudo` y evita drift manual entre `staging` y `production`.
 Ademas, `staging` y `production` deben declarar `VELMIX_REMOTE_TOPOLOGY_ID` con valores distintos; `ops/scripts/check-production-go-no-go.sh` debe bloquear `production` si ambos entornos comparten el mismo identificador o si `production` no declara uno.
+Si se elige un despliegue `single-host`, ambos entornos deben declarar el mismo `VELMIX_REMOTE_TOPOLOGY_ID` y `VELMIX_REMOTE_TOPOLOGY_MODE=single-host`; el gate pasa a `warning` en vez de `blocked`, dejando la excepcion explicitamente trazada.
 
 ## Bootstrap reproducible del environment
 

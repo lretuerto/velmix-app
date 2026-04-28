@@ -242,6 +242,7 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('gh secret list --env', $environmentReadinessScript);
         $this->assertStringContainsString('gh variable list --env', $environmentReadinessScript);
         $this->assertStringContainsString('VELMIX_REMOTE_TOPOLOGY_ID', $environmentReadinessScript);
+        $this->assertStringContainsString('VELMIX_REMOTE_TOPOLOGY_MODE', $environmentReadinessScript);
         $this->assertStringContainsString('"environment_missing"', $environmentReadinessScript);
         $this->assertStringContainsString('"invalid"', $environmentReadinessScript);
         $this->assertStringContainsString('"required_reviewers"', $environmentReadinessScript);
@@ -261,8 +262,11 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('VELMIX_FAIL_ON_SELF_REVIEW=true', $goNoGoScript);
         $this->assertStringContainsString('VELMIX_FAIL_ON_ADMIN_BYPASS=true', $goNoGoScript);
         $this->assertStringContainsString('VELMIX_REMOTE_TOPOLOGY_ID', $goNoGoScript);
+        $this->assertStringContainsString('VELMIX_REMOTE_TOPOLOGY_MODE', $goNoGoScript);
         $this->assertStringContainsString('shared_topology_id_between_staging_and_production', $goNoGoScript);
+        $this->assertStringContainsString('shared_topology_single_host_acknowledged', $goNoGoScript);
         $this->assertStringContainsString('production_topology_id_missing', $goNoGoScript);
+        $this->assertStringContainsString('production_topology_mode_missing', $goNoGoScript);
 
         $syncEnvironmentScript = file_get_contents(base_path('ops/scripts/sync-github-environment-config.sh'));
         $this->assertIsString($syncEnvironmentScript);
@@ -279,6 +283,7 @@ class OpsAssetsIntegrityTest extends TestCase
         $stagingVariablesTemplate = file_get_contents(base_path('ops/github-environments/staging.variables.env.example'));
         $this->assertIsString($stagingVariablesTemplate);
         $this->assertStringContainsString('VELMIX_REMOTE_TOPOLOGY_ID=staging-primary-node', $stagingVariablesTemplate);
+        $this->assertStringContainsString('VELMIX_REMOTE_TOPOLOGY_MODE=isolated', $stagingVariablesTemplate);
         $this->assertStringContainsString('VELMIX_REMOTE_APP_ROOT=/var/www/velmix', $stagingVariablesTemplate);
         $this->assertStringNotContainsString('VELMIX_SSH_PRIVATE_KEY', $stagingVariablesTemplate);
 
@@ -290,6 +295,7 @@ class OpsAssetsIntegrityTest extends TestCase
         $productionVariablesTemplate = file_get_contents(base_path('ops/github-environments/production.variables.env.example'));
         $this->assertIsString($productionVariablesTemplate);
         $this->assertStringContainsString('VELMIX_REMOTE_TOPOLOGY_ID=production-primary-node', $productionVariablesTemplate);
+        $this->assertStringContainsString('VELMIX_REMOTE_TOPOLOGY_MODE=isolated', $productionVariablesTemplate);
         $this->assertStringContainsString('VELMIX_REMOTE_APP_ROOT=/var/www/velmix', $productionVariablesTemplate);
         $this->assertStringNotContainsString('VELMIX_SSH_PRIVATE_KEY', $productionVariablesTemplate);
 
