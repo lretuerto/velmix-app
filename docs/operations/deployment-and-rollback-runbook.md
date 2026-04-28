@@ -217,6 +217,7 @@ Antes de revertir esquema revisar:
 - `ops/scripts/install-deploy-systemd-sudoers.sh` permite versionar esa politica minima y validarla con `visudo` antes de escribir `/etc/sudoers.d/velmix-deploy-systemd`
 - `staging` y `production` deben declarar `VELMIX_REMOTE_TOPOLOGY_ID` distinto para impedir que el gate de produccion apruebe accidentalmente una topologia compartida
 - si se acepta un modo pragmatico de `single-host`, ambos environments deben declarar el mismo `VELMIX_REMOTE_TOPOLOGY_ID` y `VELMIX_REMOTE_TOPOLOGY_MODE=single-host`; el gate deja de bloquear por topologia, pero debe seguir tratandose como una excepcion operativa con mayor blast radius
+- si tambien se acepta un modo pragmatico de `single-operator`, `production` debe declarar `VELMIX_GOVERNANCE_MODE=single-operator`; el gate deja de bloquear por reviewer unico, self-review y admin bypass, pero debe seguir tratandose como una excepcion de gobernanza y quedar explicitamente trazada
 - el target recomendado para restart coordinado es `velmix-backend.target`
 
 ## Checklist de cierre

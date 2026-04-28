@@ -63,6 +63,7 @@ El workflow carga esos secrets del environment y los expone en runtime como `VEL
 - `VELMIX_REMOTE_PORT`
 - `VELMIX_REMOTE_TOPOLOGY_ID`
 - `VELMIX_REMOTE_TOPOLOGY_MODE`
+- `VELMIX_GOVERNANCE_MODE`
 - `VELMIX_REMOTE_APP_ROOT`
 - `VELMIX_REMOTE_RELEASES_PATH`
 - `VELMIX_REMOTE_SHARED_PATH`
@@ -117,6 +118,7 @@ Sin esa autorizacion minima, `ops/scripts/bootstrap-remote-host-over-ssh.sh` deb
 El script `ops/scripts/install-deploy-systemd-sudoers.sh` deja esa politica versionada, la valida con `visudo` y evita drift manual entre `staging` y `production`.
 Ademas, `staging` y `production` deben declarar `VELMIX_REMOTE_TOPOLOGY_ID` con valores distintos; `ops/scripts/check-production-go-no-go.sh` debe bloquear `production` si ambos entornos comparten el mismo identificador o si `production` no declara uno.
 Si se elige un despliegue `single-host`, ambos entornos deben declarar el mismo `VELMIX_REMOTE_TOPOLOGY_ID` y `VELMIX_REMOTE_TOPOLOGY_MODE=single-host`; el gate pasa a `warning` en vez de `blocked`, dejando la excepcion explicitamente trazada.
+Si ademas se acepta una operacion `single-operator`, `production` debe declarar `VELMIX_GOVERNANCE_MODE=single-operator`; el gate pasa a `warning` en vez de `blocked` para reviewer unico, self-review y admin bypass, dejando la excepcion de gobernanza explicitamente trazada.
 
 ## Bootstrap reproducible del environment
 
@@ -155,6 +157,7 @@ Para `production`, el gate consolidado debe tratar como `blocked` estos casos de
 - `prevent_self_review=false`
 - `can_admins_bypass=true`
 - el script `ops/scripts/configure-github-environment-protection.sh` ya acepta reviewers separados por coma para dejar esa gobernanza aplicada de forma reproducible
+- solo si se declara `VELMIX_GOVERNANCE_MODE=single-operator`, el gate degrada esas condiciones a `warning` controlado y agrega `single_operator_governance_acknowledged`
 
 ## Aprobación manual del environment
 
