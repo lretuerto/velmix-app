@@ -119,6 +119,7 @@ El script `ops/scripts/install-deploy-systemd-sudoers.sh` deja esa politica vers
 Ademas, `staging` y `production` deben declarar `VELMIX_REMOTE_TOPOLOGY_ID` con valores distintos; `ops/scripts/check-production-go-no-go.sh` debe bloquear `production` si ambos entornos comparten el mismo identificador o si `production` no declara uno.
 Si se elige un despliegue `single-host`, ambos entornos deben declarar el mismo `VELMIX_REMOTE_TOPOLOGY_ID` y `VELMIX_REMOTE_TOPOLOGY_MODE=single-host`; el gate pasa a `warning` en vez de `blocked`, dejando la excepcion explicitamente trazada.
 Si ademas se acepta una operacion `single-operator`, `production` debe declarar `VELMIX_GOVERNANCE_MODE=single-operator`; el gate pasa a `warning` en vez de `blocked` para reviewer unico, self-review y admin bypass, dejando la excepcion de gobernanza explicitamente trazada.
+Cuando el workflow corre con `target_environment=production`, `ops/scripts/run-evidence-governed-deploy.sh` ya no regraba certificacion de staging ni aprobacion de promocion; reutiliza la evidencia previa (`staging_summary.json` y `promotion_summary.json`) y solo registra cutover y certificacion operativa sobre el nodo objetivo.
 
 ## Bootstrap reproducible del environment
 

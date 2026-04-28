@@ -160,6 +160,7 @@ jobs:
       VELMIX_DEPLOY_OPERATOR: ${{ github.actor }}
       VELMIX_DEPLOY_ALLOW_WARNING: false
       VELMIX_DEPLOY_NOTES: GitHub Actions evidence-governed deployment workflow
+      VELMIX_TARGET_ENVIRONMENT: staging
       VELMIX_BACKUP_DRIVER: github-actions
       VELMIX_BACKUP_CHECKSUM: sha256:${{ github.sha }}
       VELMIX_BACKUP_SIZE: 0
@@ -247,6 +248,7 @@ jobs:
       VELMIX_DEPLOY_ALLOW_WARNING: ${{ inputs.allow_warning && 'true' || 'false' }}
       VELMIX_DEPLOYMENT_STRATEGY: ${{ inputs.deployment_strategy }}
       VELMIX_DEPLOY_NOTES: GitHub Actions evidence-governed deployment workflow
+      VELMIX_TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
       VELMIX_BACKUP_DRIVER: github-actions
       VELMIX_BACKUP_CHECKSUM: sha256:${{ github.sha }}
       VELMIX_BACKUP_SIZE: 0

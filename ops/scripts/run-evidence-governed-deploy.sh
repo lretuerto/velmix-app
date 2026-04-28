@@ -18,6 +18,7 @@ ALLOW_WARNING="${VELMIX_DEPLOY_ALLOW_WARNING:-false}"
 BACKUP_CHECKSUM="${VELMIX_BACKUP_CHECKSUM:-sha256:workflow-placeholder}"
 BACKUP_SIZE="${VELMIX_BACKUP_SIZE:-0}"
 BACKUP_DRIVER="${VELMIX_BACKUP_DRIVER:-workflow-simulated}"
+TARGET_ENVIRONMENT="${VELMIX_TARGET_ENVIRONMENT:-staging}"
 
 if [[ -z "$RELEASE" || -z "$DEPLOY_EVIDENCE" || -z "$ROLLBACK_EVIDENCE" || -z "$APPROVAL_EVIDENCE" || -z "$CUTOVER_EVIDENCE" || -z "$BACKUP_ARTIFACT" || -z "$RESTORE_EVIDENCE" ]]; then
   echo "Missing mandatory evidence variables. Required: VELMIX_RELEASE_IDENTIFIER, VELMIX_DEPLOY_EVIDENCE, VELMIX_ROLLBACK_EVIDENCE, VELMIX_APPROVAL_EVIDENCE, VELMIX_CUTOVER_EVIDENCE, VELMIX_BACKUP_ARTIFACT, VELMIX_RESTORE_EVIDENCE." >&2
@@ -73,7 +74,19 @@ if [[ -n "$ALLOW_WARNING_OPTION" ]]; then
   STAGING_ARGS+=("$ALLOW_WARNING_OPTION")
 fi
 
-run_json staging_record bash "${STAGING_ARGS[@]}"
+if [[ "$TARGET_ENVIRONMENT" == "production" ]]; then
+  cat > "$EVIDENCE_DIR/staging_record.json" <<EOF
+{
+  "status": "skipped",
+  "checked_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "reason": "staging_record_reused_for_production_cutover",
+  "target_environment": "$TARGET_ENVIRONMENT",
+  "release": "$RELEASE"
+}
+EOF
+else
+  run_json staging_record bash "${STAGING_ARGS[@]}"
+fi
 run_json staging_summary "$PHP_BIN" artisan system:staging-certification --json "$FAIL_OPTION"
 
 PROMOTION_ARGS=(
@@ -89,7 +102,19 @@ if [[ -n "$ALLOW_WARNING_OPTION" ]]; then
   PROMOTION_ARGS+=("$ALLOW_WARNING_OPTION")
 fi
 
-run_json promotion_record bash "${PROMOTION_ARGS[@]}"
+if [[ "$TARGET_ENVIRONMENT" == "production" ]]; then
+  cat > "$EVIDENCE_DIR/promotion_record.json" <<EOF
+{
+  "status": "skipped",
+  "checked_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "reason": "promotion_record_reused_for_production_cutover",
+  "target_environment": "$TARGET_ENVIRONMENT",
+  "release": "$RELEASE"
+}
+EOF
+else
+  run_json promotion_record bash "${PROMOTION_ARGS[@]}"
+fi
 run_json promotion_summary "$PHP_BIN" artisan system:promotion-readiness --json "$FAIL_OPTION"
 
 CUTOVER_ARGS=(

@@ -206,8 +206,11 @@ class OpsAssetsIntegrityTest extends TestCase
 
         $evidenceGovernedDeployScript = file_get_contents(base_path('ops/scripts/run-evidence-governed-deploy.sh'));
         $this->assertIsString($evidenceGovernedDeployScript);
+        $this->assertStringContainsString('VELMIX_TARGET_ENVIRONMENT', $evidenceGovernedDeployScript);
         $this->assertStringContainsString('system:record-backup', $evidenceGovernedDeployScript);
         $this->assertStringContainsString('system:record-operational-certification', $evidenceGovernedDeployScript);
+        $this->assertStringContainsString('staging_record_reused_for_production_cutover', $evidenceGovernedDeployScript);
+        $this->assertStringContainsString('promotion_record_reused_for_production_cutover', $evidenceGovernedDeployScript);
         $this->assertStringContainsString('summary.md', $evidenceGovernedDeployScript);
         $this->assertTrue(
             strpos($evidenceGovernedDeployScript, 'system:record-backup') < strpos($evidenceGovernedDeployScript, 'system:preflight'),
@@ -335,6 +338,7 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('ops/scripts/check-production-go-no-go.sh', $workflow);
         $this->assertStringContainsString('ops/github-environments/production.env.example', $workflow);
         $this->assertStringContainsString('vars.VELMIX_REMOTE_APP_ROOT', $workflow);
+        $this->assertStringContainsString('VELMIX_TARGET_ENVIRONMENT: ${{ inputs.target_environment }}', $workflow);
         $this->assertStringContainsString('ops/scripts/check-github-environment-readiness.sh', $workflow);
         $this->assertStringContainsString('upload-artifact@v4', $workflow);
         $this->assertStringContainsString('FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true', $workflow);
