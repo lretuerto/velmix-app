@@ -7,6 +7,7 @@ SHARED_PATH="${VELMIX_SHARED_PATH:-$APP_ROOT/shared}"
 ENV_FILE="${VELMIX_ENV_FILE:-$SHARED_PATH/.env}"
 PHP_BIN="${VELMIX_PHP_BIN:-php}"
 COMPOSER_BIN="${VELMIX_COMPOSER_BIN:-composer}"
+ALLOW_WARNING="${VELMIX_ALLOW_WARNING:-${VELMIX_DEPLOY_ALLOW_WARNING:-false}}"
 
 if [[ -z "$RELEASE_PATH" ]]; then
   echo "Usage: prepare-release.sh <release-path>" >&2
@@ -41,11 +42,17 @@ ln -sfn "$SHARED_PATH/bootstrap/cache" "$RELEASE_PATH/bootstrap/cache"
 
 cd "$RELEASE_PATH"
 
+FAIL_OPTION="--fail-on-warning"
+
+if [[ "$ALLOW_WARNING" == "true" ]]; then
+  FAIL_OPTION="--fail-on-critical"
+fi
+
 "$COMPOSER_BIN" install --no-dev --prefer-dist --optimize-autoloader --no-interaction
 "$PHP_BIN" artisan migrate --force
 "$PHP_BIN" artisan optimize:clear
 "$PHP_BIN" artisan config:cache
 "$PHP_BIN" artisan route:cache
-"$PHP_BIN" artisan system:preflight --json --fail-on-warning
+"$PHP_BIN" artisan system:preflight --json "$FAIL_OPTION"
 
 echo "Release prepared successfully: $RELEASE_PATH"

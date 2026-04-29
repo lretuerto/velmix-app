@@ -12,6 +12,7 @@ PHP_BIN="${VELMIX_PHP_BIN:-php}"
 SYSTEMD_TARGET="${VELMIX_SYSTEMD_TARGET:-velmix-backend.target}"
 QUEUE_RESTART_SERVICE="${VELMIX_SYSTEMD_QUEUE_RESTART_SERVICE:-velmix-queue-restart.service}"
 USE_SYSTEMD="${VELMIX_USE_SYSTEMD:-true}"
+ALLOW_WARNING="${VELMIX_ALLOW_WARNING:-${VELMIX_DEPLOY_ALLOW_WARNING:-false}}"
 
 if [[ -z "$RELEASE_PATH" ]]; then
   echo "Usage: promote-release.sh <release-path>" >&2
@@ -52,7 +53,14 @@ if [[ -n "$PREVIOUS_TARGET" && -d "$PREVIOUS_TARGET" ]]; then
 fi
 
 cd "$CURRENT_LINK"
-"$PHP_BIN" artisan system:preflight --json --fail-on-warning
+
+FAIL_OPTION="--fail-on-warning"
+
+if [[ "$ALLOW_WARNING" == "true" ]]; then
+  FAIL_OPTION="--fail-on-critical"
+fi
+
+"$PHP_BIN" artisan system:preflight --json "$FAIL_OPTION"
 
 if [[ "$USE_SYSTEMD" == "true" ]] && velmix_systemctl_bin >/dev/null 2>&1; then
   velmix_run_systemctl daemon-reload

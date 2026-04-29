@@ -96,7 +96,10 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertIsString($promoteScript);
         $this->assertStringContainsString('source "$SCRIPT_DIR/systemctl-helpers.sh"', $promoteScript);
         $this->assertStringContainsString('mv -Tf "${CURRENT_LINK}.next" "$CURRENT_LINK"', $promoteScript);
-        $this->assertStringContainsString('artisan system:preflight --json --fail-on-warning', $promoteScript);
+        $this->assertStringContainsString('VELMIX_DEPLOY_ALLOW_WARNING', $promoteScript);
+        $this->assertStringContainsString('FAIL_OPTION="--fail-on-warning"', $promoteScript);
+        $this->assertStringContainsString('FAIL_OPTION="--fail-on-critical"', $promoteScript);
+        $this->assertStringContainsString('artisan system:preflight --json "$FAIL_OPTION"', $promoteScript);
         $this->assertStringContainsString('velmix_run_systemctl restart "$SYSTEMD_TARGET"', $promoteScript);
 
         $rollbackScript = file_get_contents(base_path('ops/scripts/rollback-to-previous-release.sh'));
@@ -243,6 +246,13 @@ class OpsAssetsIntegrityTest extends TestCase
             strpos($remoteDeployScript, 'bootstrap-remote-host-over-ssh.sh') < strpos($remoteDeployScript, 'scp "${SCP_OPTS[@]}" "$LOCAL_ARCHIVE_PATH"'),
             'Remote host bootstrap should run before transferring the release archive.'
         );
+
+        $prepareReleaseScript = file_get_contents(base_path('ops/scripts/prepare-release.sh'));
+        $this->assertIsString($prepareReleaseScript);
+        $this->assertStringContainsString('VELMIX_DEPLOY_ALLOW_WARNING', $prepareReleaseScript);
+        $this->assertStringContainsString('FAIL_OPTION="--fail-on-warning"', $prepareReleaseScript);
+        $this->assertStringContainsString('FAIL_OPTION="--fail-on-critical"', $prepareReleaseScript);
+        $this->assertStringContainsString('artisan system:preflight --json "$FAIL_OPTION"', $prepareReleaseScript);
 
         $configureEnvironmentScript = file_get_contents(base_path('ops/scripts/configure-github-environment-protection.sh'));
         $this->assertIsString($configureEnvironmentScript);
