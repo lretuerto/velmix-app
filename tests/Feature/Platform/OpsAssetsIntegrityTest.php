@@ -225,8 +225,11 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('VELMIX_TARGET_ENVIRONMENT', $evidenceGovernedDeployScript);
         $this->assertStringContainsString('system:record-backup', $evidenceGovernedDeployScript);
         $this->assertStringContainsString('system:record-operational-certification', $evidenceGovernedDeployScript);
+        $this->assertStringContainsString('write_skipped_json()', $evidenceGovernedDeployScript);
         $this->assertStringContainsString('staging_record_reused_for_production_cutover', $evidenceGovernedDeployScript);
+        $this->assertStringContainsString('staging_summary_reused_for_production_cutover', $evidenceGovernedDeployScript);
         $this->assertStringContainsString('promotion_record_reused_for_production_cutover', $evidenceGovernedDeployScript);
+        $this->assertStringContainsString('promotion_summary_reused_for_production_cutover', $evidenceGovernedDeployScript);
         $this->assertStringContainsString('summary.md', $evidenceGovernedDeployScript);
         $this->assertTrue(
             strpos($evidenceGovernedDeployScript, 'system:record-backup') < strpos($evidenceGovernedDeployScript, 'system:preflight'),

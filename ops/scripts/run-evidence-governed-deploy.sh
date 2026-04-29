@@ -40,6 +40,21 @@ run_text() {
   "$@" | tee "$EVIDENCE_DIR/${name}.txt"
 }
 
+write_skipped_json() {
+  local name="$1"
+  local reason="$2"
+
+  cat > "$EVIDENCE_DIR/${name}.json" <<EOF
+{
+  "status": "skipped",
+  "checked_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "reason": "$reason",
+  "target_environment": "$TARGET_ENVIRONMENT",
+  "release": "$RELEASE"
+}
+EOF
+}
+
 FAIL_OPTION="--fail-on-warning"
 ALLOW_WARNING_OPTION=""
 
@@ -75,19 +90,12 @@ if [[ -n "$ALLOW_WARNING_OPTION" ]]; then
 fi
 
 if [[ "$TARGET_ENVIRONMENT" == "production" ]]; then
-  cat > "$EVIDENCE_DIR/staging_record.json" <<EOF
-{
-  "status": "skipped",
-  "checked_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "reason": "staging_record_reused_for_production_cutover",
-  "target_environment": "$TARGET_ENVIRONMENT",
-  "release": "$RELEASE"
-}
-EOF
+  write_skipped_json staging_record staging_record_reused_for_production_cutover
+  write_skipped_json staging_summary staging_summary_reused_for_production_cutover
 else
   run_json staging_record bash "${STAGING_ARGS[@]}"
+  run_json staging_summary "$PHP_BIN" artisan system:staging-certification --json "$FAIL_OPTION"
 fi
-run_json staging_summary "$PHP_BIN" artisan system:staging-certification --json "$FAIL_OPTION"
 
 PROMOTION_ARGS=(
   "$APP_PATH/ops/scripts/record-release-promotion.sh"
@@ -103,19 +111,12 @@ if [[ -n "$ALLOW_WARNING_OPTION" ]]; then
 fi
 
 if [[ "$TARGET_ENVIRONMENT" == "production" ]]; then
-  cat > "$EVIDENCE_DIR/promotion_record.json" <<EOF
-{
-  "status": "skipped",
-  "checked_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "reason": "promotion_record_reused_for_production_cutover",
-  "target_environment": "$TARGET_ENVIRONMENT",
-  "release": "$RELEASE"
-}
-EOF
+  write_skipped_json promotion_record promotion_record_reused_for_production_cutover
+  write_skipped_json promotion_summary promotion_summary_reused_for_production_cutover
 else
   run_json promotion_record bash "${PROMOTION_ARGS[@]}"
+  run_json promotion_summary "$PHP_BIN" artisan system:promotion-readiness --json "$FAIL_OPTION"
 fi
-run_json promotion_summary "$PHP_BIN" artisan system:promotion-readiness --json "$FAIL_OPTION"
 
 CUTOVER_ARGS=(
   "$APP_PATH/ops/scripts/record-release-cutover.sh"
