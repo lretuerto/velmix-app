@@ -234,7 +234,21 @@ class StagingCertificationService
      */
     private function config(): array
     {
-        return (array) config('velmix.staging_certification', []);
+        $config = (array) config('velmix.staging_certification', []);
+
+        if (($expectedEnvironment = $this->runtimeEnv('VELMIX_STAGING_CERTIFICATION_ENV')) !== null) {
+            $config['expected_environment'] = $expectedEnvironment;
+        }
+
+        if (($requiredEnvironments = $this->runtimeEnvList('VELMIX_STAGING_CERTIFICATION_REQUIRED_ENVS')) !== null) {
+            $config['required_environments'] = $requiredEnvironments;
+        }
+
+        if (($releaseIdentifier = $this->runtimeEnv('VELMIX_RELEASE_IDENTIFIER')) !== null) {
+            $config['release_identifier'] = $releaseIdentifier;
+        }
+
+        return $config;
     }
 
     /**
@@ -469,5 +483,33 @@ class StagingCertificationService
     private function currentEnvironment(): string
     {
         return trim((string) config('app.env', app()->environment()));
+    }
+
+    private function runtimeEnv(string $name): ?string
+    {
+        $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);
+
+        if ($value === false || $value === null) {
+            return null;
+        }
+
+        return trim((string) $value);
+    }
+
+    /**
+     * @return array<int, string>|null
+     */
+    private function runtimeEnvList(string $name): ?array
+    {
+        $value = $this->runtimeEnv($name);
+
+        if ($value === null) {
+            return null;
+        }
+
+        return array_values(array_filter(array_map(
+            static fn (string $environment) => trim($environment),
+            explode(',', $value)
+        )));
     }
 }

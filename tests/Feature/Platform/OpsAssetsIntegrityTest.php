@@ -2,10 +2,84 @@
 
 namespace Tests\Feature\Platform;
 
+use App\Services\Platform\ReleasePromotionService;
+use App\Services\Platform\StagingCertificationService;
+use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 class OpsAssetsIntegrityTest extends TestCase
 {
+    public function test_platform_evidence_services_honor_runtime_environment_overrides(): void
+    {
+        $basePath = storage_path('framework/testing/platform-runtime-env-overrides');
+
+        File::ensureDirectoryExists($basePath.DIRECTORY_SEPARATOR.'staging'.DIRECTORY_SEPARATOR.'history');
+        File::ensureDirectoryExists($basePath.DIRECTORY_SEPARATOR.'promotion'.DIRECTORY_SEPARATOR.'history');
+
+        config([
+            'app.env' => 'production',
+            'velmix.staging_certification.expected_environment' => 'staging',
+            'velmix.staging_certification.required_environments' => ['staging'],
+            'velmix.staging_certification.storage_path' => $basePath.DIRECTORY_SEPARATOR.'staging',
+            'velmix.staging_certification.history_path' => $basePath.DIRECTORY_SEPARATOR.'staging'.DIRECTORY_SEPARATOR.'history',
+            'velmix.staging_certification.manifest_filename' => 'latest-staging-certification.json',
+            'velmix.staging_certification.release_identifier' => 'stale-staging-release',
+            'velmix.release_promotion.expected_environment' => 'staging',
+            'velmix.release_promotion.required_environments' => ['staging'],
+            'velmix.release_promotion.storage_path' => $basePath.DIRECTORY_SEPARATOR.'promotion',
+            'velmix.release_promotion.history_path' => $basePath.DIRECTORY_SEPARATOR.'promotion'.DIRECTORY_SEPARATOR.'history',
+            'velmix.release_promotion.manifest_filename' => 'latest-release-promotion.json',
+            'velmix.release_promotion.release_identifier' => 'stale-production-release',
+        ]);
+
+        $env = [
+            'VELMIX_STAGING_CERTIFICATION_ENV' => 'production',
+            'VELMIX_STAGING_CERTIFICATION_REQUIRED_ENVS' => 'production',
+            'VELMIX_RELEASE_PROMOTION_ENV' => 'production',
+            'VELMIX_RELEASE_PROMOTION_REQUIRED_ENVS' => 'production',
+            'VELMIX_RELEASE_IDENTIFIER' => 'production-2026-04-29-006',
+        ];
+
+        $signals = [
+            'preflight' => ['status' => 'ok', 'items' => []],
+            'alerts' => ['status' => 'ok', 'summary' => ['critical_count' => 0, 'warning_count' => 0], 'items' => []],
+            'recovery' => [
+                'backup' => ['status' => 'ok', 'latest_backup' => ['manifest_path' => $basePath.DIRECTORY_SEPARATOR.'backup.json']],
+                'restore_drill' => ['status' => 'ok', 'latest_drill' => ['report_path' => $basePath.DIRECTORY_SEPARATOR.'restore.json']],
+            ],
+        ];
+
+        foreach ($env as $name => $value) {
+            putenv(sprintf('%s=%s', $name, $value));
+            $_ENV[$name] = $value;
+            $_SERVER[$name] = $value;
+        }
+
+        try {
+            $stagingSummary = app(StagingCertificationService::class)->summary($signals);
+            $promotionSummary = app(ReleasePromotionService::class)->summary(array_merge($signals, [
+                'certification' => $stagingSummary,
+            ]));
+
+            $this->assertSame('production', $stagingSummary['expected_environment']);
+            $this->assertSame(['production'], $stagingSummary['required_environments']);
+            $this->assertTrue($stagingSummary['required']);
+            $this->assertSame('production-2026-04-29-006', $stagingSummary['release_identifier']);
+
+            $this->assertSame('production', $promotionSummary['expected_environment']);
+            $this->assertSame(['production'], $promotionSummary['required_environments']);
+            $this->assertTrue($promotionSummary['required']);
+            $this->assertSame('production-2026-04-29-006', $promotionSummary['release_identifier']);
+        } finally {
+            foreach (array_keys($env) as $name) {
+                putenv($name);
+                unset($_ENV[$name], $_SERVER[$name]);
+            }
+
+            File::deleteDirectory($basePath);
+        }
+    }
+
     public function test_versioned_ops_assets_exist_with_expected_release_controls(): void
     {
         $this->assertFileExists(base_path('ops/systemd/velmix-app.env.example'));

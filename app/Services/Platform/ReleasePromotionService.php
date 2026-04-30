@@ -274,7 +274,21 @@ class ReleasePromotionService
      */
     private function config(): array
     {
-        return (array) config('velmix.release_promotion', []);
+        $config = (array) config('velmix.release_promotion', []);
+
+        if (($expectedEnvironment = $this->runtimeEnv('VELMIX_RELEASE_PROMOTION_ENV')) !== null) {
+            $config['expected_environment'] = $expectedEnvironment;
+        }
+
+        if (($requiredEnvironments = $this->runtimeEnvList('VELMIX_RELEASE_PROMOTION_REQUIRED_ENVS')) !== null) {
+            $config['required_environments'] = $requiredEnvironments;
+        }
+
+        if (($releaseIdentifier = $this->runtimeEnv('VELMIX_RELEASE_IDENTIFIER')) !== null) {
+            $config['release_identifier'] = $releaseIdentifier;
+        }
+
+        return $config;
     }
 
     /**
@@ -553,5 +567,33 @@ class ReleasePromotionService
     private function currentEnvironment(): string
     {
         return trim((string) config('app.env', app()->environment()));
+    }
+
+    private function runtimeEnv(string $name): ?string
+    {
+        $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);
+
+        if ($value === false || $value === null) {
+            return null;
+        }
+
+        return trim((string) $value);
+    }
+
+    /**
+     * @return array<int, string>|null
+     */
+    private function runtimeEnvList(string $name): ?array
+    {
+        $value = $this->runtimeEnv($name);
+
+        if ($value === null) {
+            return null;
+        }
+
+        return array_values(array_filter(array_map(
+            static fn (string $environment) => trim($environment),
+            explode(',', $value)
+        )));
     }
 }
