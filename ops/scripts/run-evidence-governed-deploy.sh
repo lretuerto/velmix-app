@@ -19,6 +19,8 @@ BACKUP_CHECKSUM="${VELMIX_BACKUP_CHECKSUM:-sha256:workflow-placeholder}"
 BACKUP_SIZE="${VELMIX_BACKUP_SIZE:-0}"
 BACKUP_DRIVER="${VELMIX_BACKUP_DRIVER:-workflow-simulated}"
 TARGET_ENVIRONMENT="${VELMIX_TARGET_ENVIRONMENT:-staging}"
+TOPOLOGY_MODE="${VELMIX_REMOTE_TOPOLOGY_MODE:-isolated}"
+GOVERNANCE_MODE="${VELMIX_GOVERNANCE_MODE:-independent-review}"
 
 if [[ -z "$RELEASE" || -z "$DEPLOY_EVIDENCE" || -z "$ROLLBACK_EVIDENCE" || -z "$APPROVAL_EVIDENCE" || -z "$CUTOVER_EVIDENCE" || -z "$BACKUP_ARTIFACT" || -z "$RESTORE_EVIDENCE" ]]; then
   echo "Missing mandatory evidence variables. Required: VELMIX_RELEASE_IDENTIFIER, VELMIX_DEPLOY_EVIDENCE, VELMIX_ROLLBACK_EVIDENCE, VELMIX_APPROVAL_EVIDENCE, VELMIX_CUTOVER_EVIDENCE, VELMIX_BACKUP_ARTIFACT, VELMIX_RESTORE_EVIDENCE." >&2
@@ -63,6 +65,12 @@ if [[ "$ALLOW_WARNING" == "true" ]]; then
   ALLOW_WARNING_OPTION="--allow-warning"
 fi
 
+SINGLE_HOST_PRODUCTION_MODE=false
+
+if [[ "$TARGET_ENVIRONMENT" == "production" && "$TOPOLOGY_MODE" == "single-host" && "$GOVERNANCE_MODE" == "single-operator" ]]; then
+  SINGLE_HOST_PRODUCTION_MODE=true
+fi
+
 run_json backup_record "$PHP_BIN" artisan system:record-backup \
   "$BACKUP_ARTIFACT" \
   --checksum="$BACKUP_CHECKSUM" \
@@ -89,7 +97,16 @@ if [[ -n "$ALLOW_WARNING_OPTION" ]]; then
   STAGING_ARGS+=("$ALLOW_WARNING_OPTION")
 fi
 
-if [[ "$TARGET_ENVIRONMENT" == "production" ]]; then
+if [[ "$SINGLE_HOST_PRODUCTION_MODE" == "true" ]]; then
+  STAGING_ENV=(
+    env
+    VELMIX_STAGING_CERTIFICATION_ENV=production
+    VELMIX_STAGING_CERTIFICATION_REQUIRED_ENVS=production
+  )
+
+  run_json staging_record "${STAGING_ENV[@]}" bash "${STAGING_ARGS[@]}"
+  run_json staging_summary "${STAGING_ENV[@]}" "$PHP_BIN" artisan system:staging-certification --json "$FAIL_OPTION"
+elif [[ "$TARGET_ENVIRONMENT" == "production" ]]; then
   write_skipped_json staging_record staging_record_reused_for_production_cutover
   write_skipped_json staging_summary staging_summary_reused_for_production_cutover
 else
@@ -110,7 +127,18 @@ if [[ -n "$ALLOW_WARNING_OPTION" ]]; then
   PROMOTION_ARGS+=("$ALLOW_WARNING_OPTION")
 fi
 
-if [[ "$TARGET_ENVIRONMENT" == "production" ]]; then
+if [[ "$SINGLE_HOST_PRODUCTION_MODE" == "true" ]]; then
+  PROMOTION_ENV=(
+    env
+    VELMIX_STAGING_CERTIFICATION_ENV=production
+    VELMIX_STAGING_CERTIFICATION_REQUIRED_ENVS=production
+    VELMIX_RELEASE_PROMOTION_ENV=production
+    VELMIX_RELEASE_PROMOTION_REQUIRED_ENVS=production
+  )
+
+  run_json promotion_record "${PROMOTION_ENV[@]}" bash "${PROMOTION_ARGS[@]}"
+  run_json promotion_summary "${PROMOTION_ENV[@]}" "$PHP_BIN" artisan system:promotion-readiness --json "$FAIL_OPTION"
+elif [[ "$TARGET_ENVIRONMENT" == "production" ]]; then
   write_skipped_json promotion_record promotion_record_reused_for_production_cutover
   write_skipped_json promotion_summary promotion_summary_reused_for_production_cutover
 else

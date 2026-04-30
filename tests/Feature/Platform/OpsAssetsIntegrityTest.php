@@ -223,6 +223,11 @@ class OpsAssetsIntegrityTest extends TestCase
         $evidenceGovernedDeployScript = file_get_contents(base_path('ops/scripts/run-evidence-governed-deploy.sh'));
         $this->assertIsString($evidenceGovernedDeployScript);
         $this->assertStringContainsString('VELMIX_TARGET_ENVIRONMENT', $evidenceGovernedDeployScript);
+        $this->assertStringContainsString('VELMIX_REMOTE_TOPOLOGY_MODE', $evidenceGovernedDeployScript);
+        $this->assertStringContainsString('VELMIX_GOVERNANCE_MODE', $evidenceGovernedDeployScript);
+        $this->assertStringContainsString('SINGLE_HOST_PRODUCTION_MODE=true', $evidenceGovernedDeployScript);
+        $this->assertStringContainsString('VELMIX_STAGING_CERTIFICATION_ENV=production', $evidenceGovernedDeployScript);
+        $this->assertStringContainsString('VELMIX_RELEASE_PROMOTION_ENV=production', $evidenceGovernedDeployScript);
         $this->assertStringContainsString('system:record-backup', $evidenceGovernedDeployScript);
         $this->assertStringContainsString('system:record-operational-certification', $evidenceGovernedDeployScript);
         $this->assertStringContainsString('write_skipped_json()', $evidenceGovernedDeployScript);
@@ -246,6 +251,8 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('ops/scripts/run-evidence-governed-deploy.sh', $remoteDeployScript);
         $this->assertStringContainsString('rollback-to-previous-release.sh', $remoteDeployScript);
         $this->assertStringContainsString('VELMIX_TARGET_ENVIRONMENT', $remoteDeployScript);
+        $this->assertStringContainsString('VELMIX_REMOTE_TOPOLOGY_MODE', $remoteDeployScript);
+        $this->assertStringContainsString('VELMIX_GOVERNANCE_MODE', $remoteDeployScript);
         $this->assertTrue(
             strpos($remoteDeployScript, 'bootstrap-remote-host-over-ssh.sh') < strpos($remoteDeployScript, 'scp "${SCP_OPTS[@]}" "$LOCAL_ARCHIVE_PATH"'),
             'Remote host bootstrap should run before transferring the release archive.'
