@@ -245,6 +245,7 @@ class OpsAssetsIntegrityTest extends TestCase
         $this->assertStringContainsString('ops/scripts/promote-release.sh', $remoteDeployScript);
         $this->assertStringContainsString('ops/scripts/run-evidence-governed-deploy.sh', $remoteDeployScript);
         $this->assertStringContainsString('rollback-to-previous-release.sh', $remoteDeployScript);
+        $this->assertStringContainsString('VELMIX_TARGET_ENVIRONMENT', $remoteDeployScript);
         $this->assertTrue(
             strpos($remoteDeployScript, 'bootstrap-remote-host-over-ssh.sh') < strpos($remoteDeployScript, 'scp "${SCP_OPTS[@]}" "$LOCAL_ARCHIVE_PATH"'),
             'Remote host bootstrap should run before transferring the release archive.'

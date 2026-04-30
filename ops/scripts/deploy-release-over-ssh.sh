@@ -94,6 +94,7 @@ remote_env=(
   "VELMIX_DEPLOY_OPERATOR=$(quote "${VELMIX_DEPLOY_OPERATOR:-workflow-bot}")"
   "VELMIX_DEPLOY_NOTES=$(quote "${VELMIX_DEPLOY_NOTES:-Remote evidence-governed deployment workflow execution}")"
   "VELMIX_DEPLOY_ALLOW_WARNING=$(quote "${VELMIX_DEPLOY_ALLOW_WARNING:-false}")"
+  "VELMIX_TARGET_ENVIRONMENT=$(quote "${VELMIX_TARGET_ENVIRONMENT:-staging}")"
   "VELMIX_BACKUP_DRIVER=$(quote "${VELMIX_BACKUP_DRIVER:-remote-ssh}")"
   "VELMIX_BACKUP_CHECKSUM=$(quote "${VELMIX_BACKUP_CHECKSUM:-sha256:remote-archive}")"
   "VELMIX_BACKUP_SIZE=$(quote "${VELMIX_BACKUP_SIZE:-0}")"
