@@ -337,6 +337,9 @@ class OpsAssetsIntegrityTest extends TestCase
         $healthScript = file_get_contents(base_path('ops/scripts/check-backend-health.sh'));
         $this->assertIsString($healthScript);
         $this->assertStringContainsString('source "$SCRIPT_DIR/systemctl-helpers.sh"', $healthScript);
+        $this->assertStringContainsString('VELMIX_TARGET_ENVIRONMENT', $healthScript);
+        $this->assertStringContainsString('CURRENT_APP_ENV', $healthScript);
+        $this->assertStringContainsString('Skipping staging-only evidence checks during production-targeted backend health validation.', $healthScript);
         $this->assertStringContainsString('artisan system:observability-report --json', $healthScript);
         $this->assertStringContainsString('artisan system:backup-readiness --json', $healthScript);
         $this->assertStringContainsString('artisan system:staging-certification --json', $healthScript);
