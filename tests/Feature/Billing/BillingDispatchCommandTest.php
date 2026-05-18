@@ -2,13 +2,13 @@
 
 namespace Tests\Feature\Billing;
 
-use App\Services\Billing\OutboxDispatchService;
 use App\Models\User;
+use App\Services\Billing\OutboxDispatchService;
 use Exception;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Database\QueryException;
 use Tests\TestCase;
 
 class BillingDispatchCommandTest extends TestCase

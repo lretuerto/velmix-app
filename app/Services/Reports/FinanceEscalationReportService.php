@@ -16,13 +16,13 @@ class FinanceEscalationReportService
     ];
 
     private const MAX_LIMIT = 20;
+
     private const STALE_ACKNOWLEDGED_HOURS = 24;
 
     public function __construct(
         private readonly FinanceOperationsReportService $reportService,
         private readonly FinanceEscalationStateService $stateService,
-    ) {
-    }
+    ) {}
 
     public function summary(
         int $tenantId,

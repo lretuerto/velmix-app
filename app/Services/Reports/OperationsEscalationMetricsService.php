@@ -13,8 +13,7 @@ class OperationsEscalationMetricsService
         private readonly OperationsEscalationReportService $reportService,
         private readonly BillingEscalationMetricsService $billingMetricsService,
         private readonly FinanceEscalationMetricsService $financeMetricsService,
-    ) {
-    }
+    ) {}
 
     public function summary(
         int $tenantId,

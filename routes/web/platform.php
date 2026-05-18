@@ -1,9 +1,13 @@
 <?php
 
 use App\Services\Admin\TenantTeamService;
+use App\Services\Frontend\AppShellBootstrapService;
 use App\Services\Platform\SystemHealthService;
 use App\Services\Security\ApiTokenService;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Validation\ValidationException;
 
 Route::get('/', function () {
     return view('welcome');
@@ -19,6 +23,85 @@ Route::get('/health/ready', function (SystemHealthService $service) {
 
     return response()->json(['data' => $result], $status);
 });
+
+Route::get('/app/{any?}', function (AppShellBootstrapService $bootstrap) {
+    $boot = $bootstrap->build(
+        request()->user() ?? auth()->user(),
+        request()->query('tenant'),
+        (string) request()->attributes->get('request_id', ''),
+    );
+
+    return view('app', ['boot' => $boot]);
+})->where('any', '.*');
+
+Route::post('/auth/session/login', function (AppShellBootstrapService $bootstrap) {
+    $payload = request()->validate([
+        'email' => ['required', 'email'],
+        'password' => ['required', 'string'],
+        'tenant' => ['nullable', 'string'],
+    ]);
+    $email = trim((string) $payload['email']);
+    $emailFingerprint = sha1(strtolower($email));
+    $tenantSelector = isset($payload['tenant']) && trim((string) $payload['tenant']) !== ''
+        ? trim((string) $payload['tenant'])
+        : null;
+    $requestId = (string) request()->attributes->get('request_id', '');
+
+    if (! Auth::attempt([
+        'email' => $email,
+        'password' => (string) $payload['password'],
+    ])) {
+        Log::warning('frontend.session_login_failed', [
+            'email_sha1' => $emailFingerprint,
+            'tenant_selector' => $tenantSelector,
+            'request_id' => $requestId,
+            'ip' => request()->ip(),
+        ]);
+
+        throw ValidationException::withMessages([
+            'email' => ['Las credenciales no son validas.'],
+        ]);
+    }
+
+    request()->session()->regenerate();
+    $boot = $bootstrap->build(
+        request()->user() ?? auth()->user(),
+        $tenantSelector,
+        $requestId,
+    );
+
+    Log::info('frontend.session_login_succeeded', [
+        'user_id' => (int) auth()->id(),
+        'tenant_selector' => $tenantSelector,
+        'selected_tenant_id' => $boot['tenant']['selected']['id'] ?? null,
+        'selection_error' => $boot['tenant']['selection_error'] ?? null,
+        'request_id' => $requestId,
+        'ip' => request()->ip(),
+    ]);
+
+    return response()->json([
+        'data' => $boot,
+    ]);
+})->middleware('throttle:frontend-session-login');
+
+Route::post('/auth/session/logout', function () {
+    Log::info('frontend.session_logout', [
+        'user_id' => (int) auth()->id(),
+        'request_id' => (string) request()->attributes->get('request_id', ''),
+        'ip' => request()->ip(),
+    ]);
+
+    Auth::guard('web')->logout();
+
+    request()->session()->invalidate();
+    request()->session()->regenerateToken();
+
+    return response()->json([
+        'data' => [
+            'status' => 'logged_out',
+        ],
+    ]);
+})->middleware('auth.session');
 
 Route::post('/team/invitations/accept', function (TenantTeamService $service) {
     $payload = request()->validate([

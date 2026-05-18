@@ -10,14 +10,15 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 class BillingEscalationHistoryService
 {
     private const MAX_LIMIT = 20;
+
     private const MAX_ACTIVITY_LIMIT = 50;
+
     private const MAX_HISTORY_DAYS = 90;
 
     public function __construct(
         private readonly BillingEscalationReportService $reportService,
         private readonly BillingEscalationStateService $stateService,
-    ) {
-    }
+    ) {}
 
     public function index(
         int $tenantId,

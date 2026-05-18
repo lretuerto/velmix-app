@@ -18,8 +18,7 @@ class OperationsEscalationReportService
         private readonly FinanceEscalationHistoryService $financeHistoryService,
         private readonly FinanceEscalationMetricsService $financeMetricsService,
         private readonly FinanceEscalationStateService $financeStateService,
-    ) {
-    }
+    ) {}
 
     public function summary(
         int $tenantId,

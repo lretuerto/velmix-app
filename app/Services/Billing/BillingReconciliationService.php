@@ -12,8 +12,7 @@ class BillingReconciliationService
     public function __construct(
         private readonly BillingDispatchProviderRegistry $providers,
         private readonly BillingProviderProfileService $profiles,
-    ) {
-    }
+    ) {}
 
     public function reconcileVoucher(int $tenantId, ?int $userId, int $voucherId, ?string $simulateResult = null): array
     {

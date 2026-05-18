@@ -13,8 +13,7 @@ class BillingOperationsReportService
         private readonly BillingProviderMetricsService $providerMetrics,
         private readonly BillingEscalationReportService $billingEscalations,
         private readonly BillingEscalationMetricsService $billingEscalationMetrics,
-    ) {
-    }
+    ) {}
 
     public function summary(int $tenantId, ?string $date = null, int $days = 7, int $failureLimit = 5): array
     {

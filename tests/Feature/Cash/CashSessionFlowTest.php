@@ -150,17 +150,7 @@ class CashSessionFlowTest extends TestCase
             ])
             ->assertOk();
 
-        DB::table('sales')->insert([
-            'tenant_id' => 10,
-            'user_id' => $user->id,
-            'reference' => 'SALE-CASH-001',
-            'status' => 'completed',
-            'total_amount' => 25.50,
-            'gross_cost' => 10.00,
-            'gross_margin' => 15.50,
-            'created_at' => now()->addMinute(),
-            'updated_at' => now()->addMinute(),
-        ]);
+        $this->seedSessionSale($user, 'SALE-CASH-001', 25.50, 10.00, 15.50);
 
         $this->actingAs($user)
             ->withHeader('X-Tenant-Id', '10')
@@ -179,6 +169,37 @@ class CashSessionFlowTest extends TestCase
             ->assertJsonPath('data.expected_amount', 125.5);
     }
 
+    public function test_cash_summary_uses_session_ledger_not_created_at_window(): void
+    {
+        $user = $this->seedCashierUser();
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/cash/sessions/open', [
+                'opening_amount' => 100,
+            ])
+            ->assertOk();
+
+        $saleId = $this->seedSessionSale($user, 'SALE-CASH-LEDGER-WINDOW', 25.50, 10.00, 15.50);
+
+        DB::table('cash_sessions')
+            ->where('tenant_id', 10)
+            ->where('status', 'open')
+            ->update(['opened_at' => now()->addDay()]);
+
+        DB::table('sales')
+            ->where('id', $saleId)
+            ->update(['created_at' => now()->subDay()]);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/cash/sessions/current')
+            ->assertOk()
+            ->assertJsonPath('data.sales_count', 1)
+            ->assertJsonPath('data.cash_sales_total', 25.5)
+            ->assertJsonPath('data.expected_amount', 125.5);
+    }
+
     public function test_can_close_cash_session_and_compute_discrepancy(): void
     {
         $user = $this->seedCashierUser();
@@ -190,30 +211,8 @@ class CashSessionFlowTest extends TestCase
             ])
             ->assertOk();
 
-        DB::table('sales')->insert([
-            [
-                'tenant_id' => 10,
-                'user_id' => $user->id,
-                'reference' => 'SALE-CASH-001',
-                'status' => 'completed',
-                'total_amount' => 25.50,
-                'gross_cost' => 10.00,
-                'gross_margin' => 15.50,
-                'created_at' => now()->addMinute(),
-                'updated_at' => now()->addMinute(),
-            ],
-            [
-                'tenant_id' => 10,
-                'user_id' => $user->id,
-                'reference' => 'SALE-CASH-002',
-                'status' => 'completed',
-                'total_amount' => 10.00,
-                'gross_cost' => 4.00,
-                'gross_margin' => 6.00,
-                'created_at' => now()->addMinutes(2),
-                'updated_at' => now()->addMinutes(2),
-            ],
-        ]);
+        $this->seedSessionSale($user, 'SALE-CASH-001', 25.50, 10.00, 15.50);
+        $this->seedSessionSale($user, 'SALE-CASH-002', 10.00, 4.00, 6.00);
 
         $this->actingAs($user)
             ->withHeader('X-Tenant-Id', '10')
@@ -268,18 +267,7 @@ class CashSessionFlowTest extends TestCase
             ])
             ->assertOk();
 
-        DB::table('sales')->insert([
-            'tenant_id' => 10,
-            'user_id' => $cashier->id,
-            'reference' => 'SALE-CASH-DENOM-001',
-            'status' => 'completed',
-            'payment_method' => 'cash',
-            'total_amount' => 30.00,
-            'gross_cost' => 12.00,
-            'gross_margin' => 18.00,
-            'created_at' => now()->addMinute(),
-            'updated_at' => now()->addMinute(),
-        ]);
+        $this->seedSessionSale($cashier, 'SALE-CASH-DENOM-001', 30.00, 12.00, 18.00);
 
         $closeResponse = $this->actingAs($admin)
             ->withHeader('X-Tenant-Id', '10')
@@ -360,17 +348,7 @@ class CashSessionFlowTest extends TestCase
                 'updated_at' => now()->subMinutes(5),
             ]);
 
-        DB::table('sales')->insert([
-            'tenant_id' => 10,
-            'user_id' => $user->id,
-            'reference' => 'SALE-CASH-HISTORY-001',
-            'status' => 'completed',
-            'total_amount' => 20.00,
-            'gross_cost' => 8.00,
-            'gross_margin' => 12.00,
-            'created_at' => now()->subMinute(),
-            'updated_at' => now()->subMinute(),
-        ]);
+        $this->seedSessionSale($user, 'SALE-CASH-HISTORY-001', 20.00, 8.00, 12.00);
 
         $this->actingAs($user)
             ->withHeader('X-Tenant-Id', '10')
@@ -409,30 +387,8 @@ class CashSessionFlowTest extends TestCase
             ])
             ->assertOk();
 
-        DB::table('sales')->insert([
-            [
-                'tenant_id' => 10,
-                'user_id' => $user->id,
-                'reference' => 'SALE-CASH-DETAIL-001',
-                'status' => 'completed',
-                'total_amount' => 30.00,
-                'gross_cost' => 12.00,
-                'gross_margin' => 18.00,
-                'created_at' => now()->addMinute(),
-                'updated_at' => now()->addMinute(),
-            ],
-            [
-                'tenant_id' => 10,
-                'user_id' => $user->id,
-                'reference' => 'SALE-CASH-DETAIL-CANCELLED',
-                'status' => 'cancelled',
-                'total_amount' => 90.00,
-                'gross_cost' => 45.00,
-                'gross_margin' => 45.00,
-                'created_at' => now()->addMinutes(2),
-                'updated_at' => now()->addMinutes(2),
-            ],
-        ]);
+        $this->seedSessionSale($user, 'SALE-CASH-DETAIL-001', 30.00, 12.00, 18.00);
+        $this->seedSessionSale($user, 'SALE-CASH-DETAIL-CANCELLED', 90.00, 45.00, 45.00, 'cash', 'cancelled');
 
         $sessionId = DB::table('cash_sessions')->where('tenant_id', 10)->value('id');
 
@@ -453,6 +409,42 @@ class CashSessionFlowTest extends TestCase
             ->assertJsonPath('data.expected_amount', 80);
     }
 
+    public function test_can_read_cash_session_ledger_with_cursor_pagination(): void
+    {
+        $user = $this->seedCashierUser();
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/cash/sessions/open', [
+                'opening_amount' => 40,
+            ])
+            ->assertOk();
+
+        $this->seedSessionSale($user, 'SALE-CASH-LEDGER-001', 10.00, 4.00, 6.00);
+        $this->seedSessionSale($user, 'SALE-CASH-LEDGER-002', 12.00, 5.00, 7.00);
+
+        $sessionId = (int) DB::table('cash_sessions')->where('tenant_id', 10)->value('id');
+
+        $firstPage = $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/cash/sessions/{$sessionId}/ledger?limit=1");
+
+        $firstPage->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.entry_type', 'sale_cash_in')
+            ->assertJsonPath('data.items.0.direction', 'in');
+
+        $nextCursor = $firstPage->json('data.next_cursor');
+        $this->assertIsInt($nextCursor);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/cash/sessions/{$sessionId}/ledger?limit=1&cursor={$nextCursor}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.next_cursor', null);
+    }
+
     public function test_non_cash_sales_do_not_increase_expected_amount(): void
     {
         $user = $this->seedCashierUser();
@@ -464,32 +456,8 @@ class CashSessionFlowTest extends TestCase
             ])
             ->assertOk();
 
-        DB::table('sales')->insert([
-            [
-                'tenant_id' => 10,
-                'user_id' => $user->id,
-                'reference' => 'SALE-CASH-METHOD-001',
-                'status' => 'completed',
-                'payment_method' => 'cash',
-                'total_amount' => 20.00,
-                'gross_cost' => 8.00,
-                'gross_margin' => 12.00,
-                'created_at' => now()->addMinute(),
-                'updated_at' => now()->addMinute(),
-            ],
-            [
-                'tenant_id' => 10,
-                'user_id' => $user->id,
-                'reference' => 'SALE-CASH-METHOD-002',
-                'status' => 'completed',
-                'payment_method' => 'card',
-                'total_amount' => 30.00,
-                'gross_cost' => 10.00,
-                'gross_margin' => 20.00,
-                'created_at' => now()->addMinutes(2),
-                'updated_at' => now()->addMinutes(2),
-            ],
-        ]);
+        $this->seedSessionSale($user, 'SALE-CASH-METHOD-001', 20.00, 8.00, 12.00);
+        $this->seedSessionSale($user, 'SALE-CASH-METHOD-002', 30.00, 10.00, 20.00, 'card');
 
         $this->actingAs($user)
             ->withHeader('X-Tenant-Id', '10')
@@ -591,5 +559,55 @@ class CashSessionFlowTest extends TestCase
         ]);
 
         return $user;
+    }
+
+    private function seedSessionSale(
+        User $user,
+        string $reference,
+        float $totalAmount,
+        float $grossCost,
+        float $grossMargin,
+        string $paymentMethod = 'cash',
+        string $status = 'completed'
+    ): int {
+        $sessionId = (int) DB::table('cash_sessions')
+            ->where('tenant_id', 10)
+            ->where('status', 'open')
+            ->value('id');
+
+        $createdAt = now();
+        $saleId = (int) DB::table('sales')->insertGetId([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'cash_session_id' => $sessionId,
+            'reference' => $reference,
+            'status' => $status,
+            'payment_method' => $paymentMethod,
+            'total_amount' => $totalAmount,
+            'gross_cost' => $grossCost,
+            'gross_margin' => $grossMargin,
+            'created_at' => $createdAt,
+            'updated_at' => $createdAt,
+        ]);
+
+        if ($status === 'completed' && $paymentMethod === 'cash') {
+            DB::table('cash_session_ledger_entries')->insert([
+                'tenant_id' => 10,
+                'cash_session_id' => $sessionId,
+                'source_type' => 'sale',
+                'source_id' => $saleId,
+                'entry_type' => 'sale_cash_in',
+                'direction' => 'in',
+                'amount' => $totalAmount,
+                'reference' => $reference,
+                'notes' => null,
+                'created_by_user_id' => $user->id,
+                'occurred_at' => $createdAt,
+                'created_at' => $createdAt,
+                'updated_at' => $createdAt,
+            ]);
+        }
+
+        return $saleId;
     }
 }

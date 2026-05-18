@@ -148,7 +148,7 @@ class CashSessionService
                 throw new HttpException(422, 'Counted amount does not match denominations total.');
             }
 
-            $summary = $this->buildSummary($tenantId, $session);
+            $summary = app(CashSessionReadService::class)->summaryForSession($tenantId, $session);
             $expectedAmount = (float) $summary['expected_amount'];
             $discrepancy = round($countedAmount - $expectedAmount, 2);
             $closedAt = now();

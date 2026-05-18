@@ -65,6 +65,13 @@ class SaleReceivableFlowTest extends TestCase
 
         $this->actingAs($cashier)
             ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/sales/receivables?status=pending&customer_id={$customerId}&limit=1")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $receivableId);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
             ->getJson("/sales/receivables/{$receivableId}")
             ->assertOk()
             ->assertJsonPath('data.customer.id', $customerId)
@@ -90,6 +97,26 @@ class SaleReceivableFlowTest extends TestCase
             'id' => $cashMovementId,
             'tenant_id' => 10,
             'type' => 'receivable_in',
+            'amount' => 8.00,
+            'reference' => 'COBRO-001',
+        ]);
+
+        $paymentId = (int) DB::table('sale_receivable_payments')
+            ->where('sale_receivable_id', $receivableId)
+            ->where('reference', 'COBRO-001')
+            ->value('id');
+        $cashSessionId = (int) DB::table('cash_sessions')
+            ->where('tenant_id', 10)
+            ->where('status', 'open')
+            ->value('id');
+
+        $this->assertDatabaseHas('cash_session_ledger_entries', [
+            'tenant_id' => 10,
+            'cash_session_id' => $cashSessionId,
+            'source_type' => 'sale_receivable_payment',
+            'source_id' => $paymentId,
+            'entry_type' => 'receivable_cash_in',
+            'direction' => 'in',
             'amount' => 8.00,
             'reference' => 'COBRO-001',
         ]);
@@ -223,6 +250,13 @@ class SaleReceivableFlowTest extends TestCase
             ->assertJsonPath('data.summary.promised_follow_up_count', 1)
             ->assertJsonPath('data.follow_ups.0.sale_reference', 'SALE-REC-10')
             ->assertJsonPath('data.follow_ups.0.type', 'promise');
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/sales/customers/{$customerId}/statement/follow-ups?limit=1")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.type', 'promise');
     }
 
     public function test_reads_receivable_aging_and_customer_statement(): void
@@ -313,6 +347,33 @@ class SaleReceivableFlowTest extends TestCase
             ->assertJsonPath('data.summary.payments_total', 5)
             ->assertJsonPath('data.summary.outstanding_total', 15)
             ->assertJsonPath('data.payments.0.reference', 'PAY-STMT-01');
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/sales/customers/{$customerId}/statement/summary")
+            ->assertOk()
+            ->assertJsonPath('data.summary.sales_total', 30)
+            ->assertJsonPath('data.summary.receivables_total', 30)
+            ->assertJsonPath('data.summary.payments_total', 5)
+            ->assertJsonPath('data.summary.outstanding_total', 15);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/sales/customers/{$customerId}/statement/sales?limit=1")
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/sales/customers/{$customerId}/statement/receivables")
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson("/sales/customers/{$customerId}/statement/payments")
+            ->assertOk()
+            ->assertJsonPath('data.0.reference', 'PAY-STMT-01');
     }
 
     private function seedBaseCatalogAndCashier(): User

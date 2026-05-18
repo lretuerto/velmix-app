@@ -1,38 +1,38 @@
 <?php
 
 use App\Services\Audit\TenantActivityLogService;
-use App\Services\Admin\TenantTeamService;
-use App\Services\Billing\OutboxDispatchService;
-use App\Services\Billing\VoucherService;
-use App\Services\Billing\CreditNoteService;
 use App\Services\Billing\BillingDocumentPayloadService;
+use App\Services\Billing\BillingOutboxLineageService;
 use App\Services\Billing\BillingProviderHealthService;
 use App\Services\Billing\BillingProviderMetricsService;
 use App\Services\Billing\BillingProviderProfileService;
 use App\Services\Billing\BillingReconciliationService;
 use App\Services\Billing\BillingReplayService;
-use App\Services\Billing\BillingOutboxLineageService;
+use App\Services\Billing\CreditNoteService;
+use App\Services\Billing\OutboxDispatchService;
+use App\Services\Billing\VoucherService;
 use App\Services\Cash\CashMovementService;
+use App\Services\Cash\CashSessionReadService;
 use App\Services\Cash\CashSessionService;
 use App\Services\Inventory\InventorySetupService;
 use App\Services\Inventory\LotControlService;
 use App\Services\Inventory\StockMovementReadService;
 use App\Services\Inventory\StockMovementService;
+use App\Services\Platform\SystemObservabilityReportService;
+use App\Services\Pricing\PricingCheckoutService;
+use App\Services\Pricing\PricingQuoteService;
 use App\Services\Purchasing\PurchaseOrderService;
 use App\Services\Purchasing\PurchasePayableService;
-use App\Services\Purchasing\PurchaseReplenishmentService;
 use App\Services\Purchasing\PurchaseReceiptService;
+use App\Services\Purchasing\PurchaseReplenishmentService;
 use App\Services\Purchasing\PurchaseReturnService;
 use App\Services\Purchasing\SupplierService;
-use App\Services\Reports\DailyReportService;
-use App\Services\Reports\BillingOperationsReportService;
-use App\Services\Reports\OperationsControlTowerBriefingService;
-use App\Services\Reports\OperationsControlTowerReportService;
-use App\Services\Reports\OperationsControlTowerSnapshotService;
 use App\Services\Reports\BillingEscalationHistoryService;
 use App\Services\Reports\BillingEscalationMetricsService;
-use App\Services\Reports\BillingEscalationStateService;
 use App\Services\Reports\BillingEscalationReportService;
+use App\Services\Reports\BillingEscalationStateService;
+use App\Services\Reports\BillingOperationsReportService;
+use App\Services\Reports\DailyReportService;
 use App\Services\Reports\DueReminderReportService;
 use App\Services\Reports\FinanceEscalationHistoryService;
 use App\Services\Reports\FinanceEscalationMetricsService;
@@ -42,23 +42,25 @@ use App\Services\Reports\FinanceOperationsHistoryService;
 use App\Services\Reports\FinanceOperationsMetricsService;
 use App\Services\Reports\FinanceOperationsReportService;
 use App\Services\Reports\FinanceOperationsStateService;
+use App\Services\Reports\OperationsControlTowerBriefingService;
+use App\Services\Reports\OperationsControlTowerReportService;
+use App\Services\Reports\OperationsControlTowerSnapshotService;
 use App\Services\Reports\OperationsEscalationHistoryService;
 use App\Services\Reports\OperationsEscalationMetricsService;
+use App\Services\Reports\OperationsEscalationReportService;
 use App\Services\Reports\PromiseComplianceReportService;
 use App\Services\Reports\ReceivableRiskReportService;
-use App\Services\Reports\OperationsEscalationReportService;
-use App\Services\Platform\SystemHealthService;
-use App\Services\Platform\SystemObservabilityReportService;
-use App\Services\Security\ApiTokenService;
-use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\DB;
 use App\Services\Reports\SalesProfitabilityReportService;
 use App\Services\Sales\CustomerService;
+use App\Services\Sales\CustomerStatementReadService;
 use App\Services\Sales\PosSaleService;
-use App\Services\Sales\SaleCancellationService;
-use App\Services\Sales\SaleReceivableService;
-use App\Services\Sales\SaleReadService;
 use App\Services\Sales\SaleApprovalService;
+use App\Services\Sales\SaleCancellationService;
+use App\Services\Sales\SaleReadService;
+use App\Services\Sales\SaleReceivableReadService;
+use App\Services\Sales\SaleReceivableService;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 
 require __DIR__.'/web/platform.php';
 require __DIR__.'/web/team-security.php';
@@ -126,6 +128,66 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         return response()->json(['data' => $result]);
     })->middleware(['perm:pos.sale.execute', 'idempotent']);
 
+    Route::post('/pricing/quotes', function (PricingQuoteService $service) {
+        $payload = request()->validate([
+            'payment_method' => ['required', 'in:cash,card,transfer,credit'],
+            'customer_id' => ['nullable', 'integer'],
+            'channel' => ['nullable', 'in:retail,wholesale,institutional,mixed'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.product_id' => ['required', 'integer'],
+            'items.*.quantity' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $result = $service->create(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            array_map(fn (array $item) => [
+                'product_id' => (int) $item['product_id'],
+                'quantity' => (int) $item['quantity'],
+            ], $payload['items']),
+            (string) $payload['payment_method'],
+            isset($payload['customer_id']) ? (int) $payload['customer_id'] : null,
+            (string) ($payload['channel'] ?? 'retail'),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware(['perm:pricing.quote.create', 'idempotent']);
+
+    Route::get('/pricing/quotes/{quote}', function (int $quote, PricingQuoteService $service) {
+        $result = $service->detail(
+            (int) request()->attributes->get('tenant_id'),
+            $quote,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:pricing.quote.read');
+
+    Route::post('/pricing/quotes/{quote}/checkout', function (int $quote, PricingCheckoutService $service) {
+        $payload = request()->validate([
+            'quote_hash' => ['required', 'string'],
+            'due_at' => ['nullable', 'date'],
+            'line_inputs' => ['nullable', 'array'],
+            'line_inputs.*.quote_item_id' => ['required_with:line_inputs', 'integer'],
+            'line_inputs.*.prescription_code' => ['nullable', 'string'],
+            'line_inputs.*.approval_code' => ['nullable', 'string'],
+        ]);
+
+        $result = $service->execute(
+            (int) request()->attributes->get('tenant_id'),
+            (int) optional(request()->user())->id,
+            $quote,
+            (string) $payload['quote_hash'],
+            array_map(fn (array $lineInput) => [
+                'quote_item_id' => (int) $lineInput['quote_item_id'],
+                'prescription_code' => $lineInput['prescription_code'] ?? null,
+                'approval_code' => $lineInput['approval_code'] ?? null,
+            ], $payload['line_inputs'] ?? []),
+            isset($payload['due_at']) ? (string) $payload['due_at'] : null,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware(['perm:pos.sale.execute', 'idempotent']);
+
     Route::get('/sales/customers', function (CustomerService $service) {
         $result = $service->list((int) request()->attributes->get('tenant_id'));
 
@@ -157,7 +219,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:sales.customer.create');
+    })->middleware(['perm:sales.customer.create', 'idempotent']);
 
     Route::patch('/sales/customers/{customer}', function (int $customer, CustomerService $service) {
         $payload = request()->validate([
@@ -179,9 +241,9 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:sales.customer.update');
+    })->middleware(['perm:sales.customer.update', 'idempotent']);
 
-    Route::get('/sales/customers/{customer}/statement', function (int $customer, CustomerService $service) {
+    Route::get('/sales/customers/{customer}/statement', function (int $customer, CustomerStatementReadService $service) {
         $result = $service->statement(
             (int) request()->attributes->get('tenant_id'),
             $customer,
@@ -190,19 +252,101 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         return response()->json(['data' => $result]);
     })->middleware('perm:sales.customer.read');
 
-    Route::get('/sales/receivables', function (SaleReceivableService $service) {
-        $result = $service->list((int) request()->attributes->get('tenant_id'));
+    Route::get('/sales/customers/{customer}/statement/summary', function (int $customer, CustomerStatementReadService $service) {
+        $result = $service->summary(
+            (int) request()->attributes->get('tenant_id'),
+            $customer,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:sales.customer.read');
+
+    Route::get('/sales/customers/{customer}/statement/sales', function (int $customer, CustomerStatementReadService $service) {
+        $payload = request()->validate([
+            'cursor' => ['nullable', 'integer', 'min:1'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $result = $service->sales(
+            (int) request()->attributes->get('tenant_id'),
+            $customer,
+            isset($payload['cursor']) ? (int) $payload['cursor'] : null,
+            (int) ($payload['limit'] ?? 100),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:sales.customer.read');
+
+    Route::get('/sales/customers/{customer}/statement/receivables', function (int $customer, CustomerStatementReadService $service) {
+        $payload = request()->validate([
+            'cursor' => ['nullable', 'integer', 'min:1'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $result = $service->receivables(
+            (int) request()->attributes->get('tenant_id'),
+            $customer,
+            isset($payload['cursor']) ? (int) $payload['cursor'] : null,
+            (int) ($payload['limit'] ?? 100),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:sales.customer.read');
+
+    Route::get('/sales/customers/{customer}/statement/payments', function (int $customer, CustomerStatementReadService $service) {
+        $payload = request()->validate([
+            'cursor' => ['nullable', 'integer', 'min:1'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $result = $service->payments(
+            (int) request()->attributes->get('tenant_id'),
+            $customer,
+            isset($payload['cursor']) ? (int) $payload['cursor'] : null,
+            (int) ($payload['limit'] ?? 100),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:sales.customer.read');
+
+    Route::get('/sales/customers/{customer}/statement/follow-ups', function (int $customer, CustomerStatementReadService $service) {
+        $payload = request()->validate([
+            'cursor' => ['nullable', 'integer', 'min:1'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $result = $service->followUps(
+            (int) request()->attributes->get('tenant_id'),
+            $customer,
+            isset($payload['cursor']) ? (int) $payload['cursor'] : null,
+            (int) ($payload['limit'] ?? 100),
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:sales.customer.read');
+
+    Route::get('/sales/receivables', function (SaleReceivableReadService $service) {
+        $payload = request()->validate([
+            'status' => ['nullable', 'string'],
+            'customer_id' => ['nullable', 'integer'],
+            'due_from' => ['nullable', 'date'],
+            'due_to' => ['nullable', 'date'],
+            'cursor' => ['nullable', 'integer', 'min:1'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $result = $service->list((int) request()->attributes->get('tenant_id'), $payload);
 
         return response()->json(['data' => $result]);
     })->middleware('perm:sales.receivable.read');
 
-    Route::get('/sales/receivables/aging', function (SaleReceivableService $service) {
+    Route::get('/sales/receivables/aging', function (SaleReceivableReadService $service) {
         $result = $service->agingSummary((int) request()->attributes->get('tenant_id'));
 
         return response()->json(['data' => $result]);
     })->middleware('perm:sales.receivable.read');
 
-    Route::get('/sales/receivables/{receivable}', function (int $receivable, SaleReceivableService $service) {
+    Route::get('/sales/receivables/{receivable}', function (int $receivable, SaleReceivableReadService $service) {
         $result = $service->detail(
             (int) request()->attributes->get('tenant_id'),
             $receivable,
@@ -230,10 +374,17 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         return response()->json(['data' => $result]);
     })->middleware(['perm:sales.receivable.pay', 'idempotent']);
 
-    Route::get('/sales/receivables/{receivable}/follow-ups', function (int $receivable, SaleReceivableService $service) {
+    Route::get('/sales/receivables/{receivable}/follow-ups', function (int $receivable, SaleReceivableReadService $service) {
+        $payload = request()->validate([
+            'cursor' => ['nullable', 'integer', 'min:1'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
         $result = $service->followUps(
             (int) request()->attributes->get('tenant_id'),
             $receivable,
+            isset($payload['cursor']) ? (int) $payload['cursor'] : null,
+            (int) ($payload['limit'] ?? 100),
         );
 
         return response()->json(['data' => $result]);
@@ -258,7 +409,7 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         );
 
         return response()->json(['data' => $result]);
-    })->middleware('perm:sales.receivable.follow-up.create');
+    })->middleware(['perm:sales.receivable.follow-up.create', 'idempotent']);
 
     Route::get('/pos/sales', function (SaleReadService $service) {
         $result = $service->list((int) request()->attributes->get('tenant_id'));
@@ -323,22 +474,47 @@ Route::middleware(['auth.hybrid', 'tenant.context', 'tenant.access'])->group(fun
         return response()->json(['data' => $result]);
     })->middleware(['perm:cash.session.open', 'idempotent']);
 
-    Route::get('/cash/sessions/current', function (CashSessionService $service) {
+    Route::get('/cash/sessions/current', function (CashSessionReadService $service) {
         $result = $service->current((int) request()->attributes->get('tenant_id'));
 
         return response()->json(['data' => $result]);
     })->middleware('perm:cash.session.read');
 
-    Route::get('/cash/sessions', function (CashSessionService $service) {
-        $result = $service->history((int) request()->attributes->get('tenant_id'));
+    Route::get('/cash/sessions', function (CashSessionReadService $service) {
+        $payload = request()->validate([
+            'cursor' => ['nullable', 'integer', 'min:1'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $result = $service->history(
+            (int) request()->attributes->get('tenant_id'),
+            isset($payload['cursor']) ? (int) $payload['cursor'] : null,
+            (int) ($payload['limit'] ?? 50),
+        );
 
         return response()->json(['data' => $result]);
     })->middleware('perm:cash.session.read');
 
-    Route::get('/cash/sessions/{session}', function (int $session, CashSessionService $service) {
+    Route::get('/cash/sessions/{session}', function (int $session, CashSessionReadService $service) {
         $result = $service->detail(
             (int) request()->attributes->get('tenant_id'),
             $session,
+        );
+
+        return response()->json(['data' => $result]);
+    })->middleware('perm:cash.session.read');
+
+    Route::get('/cash/sessions/{session}/ledger', function (int $session, CashSessionReadService $service) {
+        $payload = request()->validate([
+            'cursor' => ['nullable', 'integer', 'min:1'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $result = $service->ledger(
+            (int) request()->attributes->get('tenant_id'),
+            $session,
+            isset($payload['cursor']) ? (int) $payload['cursor'] : null,
+            (int) ($payload['limit'] ?? 50),
         );
 
         return response()->json(['data' => $result]);

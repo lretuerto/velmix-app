@@ -78,7 +78,7 @@ class CustomerFlowTest extends TestCase
                 'document_number' => '12345678',
                 'name' => 'Cliente Duplicado',
             ])
-            ->assertStatus(422);
+            ->assertStatus(409);
     }
 
     public function test_cashier_can_update_customer_credit_policy(): void

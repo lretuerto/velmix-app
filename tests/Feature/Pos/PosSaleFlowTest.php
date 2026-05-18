@@ -46,6 +46,8 @@ class PosSaleFlowTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        $cashSessionId = $this->openCashSession($user);
+
         $response = $this->actingAs($user)
             ->withHeader('X-Tenant-Id', '10')
             ->postJson('/pos/sales', [
@@ -70,6 +72,7 @@ class PosSaleFlowTest extends TestCase
         $this->assertDatabaseHas('sales', [
             'tenant_id' => 10,
             'user_id' => $user->id,
+            'cash_session_id' => $cashSessionId,
             'status' => 'completed',
             'payment_method' => 'cash',
             'total_amount' => 17.50,
@@ -101,6 +104,17 @@ class PosSaleFlowTest extends TestCase
             'gross_margin' => 11.50,
         ]);
 
+        $this->assertDatabaseHas('cash_session_ledger_entries', [
+            'tenant_id' => 10,
+            'cash_session_id' => $cashSessionId,
+            'source_type' => 'sale',
+            'source_id' => $saleId,
+            'entry_type' => 'sale_cash_in',
+            'direction' => 'in',
+            'amount' => 17.50,
+            'reference' => $expectedReference,
+        ]);
+
         $this->assertDatabaseHas('tenant_activity_logs', [
             'tenant_id' => 10,
             'user_id' => $user->id,
@@ -109,6 +123,31 @@ class PosSaleFlowTest extends TestCase
             'aggregate_type' => 'sale',
             'aggregate_id' => $saleId,
         ]);
+    }
+
+    public function test_rejects_cash_sale_without_open_cash_session(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+            \Database\Seeders\InventoryCatalogSeeder::class,
+        ]);
+
+        $cashier = $this->seedCashierUser();
+        $lotId = DB::table('lots')->where('tenant_id', 10)->value('id');
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/pos/sales', [
+                'lot_id' => $lotId,
+                'quantity' => 1,
+                'unit_price' => 3.50,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Cash operation requires an open cash session.');
+
+        $this->assertSame(0, DB::table('sales')->count());
+        $this->assertSame(0, DB::table('cash_session_ledger_entries')->count());
     }
 
     public function test_rejects_sale_when_lot_belongs_to_another_tenant(): void
@@ -137,6 +176,8 @@ class PosSaleFlowTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        $this->openCashSession($user);
 
         $this->actingAs($user)
             ->withHeader('X-Tenant-Id', '10')
@@ -174,6 +215,8 @@ class PosSaleFlowTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        $this->openCashSession($user);
 
         $this->actingAs($user)
             ->withHeader('X-Tenant-Id', '10')
@@ -213,6 +256,8 @@ class PosSaleFlowTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        $this->openCashSession($user);
 
         $response = $this->actingAs($user)
             ->withHeader('X-Tenant-Id', '10')
@@ -263,6 +308,7 @@ class PosSaleFlowTest extends TestCase
         ]);
 
         $cashier = $this->seedCashierUser();
+        $this->openCashSession($cashier);
         $lotId = (int) DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
 
         DB::table('lots')->where('id', $lotId)->update([
@@ -311,6 +357,7 @@ class PosSaleFlowTest extends TestCase
         ]);
 
         $cashier = $this->seedCashierUser();
+        $this->openCashSession($cashier);
         $lotId = (int) DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
 
         DB::table('lots')->where('id', $lotId)->update([
@@ -354,6 +401,7 @@ class PosSaleFlowTest extends TestCase
         ]);
 
         $cashier = $this->seedCashierUser();
+        $this->openCashSession($cashier);
         $firstLotId = (int) DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
         $secondLotId = (int) DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-002')->value('id');
         $productId = (int) DB::table('lots')->where('id', $firstLotId)->value('product_id');
@@ -453,6 +501,8 @@ class PosSaleFlowTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        $this->openCashSession($user);
 
         $response = $this->actingAs($user)
             ->withHeader('X-Tenant-Id', '10')
@@ -713,6 +763,7 @@ class PosSaleFlowTest extends TestCase
     {
         $controlledProductId = $this->seedControlledProduct();
         $cashier = $this->seedCashierUser();
+        $this->openCashSession($cashier);
 
         $this->actingAs($cashier)
             ->withHeader('X-Tenant-Id', '10')
@@ -730,6 +781,7 @@ class PosSaleFlowTest extends TestCase
     {
         $controlledProductId = $this->seedControlledProduct();
         $cashier = $this->seedCashierUser();
+        $this->openCashSession($cashier);
 
         $this->actingAs($cashier)
             ->withHeader('X-Tenant-Id', '10')
@@ -754,6 +806,7 @@ class PosSaleFlowTest extends TestCase
         $controlledProductId = $this->seedControlledProduct();
         $cashier = $this->seedCashierUser();
         $admin = $this->seedAdminUser();
+        $this->openCashSession($cashier);
 
         $approvalResponse = $this->actingAs($admin)
             ->withHeader('X-Tenant-Id', '10')
@@ -797,6 +850,7 @@ class PosSaleFlowTest extends TestCase
         ]);
 
         $cashier = $this->seedCashierUser();
+        $this->openCashSession($cashier);
         $lotId = DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
 
         DB::table('lots')->where('id', $lotId)->update([
@@ -823,6 +877,7 @@ class PosSaleFlowTest extends TestCase
         ]);
 
         $cashier = $this->seedCashierUser();
+        $this->openCashSession($cashier);
         $lotId = DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
 
         DB::table('lots')->where('id', $lotId)->update([
@@ -895,6 +950,21 @@ class PosSaleFlowTest extends TestCase
         ]);
 
         return $user;
+    }
+
+    private function openCashSession(User $user, int $tenantId = 10, float $openingAmount = 1000): int
+    {
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', (string) $tenantId)
+            ->postJson('/cash/sessions/open', [
+                'opening_amount' => $openingAmount,
+            ])
+            ->assertOk();
+
+        return (int) DB::table('cash_sessions')
+            ->where('tenant_id', $tenantId)
+            ->where('status', 'open')
+            ->value('id');
     }
 
     private function seedAdminUser(): User

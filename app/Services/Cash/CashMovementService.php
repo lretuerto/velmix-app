@@ -43,9 +43,10 @@ class CashMovementService
                 throw new HttpException(404, 'No open cash session.');
             }
 
-            $summary = (new CashSessionService())->current($tenantId);
+            $expectedAmount = app(CashLedgerSummaryService::class)
+                ->expectedAmountForSession($tenantId, (int) $session->id);
 
-            if ($type === 'manual_out' && $amount > (float) $summary['expected_amount']) {
+            if ($type === 'manual_out' && $amount > $expectedAmount) {
                 throw new HttpException(422, 'Cash movement exceeds available cash in session.');
             }
 
@@ -61,6 +62,17 @@ class CashMovementService
                 'created_at' => $createdAt,
                 'updated_at' => $createdAt,
             ]);
+
+            app(CashLedgerService::class)->recordManualMovement(
+                $tenantId,
+                (int) $session->id,
+                $movementId,
+                $userId,
+                $type,
+                $amount,
+                $reference,
+                $notes,
+            );
 
             app(TenantActivityLogService::class)->record(
                 $tenantId,

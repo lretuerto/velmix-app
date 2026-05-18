@@ -3,6 +3,7 @@
 namespace App\Services\Sales;
 
 use App\Services\Audit\TenantActivityLogService;
+use App\Services\Cash\CashLedgerService;
 use App\Services\Inventory\LotStockMutationService;
 use App\Support\ReferenceCode;
 use Illuminate\Support\Collection;
@@ -34,9 +35,20 @@ class PosSaleService
         return DB::transaction(function () use ($tenantId, $userId, $items, $paymentMethod, $customerId, $dueAt) {
             $customer = $this->resolveCustomer($tenantId, $customerId);
             $lotReservations = [];
+            $cashSession = null;
 
             if ($paymentMethod === 'credit' && $customer === null) {
                 throw new HttpException(422, 'Credit sale requires customer_id.');
+            }
+
+            $cashSession = DB::table('cash_sessions')
+                ->where('tenant_id', $tenantId)
+                ->where('status', 'open')
+                ->lockForUpdate()
+                ->first(['id']);
+
+            if ($paymentMethod === 'cash' && $cashSession === null) {
+                throw new HttpException(422, 'Cash operation requires an open cash session.');
             }
 
             $resolvedItems = collect($items)
@@ -46,7 +58,7 @@ class PosSaleService
 
             $totalAmount = round($resolvedItems->sum('line_total'), 2);
             $grossCost = round($resolvedItems->sum('cost_amount'), 2);
-            $grossMargin = round($totalAmount - $grossCost, 2);
+            $grossMargin = round($resolvedItems->sum('gross_margin'), 2);
 
             if ($paymentMethod === 'credit') {
                 if ($customer->status !== 'active') {
@@ -58,10 +70,10 @@ class PosSaleService
                     ->where('customer_id', $customer->id)
                     ->where('outstanding_amount', '>', 0)
                     ->lockForUpdate()
-                    ->selectRaw("
+                    ->selectRaw('
                         COALESCE(SUM(outstanding_amount), 0) as outstanding_total,
                         SUM(CASE WHEN due_at IS NOT NULL AND due_at < ? THEN 1 ELSE 0 END) as overdue_count
-                    ", [now()])
+                    ', [now()])
                     ->first();
 
                 $outstandingTotal = round((float) ($creditSummary->outstanding_total ?? 0), 2);
@@ -88,6 +100,7 @@ class PosSaleService
                 'tenant_id' => $tenantId,
                 'user_id' => $userId,
                 'customer_id' => $customer?->id,
+                'cash_session_id' => $cashSession?->id,
                 'reference' => ReferenceCode::temporary('SALE'),
                 'status' => 'completed',
                 'payment_method' => $paymentMethod,
@@ -107,17 +120,36 @@ class PosSaleService
                     'updated_at' => now(),
                 ]);
 
+            if ($paymentMethod === 'cash' && $cashSession !== null) {
+                app(CashLedgerService::class)->recordSaleCashIn(
+                    $tenantId,
+                    (int) $cashSession->id,
+                    $saleId,
+                    $userId,
+                    $totalAmount,
+                    $reference,
+                );
+            }
+
+            $persistedItems = [];
+
             foreach ($resolvedItems as $item) {
+                $allocationLineTotals = $this->splitLineTotalsAcrossAllocations($item['allocations'], (float) $item['line_total']);
+                $persistedAllocations = [];
+
                 foreach ($item['allocations'] as $allocation) {
                     $costAmount = round($allocation['quantity'] * $item['unit_cost_snapshot'], 2);
-                    $lineTotal = round($allocation['quantity'] * $item['unit_price'], 2);
+                    $lineTotal = $allocationLineTotals[(int) $allocation['lot_id']] ?? round($allocation['quantity'] * $item['unit_price'], 2);
+                    $saleItemUnitPrice = $allocation['quantity'] > 0
+                        ? round($lineTotal / $allocation['quantity'], 2)
+                        : round((float) $item['unit_price'], 2);
 
-                    DB::table('sale_items')->insert([
+                    $saleItemId = DB::table('sale_items')->insertGetId([
                         'sale_id' => $saleId,
                         'lot_id' => $allocation['lot_id'],
                         'product_id' => $item['product_id'],
                         'quantity' => $allocation['quantity'],
-                        'unit_price' => $item['unit_price'],
+                        'unit_price' => $saleItemUnitPrice,
                         'unit_cost_snapshot' => $item['unit_cost_snapshot'],
                         'line_total' => $lineTotal,
                         'cost_amount' => $costAmount,
@@ -127,6 +159,14 @@ class PosSaleService
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
+
+                    $persistedAllocations[] = [
+                        'sale_item_id' => $saleItemId,
+                        'lot_id' => $allocation['lot_id'],
+                        'lot_code' => $allocation['lot_code'],
+                        'quantity' => $allocation['quantity'],
+                        'remaining_stock' => $allocation['remaining_stock'],
+                    ];
 
                     app(LotStockMutationService::class)->decrementById(
                         $tenantId,
@@ -148,6 +188,21 @@ class PosSaleService
                         'updated_at' => now(),
                     ]);
                 }
+
+                $persistedItems[] = [
+                    'quote_item_id' => $item['quote_item_id'],
+                    'product_id' => $item['product_id'],
+                    'product_sku' => $item['product_sku'],
+                    'quantity' => $item['quantity'],
+                    'unit_price' => $item['unit_price'],
+                    'unit_cost_snapshot' => $item['unit_cost_snapshot'],
+                    'line_total' => $item['line_total'],
+                    'cost_amount' => $item['cost_amount'],
+                    'gross_margin' => $item['gross_margin'],
+                    'prescription_code' => $item['prescription_code'],
+                    'approval_code' => $item['approval_code'],
+                    'allocations' => $persistedAllocations,
+                ];
 
                 if ($item['approval_id'] !== null) {
                     DB::table('sale_approvals')
@@ -217,24 +272,7 @@ class PosSaleService
                 'total_amount' => $totalAmount,
                 'gross_cost' => $grossCost,
                 'gross_margin' => $grossMargin,
-                'items' => $resolvedItems->map(fn (array $item) => [
-                    'product_id' => $item['product_id'],
-                    'product_sku' => $item['product_sku'],
-                    'quantity' => $item['quantity'],
-                    'unit_price' => $item['unit_price'],
-                    'unit_cost_snapshot' => $item['unit_cost_snapshot'],
-                    'line_total' => $item['line_total'],
-                    'cost_amount' => $item['cost_amount'],
-                    'gross_margin' => $item['gross_margin'],
-                    'prescription_code' => $item['prescription_code'],
-                    'approval_code' => $item['approval_code'],
-                    'allocations' => array_map(fn (array $allocation) => [
-                        'lot_id' => $allocation['lot_id'],
-                        'lot_code' => $allocation['lot_code'],
-                        'quantity' => $allocation['quantity'],
-                        'remaining_stock' => $allocation['remaining_stock'],
-                    ], $item['allocations']),
-                ])->values()->all(),
+                'items' => $persistedItems,
             ];
         });
     }
@@ -270,6 +308,9 @@ class PosSaleService
     {
         $quantity = (int) ($item['quantity'] ?? 0);
         $unitPrice = (float) ($item['unit_price'] ?? -1);
+        $lineTotalOverride = array_key_exists('line_total', $item) && $item['line_total'] !== null
+            ? round((float) $item['line_total'], 2)
+            : null;
         $prescriptionCode = $item['prescription_code'] ?? null;
         $approvalCode = $item['approval_code'] ?? null;
 
@@ -277,8 +318,12 @@ class PosSaleService
             throw new HttpException(422, 'Quantity and unit price must be valid.');
         }
 
+        if ($lineTotalOverride !== null && $lineTotalOverride < 0) {
+            throw new HttpException(422, 'Line total must be valid.');
+        }
+
         if (array_key_exists('lot_id', $item) && $item['lot_id'] !== null) {
-            return $this->resolveDirectLotItem(
+            $resolved = $this->resolveDirectLotItem(
                 $tenantId,
                 (int) $item['lot_id'],
                 $quantity,
@@ -287,10 +332,8 @@ class PosSaleService
                 $approvalCode,
                 $lotReservations,
             );
-        }
-
-        if (array_key_exists('product_id', $item) && $item['product_id'] !== null) {
-            return $this->resolveFifoProductItem(
+        } elseif (array_key_exists('product_id', $item) && $item['product_id'] !== null) {
+            $resolved = $this->resolveFifoProductItem(
                 $tenantId,
                 (int) $item['product_id'],
                 $quantity,
@@ -299,9 +342,21 @@ class PosSaleService
                 $approvalCode,
                 $lotReservations,
             );
+        } else {
+            throw new HttpException(422, 'Each item must include lot_id or product_id.');
         }
 
-        throw new HttpException(422, 'Each item must include lot_id or product_id.');
+        if ($lineTotalOverride !== null) {
+            $resolved['line_total'] = $lineTotalOverride;
+            $resolved['unit_price'] = $quantity > 0
+                ? round($lineTotalOverride / $quantity, 2)
+                : $resolved['unit_price'];
+            $resolved['gross_margin'] = round($lineTotalOverride - $resolved['cost_amount'], 2);
+        }
+
+        $resolved['quote_item_id'] = isset($item['quote_item_id']) ? (int) $item['quote_item_id'] : null;
+
+        return $resolved;
     }
 
     private function resolveDirectLotItem(
@@ -507,6 +562,32 @@ class PosSaleService
     private function effectiveLotStock(int $lotId, int $databaseStock, array $lotReservations): int
     {
         return max($databaseStock - (int) ($lotReservations[$lotId] ?? 0), 0);
+    }
+
+    private function splitLineTotalsAcrossAllocations(array $allocations, float $lineTotal): array
+    {
+        if ($allocations === []) {
+            return [];
+        }
+
+        $remaining = round($lineTotal, 2);
+        $totalQuantity = array_sum(array_map(fn (array $allocation) => (int) $allocation['quantity'], $allocations));
+        $lastIndex = array_key_last($allocations);
+        $splitTotals = [];
+
+        foreach ($allocations as $index => $allocation) {
+            if ($index === $lastIndex) {
+                $allocatedLineTotal = $remaining;
+            } else {
+                $ratio = $totalQuantity > 0 ? ((int) $allocation['quantity'] / $totalQuantity) : 0;
+                $allocatedLineTotal = round($lineTotal * $ratio, 2);
+                $remaining = round($remaining - $allocatedLineTotal, 2);
+            }
+
+            $splitTotals[(int) $allocation['lot_id']] = $allocatedLineTotal;
+        }
+
+        return $splitTotals;
     }
 
     private function assertLotAvailableForSale(string $status, string $expiresAt): void

@@ -3,6 +3,7 @@
 namespace App\Services\Sales;
 
 use App\Services\Audit\TenantActivityLogService;
+use App\Services\Cash\CashLedgerService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -215,6 +216,15 @@ class SaleReceivableService
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
+
+                    app(CashLedgerService::class)->recordReceivableCashIn(
+                        $tenantId,
+                        (int) $cashSessionId,
+                        $paymentId,
+                        $userId,
+                        $amount,
+                        $reference,
+                    );
                 }
 
                 app(TenantActivityLogService::class)->record(
@@ -361,6 +371,7 @@ class SaleReceivableService
             if ($bucket === 'paid') {
                 $summary['paid']['count']++;
                 $summary['paid']['amount'] = round($summary['paid']['amount'] + (float) $receivable->paid_amount, 2);
+
                 continue;
             }
 

@@ -13,8 +13,7 @@ class FinanceOperationsReportService
         private readonly PromiseInsightService $promiseInsights,
         private readonly DueReminderReportService $dueReminders,
         private readonly FinanceOperationsStateService $stateService,
-    ) {
-    }
+    ) {}
 
     public function summary(
         int $tenantId,
@@ -321,8 +320,7 @@ class FinanceOperationsReportService
         Collection $payables,
         CarbonImmutable $baseDate,
         int $daysAhead,
-    ): array
-    {
+    ): array {
         $windowEnd = $baseDate->addDays($daysAhead);
         $items = $receivables
             ->concat($payables)

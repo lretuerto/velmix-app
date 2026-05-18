@@ -3,6 +3,7 @@
 namespace App\Services\Billing;
 
 use App\Services\Audit\TenantActivityLogService;
+use App\Services\Cash\CashLedgerService;
 use App\Services\Cash\CashSessionService;
 use App\Services\Inventory\LotStockMutationService;
 use Illuminate\Support\Facades\DB;
@@ -203,6 +204,17 @@ class CreditNoteService
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
+
+                if ($refundPaymentMethod === 'cash' && $cashSessionId !== null) {
+                    app(CashLedgerService::class)->recordCreditNoteRefund(
+                        $tenantId,
+                        (int) $cashSessionId,
+                        $refundId,
+                        $userId,
+                        $refundAmount,
+                        'CN-'.$sale->reference,
+                    );
+                }
             }
 
             $payloadSnapshot = app(BillingDocumentPayloadService::class)->createForCreditNote($tenantId, $creditNoteId, $userId);
@@ -411,7 +423,7 @@ class CreditNoteService
             throw new HttpException(422, 'Cash refunds require an open cash session.');
         }
 
-        $summary = (new CashSessionService())->current($tenantId);
+        $summary = (new CashSessionService)->current($tenantId);
 
         if ($refundAmount > (float) $summary['expected_amount']) {
             throw new HttpException(422, 'Cash refund exceeds available cash in session.');

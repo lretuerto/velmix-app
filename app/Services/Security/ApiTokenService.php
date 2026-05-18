@@ -12,6 +12,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 class ApiTokenService
 {
     private const DEFAULT_TTL_DAYS = 30;
+
     private const MAX_TTL_DAYS = 90;
 
     public function create(int $tenantId, int $userId, string $name, array $abilities = [], ?string $expiresAt = null): array

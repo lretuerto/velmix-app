@@ -10,12 +10,12 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 class FinanceOperationsMetricsService
 {
     private const MAX_HISTORY_DAYS = 90;
+
     private const STALE_ACKNOWLEDGED_HOURS = 24;
 
     public function __construct(
         private readonly FinanceOperationsReportService $reportService,
-    ) {
-    }
+    ) {}
 
     public function summary(
         int $tenantId,
@@ -220,6 +220,7 @@ class FinanceOperationsMetricsService
                 foreach ($group as $activity) {
                     if ($activity['event_type'] === 'finance.operation.acknowledged') {
                         $lastAcknowledged = $activity;
+
                         continue;
                     }
 

@@ -42,6 +42,15 @@ class PosSaleCancellationFlowTest extends TestCase
             'type' => 'sale_reversal',
             'quantity' => 5,
         ]);
+
+        $this->assertDatabaseHas('cash_session_ledger_entries', [
+            'tenant_id' => 10,
+            'source_type' => 'sale',
+            'source_id' => $saleId,
+            'entry_type' => 'sale_cash_reversal',
+            'direction' => 'out',
+            'amount' => 17.50,
+        ]);
     }
 
     public function test_rejects_cancellation_when_sale_has_voucher(): void
@@ -153,6 +162,7 @@ class PosSaleCancellationFlowTest extends TestCase
 
         $cashier = $this->seedUserWithRole(10, 'CAJERO');
         $admin = $this->seedUserWithRole(10, 'ADMIN');
+        $this->openCashSession($cashier);
         $lotId = DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
 
         $saleResponse = $this->actingAs($cashier)
@@ -206,6 +216,7 @@ class PosSaleCancellationFlowTest extends TestCase
         ]);
 
         $cashier = $this->seedUserWithRole(10, 'CAJERO');
+        $this->openCashSession($cashier);
         $lotId = DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
 
         $response = $this->actingAs($cashier)
@@ -220,6 +231,21 @@ class PosSaleCancellationFlowTest extends TestCase
         $saleId = $response->json('data.sale_id');
 
         return [$saleId, $lotId];
+    }
+
+    private function openCashSession(User $user, int $tenantId = 10, float $openingAmount = 1000): int
+    {
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', (string) $tenantId)
+            ->postJson('/cash/sessions/open', [
+                'opening_amount' => $openingAmount,
+            ])
+            ->assertOk();
+
+        return (int) DB::table('cash_sessions')
+            ->where('tenant_id', $tenantId)
+            ->where('status', 'open')
+            ->value('id');
     }
 
     private function seedUserWithRole(int $tenantId, string $roleCode): User

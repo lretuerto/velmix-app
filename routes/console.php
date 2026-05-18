@@ -2,6 +2,15 @@
 
 use App\Services\Billing\BillingReconciliationService;
 use App\Services\Billing\OutboxDispatchService;
+use App\Services\Cash\CashLedgerAuditService;
+use App\Services\Cash\CashSessionLedgerBackfillService;
+use App\Services\Frontend\FrontendUatReadinessService;
+use App\Services\Frontend\FrontendUatReleaseClosureService;
+use App\Services\Frontend\FrontendUatReleaseReadinessService;
+use App\Services\Frontend\FrontendUatSignoffPacketService;
+use App\Services\Frontend\FrontendUatVisualEvidenceService;
+use App\Services\Frontend\PosQuoteFirstSmokeFixtureService;
+use App\Services\Frontend\PosQuoteFirstUatSmokeService;
 use App\Services\Platform\BackupRecoveryService;
 use App\Services\Platform\OperationalCertificationService;
 use App\Services\Platform\OperationalDataPruneService;
@@ -559,6 +568,384 @@ Artisan::command('platform:prune-operational-data {--pretend} {--json}', functio
 
     return 0;
 })->purpose('Prune operational data with conservative retention windows.');
+
+Artisan::command('cash:backfill-session-ledger {--tenant=} {--session=} {--dry-run} {--json}', function (CashSessionLedgerBackfillService $service) {
+    $tenant = $this->option('tenant');
+    $session = $this->option('session');
+
+    $result = $service->run(
+        $tenant !== null && $tenant !== '' ? (int) $tenant : null,
+        $session !== null && $session !== '' ? (int) $session : null,
+        (bool) $this->option('dry-run'),
+    );
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf(
+            'Cash ledger backfill created=%d skipped=%d unresolved=%d updated_sales=%d',
+            $result['created_count'],
+            $result['skipped_count'],
+            $result['unresolved_count'],
+            $result['updated_sales_count'],
+        ));
+    }
+
+    return $result['unresolved_count'] > 0 ? 2 : 0;
+})->purpose('Backfill cash session ledger entries from historical cash movements, refunds, payments, and cash sales.');
+
+Artisan::command('cash:audit-session-ledger {--tenant=} {--session=} {--issue-limit=200} {--fail-on-issues} {--json}', function (CashLedgerAuditService $service) {
+    $tenant = $this->option('tenant');
+    $session = $this->option('session');
+    $issueLimit = max(1, min((int) $this->option('issue-limit'), 1000));
+
+    $result = $service->audit(
+        $tenant !== null && $tenant !== '' ? (int) $tenant : null,
+        $session !== null && $session !== '' ? (int) $session : null,
+        $issueLimit,
+    );
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf(
+            'Cash ledger audit status=%s issues=%d truncated=%s',
+            $result['status'],
+            $result['issue_count'],
+            $result['truncated'] ? 'yes' : 'no',
+        ));
+    }
+
+    return (bool) $this->option('fail-on-issues') && $result['issue_count'] > 0 ? 1 : 0;
+})->purpose('Audit cash session ledger coverage and source consistency without mutating business data.');
+
+Artisan::command('frontend:seed-pos-smoke {--tenant=10} {--user-email=pos-smoke@velmix.test} {--password=} {--opening-amount=1000} {--skip-cash} {--force-production} {--json}', function (PosQuoteFirstSmokeFixtureService $service) {
+    if (app()->environment('production') && ! (bool) $this->option('force-production')) {
+        $result = [
+            'status' => 'blocked',
+            'reason' => 'This command mutates demo business data and is blocked in production unless --force-production is explicitly provided.',
+        ];
+
+        if ((bool) $this->option('json')) {
+            $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        } else {
+            $this->error($result['reason']);
+        }
+
+        return 1;
+    }
+
+    try {
+        $password = $this->option('password');
+        $password = $password !== null && $password !== ''
+            ? (string) $password
+            : (string) env('VELMIX_POS_SMOKE_PASSWORD', 'pos-smoke-local-only');
+
+        $result = $service->seed(
+            max(1, (int) $this->option('tenant')),
+            (string) $this->option('user-email'),
+            $password,
+            ! (bool) $this->option('skip-cash'),
+            max(0, (float) $this->option('opening-amount')),
+        );
+
+        $result['login'] = [
+            'email' => $result['operator']['email'],
+            'password_source' => $this->option('password') !== null && $this->option('password') !== ''
+                ? 'command_option'
+                : (env('VELMIX_POS_SMOKE_PASSWORD') !== null ? 'environment' : 'local_default'),
+            'password_hint' => $this->option('password') !== null && $this->option('password') !== ''
+                ? 'Use the value passed via --password.'
+                : (env('VELMIX_POS_SMOKE_PASSWORD') !== null
+                    ? 'Use VELMIX_POS_SMOKE_PASSWORD.'
+                    : 'Local default: pos-smoke-local-only. Do not use this default outside local/UAT smoke.'),
+        ];
+
+        if ((bool) $this->option('json')) {
+            $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        } else {
+            $this->info(sprintf(
+                'POS smoke fixture ready for tenant %d. Login email: %s',
+                $result['tenant']['id'],
+                $result['operator']['email'],
+            ));
+            $this->line(sprintf('Regular SKU: %s', $result['products'][0]['sku']));
+            $this->line(sprintf('Controlled SKU: %s', $result['products'][1]['sku']));
+            $this->line(sprintf('Promotion: %s', $result['pricing']['promotion_code']));
+            $this->line(sprintf('Cash session: %s', $result['cash_session']['status'] ?? 'skipped'));
+        }
+
+        return 0;
+    } catch (Throwable $exception) {
+        $result = [
+            'status' => 'blocked',
+            'reason' => $exception->getMessage(),
+        ];
+
+        if ((bool) $this->option('json')) {
+            $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        } else {
+            $this->error($exception->getMessage());
+        }
+
+        return 1;
+    }
+})->purpose('Seed an idempotent POS quote-first smoke fixture for local/UAT frontend validation.');
+
+Artisan::command('frontend:uat-readiness {--tenant=10} {--user-email=pos-smoke@velmix.test} {--json}', function (FrontendUatReadinessService $service) {
+    try {
+        $result = $service->summary(
+            max(1, (int) $this->option('tenant')),
+            (string) $this->option('user-email'),
+        );
+    } catch (Throwable $exception) {
+        $result = [
+            'status' => 'blocked',
+            'checked_at' => now()->toISOString(),
+            'reason' => $exception->getMessage(),
+            'items' => [
+                [
+                    'module' => 'frontend',
+                    'code' => 'readiness.exception',
+                    'message' => $exception->getMessage(),
+                ],
+            ],
+        ];
+    }
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf('Frontend UAT readiness: %s', $result['status'] ?? 'blocked'));
+
+        foreach (($result['modules'] ?? []) as $moduleCode => $module) {
+            $this->line(sprintf(
+                '- %s: %s (%d bloqueos)',
+                $module['name'] ?? $moduleCode,
+                $module['status'] ?? 'blocked',
+                (int) ($module['blocked_count'] ?? 0),
+            ));
+        }
+
+        foreach (($result['items'] ?? []) as $item) {
+            $this->warn(sprintf(
+                '[%s] %s - %s',
+                $item['module'] ?? 'frontend',
+                $item['code'] ?? 'unknown',
+                $item['message'] ?? 'Sin detalle.',
+            ));
+        }
+    }
+
+    return ($result['status'] ?? 'blocked') === 'ready' ? 0 : 1;
+})->purpose('Run a non-destructive frontend UAT readiness audit for POS, cash, receivables, catalog, and customers.');
+
+Artisan::command('frontend:pos-quote-first-uat-smoke {--tenant=10} {--user-email=pos-smoke@velmix.test} {--force-production} {--json}', function (PosQuoteFirstUatSmokeService $service) {
+    if (app()->environment('production') && ! (bool) $this->option('force-production')) {
+        $result = [
+            'status' => 'blocked',
+            'checked_at' => now()->toISOString(),
+            'reason' => 'This command creates POS smoke sales and is blocked in production unless --force-production is explicitly provided.',
+        ];
+
+        if ((bool) $this->option('json')) {
+            $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        } else {
+            $this->error($result['reason']);
+        }
+
+        return 1;
+    }
+
+    try {
+        $result = $service->run(
+            max(1, (int) $this->option('tenant')),
+            (string) $this->option('user-email'),
+        );
+    } catch (Throwable $exception) {
+        $result = [
+            'status' => 'blocked',
+            'checked_at' => now()->toISOString(),
+            'reason' => $exception->getMessage(),
+        ];
+    }
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf('POS quote-first UAT smoke: %s', $result['status'] ?? 'blocked'));
+        $this->line(sprintf('Evidence: %s', $result['artifacts']['latest_evidence_path'] ?? 'n/a'));
+
+        foreach (($result['scenarios'] ?? []) as $scenarioCode => $scenario) {
+            $this->line(sprintf('- %s: %s', $scenarioCode, $scenario['status'] ?? 'blocked'));
+        }
+
+        if (($result['signoff']['status'] ?? null) === 'pending_visual_review') {
+            $this->warn('Visual signoff is still pending; use docs/frontend/uat-signoff-checklist.md.');
+        }
+    }
+
+    return ($result['status'] ?? 'blocked') === 'passed' ? 0 : 1;
+})->purpose('Execute a mutating POS quote-first UAT smoke and write signoff evidence.');
+
+Artisan::command('frontend:uat-signoff-pack {--tenant=10} {--user-email=pos-smoke@velmix.test} {--environment=local/UAT} {--base-url=} {--json}', function (FrontendUatSignoffPacketService $service) {
+    try {
+        $result = $service->build(
+            max(1, (int) $this->option('tenant')),
+            (string) $this->option('user-email'),
+            (string) $this->option('environment'),
+            $this->option('base-url') !== null ? (string) $this->option('base-url') : null,
+        );
+    } catch (Throwable $exception) {
+        $result = [
+            'status' => 'blocked',
+            'generated_at' => now()->toISOString(),
+            'reason' => $exception->getMessage(),
+        ];
+    }
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf('Frontend UAT signoff packet: %s', $result['status'] ?? 'blocked'));
+        $this->line(sprintf('Markdown: %s', $result['artifacts']['latest_markdown_path'] ?? 'n/a'));
+        $this->line(sprintf('JSON: %s', $result['artifacts']['latest_json_path'] ?? 'n/a'));
+
+        foreach (($result['blocked_items'] ?? []) as $item) {
+            $this->warn(sprintf(
+                '[%s] %s - %s',
+                $item['module'] ?? 'frontend',
+                $item['code'] ?? 'unknown',
+                $item['message'] ?? 'Sin detalle.',
+            ));
+        }
+    }
+
+    return ($result['status'] ?? 'blocked') === 'ready_for_visual_signoff' ? 0 : 1;
+})->purpose('Generate a formal frontend UAT signoff packet from readiness and POS smoke evidence.');
+
+Artisan::command('frontend:uat-visual-evidence-template {--packet=} {--json}', function (FrontendUatVisualEvidenceService $service) {
+    try {
+        $result = $service->createTemplate(
+            $this->option('packet') !== null ? (string) $this->option('packet') : null,
+        );
+    } catch (Throwable $exception) {
+        $result = [
+            'status' => 'blocked',
+            'generated_at' => now()->toISOString(),
+            'reason' => $exception->getMessage(),
+        ];
+    }
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf('Frontend UAT visual evidence template: %s', $result['status'] ?? 'blocked'));
+        $this->line(sprintf('Markdown: %s', $result['artifacts']['latest_markdown_path'] ?? 'n/a'));
+        $this->line(sprintf('JSON: %s', $result['artifacts']['latest_json_path'] ?? 'n/a'));
+
+        if (($result['reason'] ?? null) !== null) {
+            $this->warn((string) $result['reason']);
+        }
+    }
+
+    return ($result['status'] ?? 'blocked') === 'draft' ? 0 : 1;
+})->purpose('Generate the human-fillable visual evidence manifest for frontend UAT signoff.');
+
+Artisan::command('frontend:uat-visual-evidence-verify {--manifest=} {--packet=} {--json}', function (FrontendUatVisualEvidenceService $service) {
+    try {
+        $result = $service->verify(
+            $this->option('manifest') !== null ? (string) $this->option('manifest') : null,
+            $this->option('packet') !== null ? (string) $this->option('packet') : null,
+        );
+    } catch (Throwable $exception) {
+        $result = [
+            'status' => 'blocked',
+            'verified_at' => now()->toISOString(),
+            'reason' => $exception->getMessage(),
+            'blocked_items' => [
+                [
+                    'module' => 'frontend',
+                    'code' => 'visual_evidence.exception',
+                    'message' => $exception->getMessage(),
+                ],
+            ],
+        ];
+    }
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf('Frontend UAT visual signoff: %s', $result['status'] ?? 'blocked'));
+        $this->line(sprintf('Markdown: %s', $result['artifacts']['latest_markdown_path'] ?? 'n/a'));
+        $this->line(sprintf('JSON: %s', $result['artifacts']['latest_json_path'] ?? 'n/a'));
+
+        foreach (($result['blocked_items'] ?? []) as $item) {
+            $this->warn(sprintf(
+                '[%s] %s - %s',
+                $item['module'] ?? 'frontend',
+                $item['code'] ?? 'unknown',
+                $item['message'] ?? 'Sin detalle.',
+            ));
+        }
+    }
+
+    return ($result['status'] ?? 'blocked') === 'signed' ? 0 : 1;
+})->purpose('Verify human visual evidence and final approvals before closing frontend UAT signoff.');
+
+Artisan::command('frontend:uat-release-readiness {--freshness-hours=24} {--json}', function (FrontendUatReleaseReadinessService $service) {
+    $result = $service->summary(max(1, (int) $this->option('freshness-hours')));
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf('Frontend UAT release readiness: %s', $result['status'] ?? 'blocked'));
+        $this->line(sprintf('Freshness hours: %d', (int) ($result['freshness_hours'] ?? 24)));
+
+        foreach (($result['items'] ?? []) as $item) {
+            $this->warn(sprintf(
+                '[%s] %s - %s',
+                $item['severity'] ?? 'critical',
+                $item['code'] ?? 'unknown',
+                $item['message'] ?? 'Sin detalle.',
+            ));
+        }
+    }
+
+    return ($result['status'] ?? 'blocked') === 'ready_for_release' ? 0 : 1;
+})->purpose('Check whether frontend UAT evidence is complete, fresh, and signed for release readiness.');
+
+Artisan::command('frontend:uat-release-closure-pack {--freshness-hours=24} {--allow-gate-disabled} {--allow-observability-critical} {--decision-owner=} {--decision-ticket=} {--decision-notes=} {--json}', function (FrontendUatReleaseClosureService $service) {
+    $result = $service->build(
+        max(1, (int) $this->option('freshness-hours')),
+        (bool) $this->option('allow-gate-disabled'),
+        (bool) $this->option('allow-observability-critical'),
+        [
+            'owner' => (string) ($this->option('decision-owner') ?? ''),
+            'ticket' => (string) ($this->option('decision-ticket') ?? ''),
+            'notes' => (string) ($this->option('decision-notes') ?? ''),
+        ],
+    );
+
+    if ((bool) $this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info(sprintf('Frontend UAT release closure: %s', $result['status'] ?? 'blocked'));
+        $this->line(sprintf('Markdown: %s', $result['artifacts']['latest_markdown_path'] ?? 'n/a'));
+        $this->line(sprintf('JSON: %s', $result['artifacts']['latest_json_path'] ?? 'n/a'));
+
+        foreach (($result['blocked_items'] ?? []) as $item) {
+            $this->warn(sprintf(
+                '[%s] %s - %s',
+                $item['severity'] ?? 'critical',
+                $item['code'] ?? 'unknown',
+                $item['message'] ?? 'Sin detalle.',
+            ));
+        }
+    }
+
+    return ($result['status'] ?? 'blocked') === 'ready_for_release_closure' ? 0 : 1;
+})->purpose('Generate the final frontend UAT release closure packet from signed evidence, preflight, and observability.');
 
 $schedulerConfig = config('velmix.scheduler', []);
 $schedulerTimezone = (string) ($schedulerConfig['timezone'] ?? config('app.timezone', 'UTC'));

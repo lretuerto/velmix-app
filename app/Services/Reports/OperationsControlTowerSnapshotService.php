@@ -15,8 +15,7 @@ class OperationsControlTowerSnapshotService
     public function __construct(
         private readonly OperationsControlTowerReportService $controlTowerReport,
         private readonly TenantActivityLogService $activityLog,
-    ) {
-    }
+    ) {}
 
     public function create(
         int $tenantId,
@@ -88,8 +87,7 @@ class OperationsControlTowerSnapshotService
         ?string $fromDate = null,
         ?string $toDate = null,
         ?string $label = null,
-    ): array
-    {
+    ): array {
         $this->assertTenantId($tenantId);
         $this->assertLimit($limit);
         $this->assertStatus($status);

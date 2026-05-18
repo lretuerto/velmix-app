@@ -10,13 +10,13 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 class BillingEscalationMetricsService
 {
     private const MAX_HISTORY_DAYS = 90;
+
     private const STALE_ACKNOWLEDGED_HOURS = 24;
 
     public function __construct(
         private readonly BillingEscalationReportService $reportService,
         private readonly BillingEscalationStateService $stateService,
-    ) {
-    }
+    ) {}
 
     public function summary(int $tenantId, ?string $date = null, int $days = 7, int $historyDays = 30): array
     {
@@ -188,6 +188,7 @@ class BillingEscalationMetricsService
                 foreach ($group as $activity) {
                     if ($activity['event_type'] === 'billing.escalation.acknowledged') {
                         $lastAcknowledged = $activity;
+
                         continue;
                     }
 

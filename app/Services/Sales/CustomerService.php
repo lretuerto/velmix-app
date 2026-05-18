@@ -2,6 +2,7 @@
 
 namespace App\Services\Sales;
 
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -87,23 +88,31 @@ class CustomerService
             ->exists();
 
         if ($exists) {
-            throw new HttpException(422, 'Customer document already exists in tenant.');
+            throw new HttpException(409, 'Customer document already exists in tenant.');
         }
 
-        $customerId = DB::table('customers')->insertGetId([
-            'tenant_id' => $tenantId,
-            'document_type' => $documentType,
-            'document_number' => $documentNumber,
-            'name' => $name,
-            'phone' => $phone,
-            'email' => $email,
-            'credit_limit' => $creditLimit,
-            'credit_days' => $creditDays,
-            'block_on_overdue' => $blockOnOverdue,
-            'status' => 'active',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        try {
+            $customerId = DB::table('customers')->insertGetId([
+                'tenant_id' => $tenantId,
+                'document_type' => $documentType,
+                'document_number' => $documentNumber,
+                'name' => $name,
+                'phone' => $phone,
+                'email' => $email,
+                'credit_limit' => $creditLimit,
+                'credit_days' => $creditDays,
+                'block_on_overdue' => $blockOnOverdue,
+                'status' => 'active',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } catch (QueryException $exception) {
+            if ($this->isDuplicateCustomerDocumentConstraint($exception)) {
+                throw new HttpException(409, 'Customer document already exists in tenant.');
+            }
+
+            throw $exception;
+        }
 
         return [
             'id' => $customerId,
@@ -174,7 +183,7 @@ class CustomerService
                 ->exists();
 
             if ($exists) {
-                throw new HttpException(422, 'Customer document already exists in tenant.');
+                throw new HttpException(409, 'Customer document already exists in tenant.');
             }
         }
 
@@ -210,9 +219,17 @@ class CustomerService
 
         $payload['updated_at'] = now();
 
-        DB::table('customers')
-            ->where('id', $customerId)
-            ->update($payload);
+        try {
+            DB::table('customers')
+                ->where('id', $customerId)
+                ->update($payload);
+        } catch (QueryException $exception) {
+            if ($this->isDuplicateCustomerDocumentConstraint($exception)) {
+                throw new HttpException(409, 'Customer document already exists in tenant.');
+            }
+
+            throw $exception;
+        }
 
         $updated = DB::table('customers')
             ->where('tenant_id', $tenantId)
@@ -413,11 +430,11 @@ class CustomerService
         return DB::table('sale_receivables')
             ->where('tenant_id', $tenantId)
             ->where('outstanding_amount', '>', 0)
-            ->selectRaw("
+            ->selectRaw('
                 customer_id,
                 COALESCE(SUM(outstanding_amount), 0) as outstanding_total,
                 COALESCE(SUM(CASE WHEN due_at IS NOT NULL AND due_at < ? THEN outstanding_amount ELSE 0 END), 0) as overdue_total
-            ", [now()])
+            ', [now()])
             ->groupBy('customer_id')
             ->get()
             ->mapWithKeys(fn (object $row) => [
@@ -427,5 +444,24 @@ class CustomerService
                 ],
             ])
             ->all();
+    }
+
+    private function isDuplicateCustomerDocumentConstraint(QueryException $exception): bool
+    {
+        $message = strtolower($exception->getMessage());
+        $previous = strtolower($exception->getPrevious()?->getMessage() ?? '');
+
+        foreach ([
+            'customers_tenant_id_document_type_document_number_unique',
+            'customers.tenant_id, customers.document_type, customers.document_number',
+            'unique constraint failed',
+            'duplicate entry',
+        ] as $needle) {
+            if (str_contains($message, $needle) || ($previous !== '' && str_contains($previous, $needle))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

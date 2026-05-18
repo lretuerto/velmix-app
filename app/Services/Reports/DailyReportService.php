@@ -2,8 +2,8 @@
 
 namespace App\Services\Reports;
 
-use Carbon\CarbonImmutable;
 use App\Services\Billing\BillingProviderMetricsService;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 

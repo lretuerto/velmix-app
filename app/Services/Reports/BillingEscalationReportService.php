@@ -21,8 +21,7 @@ class BillingEscalationReportService
     public function __construct(
         private readonly BillingProviderMetricsService $providerMetrics,
         private readonly BillingEscalationStateService $stateService,
-    ) {
-    }
+    ) {}
 
     public function summary(int $tenantId, ?string $date = null, int $days = 7, int $limit = 10): array
     {

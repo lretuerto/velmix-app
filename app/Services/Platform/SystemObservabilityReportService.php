@@ -62,6 +62,8 @@ class SystemObservabilityReportService
                 'status' => $preflight['status'] ?? 'unknown',
                 'item_count' => count($preflight['items'] ?? []),
             ],
+            'cash_ledger' => $this->cashLedgerSnapshot($preflight),
+            'frontend_uat_release_gate' => $this->frontendUatReleaseGateSnapshot($preflight),
             'alerts' => [
                 'status' => $alerts['status'] ?? 'unknown',
                 'summary' => $alerts['summary'] ?? [],
@@ -100,6 +102,45 @@ class SystemObservabilityReportService
             'cutover' => $cutover,
             'operational_certification' => $operationalCertification,
             'recommendations' => $this->recommendations($preflight, $alerts, $logging, $delivery, $recovery, $certification, $promotion, $cutover, $operationalCertification),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $preflight
+     * @return array<string, mixed>
+     */
+    private function cashLedgerSnapshot(array $preflight): array
+    {
+        $cashLedger = (array) ($preflight['checks']['cash_ledger'] ?? []);
+        $audit = (array) ($cashLedger['audit'] ?? []);
+
+        return [
+            'status' => $cashLedger['status'] ?? 'unknown',
+            'enabled' => (bool) ($cashLedger['enabled'] ?? false),
+            'required' => (bool) ($cashLedger['required'] ?? false),
+            'tenant_id' => $cashLedger['tenant_id'] ?? null,
+            'session_id' => $cashLedger['session_id'] ?? null,
+            'issue_count' => (int) ($audit['issue_count'] ?? 0),
+            'truncated' => (bool) ($audit['truncated'] ?? false),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $preflight
+     * @return array<string, mixed>
+     */
+    private function frontendUatReleaseGateSnapshot(array $preflight): array
+    {
+        $gate = (array) ($preflight['checks']['frontend_uat_release_gate'] ?? []);
+        $readiness = (array) ($gate['readiness'] ?? []);
+
+        return [
+            'status' => $gate['status'] ?? 'unknown',
+            'enabled' => (bool) ($gate['enabled'] ?? false),
+            'required' => (bool) ($gate['required'] ?? false),
+            'freshness_hours' => (int) ($gate['freshness_hours'] ?? 24),
+            'readiness_status' => $readiness['status'] ?? null,
+            'item_count' => (int) ($readiness['item_count'] ?? 0),
         ];
     }
 
@@ -168,6 +209,12 @@ class SystemObservabilityReportService
 
         if (($preflight['status'] ?? 'ok') !== 'ok') {
             $items[] = 'Run php artisan system:preflight --json and remediate critical platform checks before promoting the release.';
+        }
+
+        $frontendUatReleaseGate = (array) ($preflight['checks']['frontend_uat_release_gate'] ?? []);
+
+        if (($frontendUatReleaseGate['status'] ?? 'ok') !== 'ok') {
+            $items[] = 'Run php artisan frontend:uat-release-readiness --json and complete signed visual UAT evidence before frontend cutover.';
         }
 
         if (($alerts['status'] ?? 'ok') === 'critical' && (int) ($delivery['candidate_alert_count'] ?? 0) > 0) {

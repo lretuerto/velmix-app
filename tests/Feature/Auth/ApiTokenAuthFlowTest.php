@@ -340,52 +340,58 @@ class ApiTokenAuthFlowTest extends TestCase
             \Database\Seeders\RbacCatalogSeeder::class,
         ]);
 
-        $owner = $this->seedTenantAdminUser(10);
-        $operator = $this->seedTenantAdminUser(10);
-        $oldPlainTextToken = $this->createTokenForUser($owner, 10, 'Integracion Rotable');
-        $tokenId = (int) DB::table('api_tokens')
-            ->where('tenant_id', 10)
-            ->where('user_id', $owner->id)
-            ->where('name', 'Integracion Rotable')
-            ->value('id');
+        Carbon::setTestNow('2026-04-14 10:00:00');
 
-        $rotateResponse = $this->actingAs($operator)
-            ->withHeader('X-Tenant-Id', '10')
-            ->postJson(sprintf('/auth/tokens/%d/rotate', $tokenId), [
-                'abilities' => ['reports.daily.read'],
-                'expires_at' => '2026-05-10',
+        try {
+            $owner = $this->seedTenantAdminUser(10);
+            $operator = $this->seedTenantAdminUser(10);
+            $oldPlainTextToken = $this->createTokenForUser($owner, 10, 'Integracion Rotable');
+            $tokenId = (int) DB::table('api_tokens')
+                ->where('tenant_id', 10)
+                ->where('user_id', $owner->id)
+                ->where('name', 'Integracion Rotable')
+                ->value('id');
+
+            $rotateResponse = $this->actingAs($operator)
+                ->withHeader('X-Tenant-Id', '10')
+                ->postJson(sprintf('/auth/tokens/%d/rotate', $tokenId), [
+                    'abilities' => ['reports.daily.read'],
+                    'expires_at' => '2026-05-10',
+                ]);
+
+            $rotateResponse->assertOk()
+                ->assertJsonPath('data.name', 'Integracion Rotable')
+                ->assertJsonPath('data.user_id', $owner->id)
+                ->assertJsonPath('data.abilities.0', 'reports.daily.read')
+                ->assertJsonPath('data.status', 'active');
+
+            $newPlainTextToken = (string) $rotateResponse->json('data.plain_text_token');
+            $this->assertNotSame($oldPlainTextToken, $newPlainTextToken);
+
+            $this->assertDatabaseMissing('api_tokens', [
+                'id' => $tokenId,
+                'revoked_at' => null,
             ]);
 
-        $rotateResponse->assertOk()
-            ->assertJsonPath('data.name', 'Integracion Rotable')
-            ->assertJsonPath('data.user_id', $owner->id)
-            ->assertJsonPath('data.abilities.0', 'reports.daily.read')
-            ->assertJsonPath('data.status', 'active');
+            $this->assertDatabaseHas('tenant_activity_logs', [
+                'tenant_id' => 10,
+                'user_id' => $operator->id,
+                'domain' => 'security',
+                'event_type' => 'security.api_token.rotated',
+            ]);
 
-        $newPlainTextToken = (string) $rotateResponse->json('data.plain_text_token');
-        $this->assertNotSame($oldPlainTextToken, $newPlainTextToken);
+            $this->withToken($oldPlainTextToken)
+                ->withHeader('X-Tenant-Id', '10')
+                ->getJson('/auth/me')
+                ->assertStatus(401);
 
-        $this->assertDatabaseMissing('api_tokens', [
-            'id' => $tokenId,
-            'revoked_at' => null,
-        ]);
-
-        $this->assertDatabaseHas('tenant_activity_logs', [
-            'tenant_id' => 10,
-            'user_id' => $operator->id,
-            'domain' => 'security',
-            'event_type' => 'security.api_token.rotated',
-        ]);
-
-        $this->withToken($oldPlainTextToken)
-            ->withHeader('X-Tenant-Id', '10')
-            ->getJson('/auth/me')
-            ->assertStatus(401);
-
-        $this->withToken($newPlainTextToken)
-            ->withHeader('X-Tenant-Id', '10')
-            ->getJson('/reports/daily?date=2026-03-12')
-            ->assertOk();
+            $this->withToken($newPlainTextToken)
+                ->withHeader('X-Tenant-Id', '10')
+                ->getJson('/reports/daily?date=2026-03-12')
+                ->assertOk();
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_rejects_api_token_expiration_outside_allowed_window(): void

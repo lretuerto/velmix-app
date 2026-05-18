@@ -48,6 +48,26 @@ class CashMovementFlowTest extends TestCase
 
         $sessionId = DB::table('cash_sessions')->where('tenant_id', 10)->value('id');
 
+        $this->assertDatabaseHas('cash_session_ledger_entries', [
+            'tenant_id' => 10,
+            'cash_session_id' => $sessionId,
+            'source_type' => 'cash_movement',
+            'entry_type' => 'manual_in',
+            'direction' => 'in',
+            'amount' => 15.00,
+            'reference' => 'ING-001',
+        ]);
+
+        $this->assertDatabaseHas('cash_session_ledger_entries', [
+            'tenant_id' => 10,
+            'cash_session_id' => $sessionId,
+            'source_type' => 'cash_movement',
+            'entry_type' => 'manual_out',
+            'direction' => 'out',
+            'amount' => 5.00,
+            'reference' => 'EGR-001',
+        ]);
+
         $this->actingAs($cashier)
             ->withHeader('X-Tenant-Id', '10')
             ->getJson('/cash/sessions/current')

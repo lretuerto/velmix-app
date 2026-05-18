@@ -8,6 +8,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 
 - Autenticacion: los endpoints de negocio pasan por `auth.hybrid`
 - El backend acepta sesion Laravel o `Authorization: Bearer <token>`
+- La SPA usa sesion web con `POST /auth/session/login` y `POST /auth/session/logout`; ambos responden en envelope `data`
 - Si una request trae sesion y bearer token al mismo tiempo, se evalua el bearer token
 - Si el token define `abilities`, solo puede usar rutas protegidas por permisos incluidos en esa lista; soporta `*` y prefijos `modulo.*`
 - `GET /auth/me` y `GET /tenant/ping` requieren el permiso `security.context.read`; los bearer tokens limitados deben declararlo en `abilities` para usarlos
@@ -40,6 +41,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 
 - `GET /health/live`
 - `GET /health/ready`
+- `POST /auth/session/login`
+- `POST /auth/session/logout`
 - `GET /auth/me`
 - `GET /auth/tokens`
 - `POST /auth/tokens`
@@ -69,11 +72,32 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 
 ### POS y ventas
 
+- `POST /pricing/quotes`
+- `GET /pricing/quotes/{quote}`
+- `POST /pricing/quotes/{quote}/checkout`
 - `POST /pos/sales`
 - `GET /pos/sales`
 - `GET /pos/sales/{sale}`
 - `POST /pos/sales/{sale}/cancel`
 - `POST /pos/approvals`
+
+El flujo primario del POS frontend es quote-first: primero `POST /pricing/quotes`,
+luego revision del snapshot (`quote_hash`, TTL, lista, promociones y totales) y finalmente
+`POST /pricing/quotes/{quote}/checkout`. `POST /pos/sales` queda como compatibilidad legacy
+para integraciones directas con `unit_price` enviado por cliente, no como contrato principal del POS.
+
+Permisos requeridos:
+
+- `pricing.quote.create` para cotizar
+- `pricing.quote.read` para leer una cotizacion
+- `pos.sale.execute` para consumir la cotizacion y crear la venta
+
+Idempotencia:
+
+- Usar un `Idempotency-Key` estable por intento logico de `POST /pricing/quotes`.
+- Usar otro `Idempotency-Key` estable por intento logico de `POST /pricing/quotes/{quote}/checkout`.
+- Si se corta la red despues del checkout, reintentar con el mismo key debe devolver la misma venta y no duplicar `sales` ni movimientos de caja.
+- Si se reutiliza el key con payload distinto, el backend debe responder conflicto de idempotencia.
 
 ### Clientes y cuentas por cobrar
 
@@ -188,7 +212,71 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 
 ## Request examples
 
-### Venta POS multi-item
+### Venta POS quote-first
+
+1. Cotizar carrito:
+
+```json
+{
+  "payment_method": "cash",
+  "channel": "retail",
+  "items": [
+    {
+      "product_id": 1,
+      "quantity": 2
+    }
+  ]
+}
+```
+
+Respuesta resumida esperada:
+
+```json
+{
+  "data": {
+    "id": 500,
+    "status": "quoted",
+    "quote_hash": "sha256:...",
+    "expires_at": "2026-05-06T15:00:00+00:00",
+    "summary": {
+      "subtotal_amount": 19.8,
+      "discount_amount": 2.0,
+      "total_amount": 17.8
+    },
+    "items": [
+      {
+        "id": 1001,
+        "product_id": 1,
+        "base_unit_price": 9.9,
+        "final_unit_price": 8.9,
+        "line_total": 17.8,
+        "adjustments": []
+      }
+    ]
+  }
+}
+```
+
+2. Confirmar checkout:
+
+```json
+{
+  "quote_hash": "sha256:...",
+  "line_inputs": [
+    {
+      "quote_item_id": 1001,
+      "prescription_code": "RX-001"
+    }
+  ]
+}
+```
+
+Errores esperados:
+
+- `409` si el `quote_hash` no coincide, la quote ya fue consumida, hay drift entre cabecera/items o el resultado POS no coincide con el snapshot.
+- `422` si la quote expiro, no esta disponible, falta input regulatorio o falla validacion.
+
+### Venta POS multi-item legacy
 
 ```json
 {
@@ -251,6 +339,8 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - Para pruebas controladas: `--simulate-result=accepted|rejected|transient_fail`
 - Para QA reproducible existe `composer run velmix:outbox`, que sale en verde si la base todavía no está migrada
 - Reconciliacion manual: `php artisan billing:reconcile-pending --limit=20`
+- Fixture local/UAT para smoke POS quote-first: `php artisan frontend:seed-pos-smoke --json`
+- Auditoria no destructiva de readiness frontend UAT: `php artisan frontend:uat-readiness --json`
 - Alertas operativas agregadas: `php artisan system:alerts --json`
 - Dispatch de alertas operativas: `php artisan system:dispatch-alerts --json`
 - Snapshot de observabilidad tecnica: `php artisan system:observability-report --json`
@@ -489,6 +579,7 @@ Esta guia resume como consumir el backend actual de VELMiX sin depender de inspe
 - `GET /docs/release-cutover` concentra la decision final de go-live del release actual
 - `GET /docs/operational-certification` concentra la evidencia final de deploy, rollback, backup y restore del release actual
 - `GET /docs/evidence-governed-deploy` concentra el workflow manual que ejecuta y publica la cadena completa como artifact de cambio
+- El smoke manual del frontend POS quote-first queda versionado en `docs/frontend/pos-quote-first-smoke-runbook.md`; el cierre UAT firmable por modulo queda en `docs/frontend/uat-signoff-checklist.md`
 - el workflow soporta `deployment_strategy=remote_ssh` para deploy real remoto y `control_only` solo para troubleshooting
 - el environment `staging` debe usar `required reviewers` y secretos `VELMIX_SSH_HOST`, `VELMIX_SSH_USER`, `VELMIX_SSH_PRIVATE_KEY` y `VELMIX_SSH_KNOWN_HOSTS`
 - variables remotas recomendadas para el environment: `VELMIX_REMOTE_PORT`, `VELMIX_REMOTE_APP_ROOT`, `VELMIX_REMOTE_RELEASES_PATH`, `VELMIX_REMOTE_SHARED_PATH`, `VELMIX_REMOTE_ENV_FILE`

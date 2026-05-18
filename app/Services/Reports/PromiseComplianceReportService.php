@@ -9,8 +9,7 @@ class PromiseComplianceReportService
 {
     public function __construct(
         private readonly PromiseInsightService $promiseInsights,
-    ) {
-    }
+    ) {}
 
     public function summary(int $tenantId, ?string $date = null, int $limit = 5): array
     {

@@ -78,6 +78,25 @@ class BillingCreditNoteFlowTest extends TestCase
             'amount' => 21.00,
         ]);
 
+        $refundId = (int) DB::table('sale_refunds')
+            ->where('sale_credit_note_id', $creditNoteId)
+            ->value('id');
+        $cashSessionId = (int) DB::table('cash_sessions')
+            ->where('tenant_id', 10)
+            ->where('status', 'open')
+            ->value('id');
+
+        $this->assertDatabaseHas('cash_session_ledger_entries', [
+            'tenant_id' => 10,
+            'cash_session_id' => $cashSessionId,
+            'source_type' => 'sale_refund',
+            'source_id' => $refundId,
+            'entry_type' => 'credit_note_refund',
+            'direction' => 'out',
+            'amount' => 21.00,
+            'reference' => 'CN-SALE-CN-CASH',
+        ]);
+
         $this->actingAs($admin)
             ->withHeader('X-Tenant-Id', '10')
             ->getJson('/cash/sessions/current')

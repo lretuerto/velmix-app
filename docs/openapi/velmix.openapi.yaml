@@ -12,6 +12,7 @@ servers:
 tags:
   - name: Tenant
   - name: Inventory
+  - name: Pricing
   - name: POS
   - name: Sales
   - name: Cash
@@ -165,6 +166,64 @@ paths:
             text/markdown:
               schema:
                 type: string
+  /auth/session/login:
+    post:
+      tags: [Tenant]
+      security: []
+      summary: Inicia sesion Laravel para la SPA
+      description: Autentica por email/password, regenera la sesion y devuelve el bootstrap del frontend con usuario, tenant, roles y permisos.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                tenant:
+                  type: string
+                  description: Codigo o id del tenant a seleccionar luego de autenticar.
+      responses:
+        '200':
+          description: Sesion creada y bootstrap frontend actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          description: Demasiados intentos de login
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+  /auth/session/logout:
+    post:
+      tags: [Tenant]
+      security:
+        - laravelSession: []
+      summary: Cierra la sesion Laravel de la SPA
+      description: Invalida la sesion actual y regenera el token CSRF.
+      responses:
+        '200':
+          description: Sesion cerrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataEnvelope'
+        '401':
+          description: Sesion no autenticada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
   /auth/me:
     get:
       tags: [Tenant]
@@ -603,6 +662,103 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataEnvelope'
+  /pricing/quotes:
+    post:
+      tags: [Pricing]
+      summary: Genera cotizacion comercial server-side
+      description: |
+        Flujo primario del POS profesional. Resuelve lista de precios, promociones elegibles,
+        descuentos por laboratorio/sponsor y snapshot con TTL. Requiere `Idempotency-Key`
+        estable por intento de cotizacion para poder reintentar sin duplicar quotes ante cortes de red.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PricingQuoteCreateRequest'
+            examples:
+              retailCashQuote:
+                value:
+                  payment_method: cash
+                  channel: retail
+                  items:
+                    - product_id: 1
+                      quantity: 2
+              creditQuote:
+                value:
+                  payment_method: credit
+                  customer_id: 15
+                  channel: retail
+                  items:
+                    - product_id: 2
+                      quantity: 1
+      responses:
+        '200':
+          description: Cotizacion persistida con hash, TTL, totales y promociones aplicadas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PricingQuoteEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /pricing/quotes/{quote}:
+    get:
+      tags: [Pricing]
+      summary: Lee detalle de cotizacion
+      parameters:
+        - $ref: '#/components/parameters/PricingQuoteId'
+      responses:
+        '200':
+          description: Cotizacion con lineas, ajustes, contexto comercial y promociones aplicadas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PricingQuoteEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /pricing/quotes/{quote}/checkout:
+    post:
+      tags: [Pricing, POS]
+      summary: Consume quote y registra venta POS
+      description: |
+        Checkout transaccional quote-first. Bloquea la quote con `lockForUpdate`, valida `quote_hash`,
+        rechaza quotes expiradas o ya consumidas, ejecuta POS con los precios finales del snapshot,
+        persiste componentes de pricing por item vendido y marca la quote como `consumed`.
+        Reutilizar el mismo `Idempotency-Key` en retries del mismo checkout debe replayar la misma venta.
+      parameters:
+        - $ref: '#/components/parameters/PricingQuoteId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PricingQuoteCheckoutRequest'
+            examples:
+              cashCheckout:
+                value:
+                  quote_hash: sha256:example
+              controlledProductCheckout:
+                value:
+                  quote_hash: sha256:example
+                  line_inputs:
+                    - quote_item_id: 1001
+                      prescription_code: RX-001
+      responses:
+        '200':
+          description: Quote consumida y venta creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PricingQuoteCheckoutEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /pos/sales:
     get:
       tags: [POS]
@@ -616,9 +772,14 @@ paths:
                 $ref: '#/components/schemas/DataEnvelope'
     post:
       tags: [POS]
-      summary: Ejecuta venta POS
+      summary: Ejecuta venta POS legacy/directa
       description: |
-        Soporta modo simple con `lot_id` y modo multi-item con `items[]`.
+        Compatibilidad legacy para venta directa con `unit_price` enviado por cliente.
+        El frontend POS profesional debe usar `POST /pricing/quotes` y luego
+        `POST /pricing/quotes/{quote}/checkout` para que precio comercial y promociones
+        sean resueltos server-side.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -2887,6 +3048,15 @@ components:
       name: X-Tenant-Id
       description: Header obligatorio en rutas multi-tenant.
   parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 255
+      description: Llave estable por intento logico de escritura. Reusar con mismo payload replaya la respuesta; reusar con payload distinto falla.
     ReportDate:
       in: query
       name: date
@@ -2903,6 +3073,11 @@ components:
     SaleId:
       in: path
       name: sale
+      required: true
+      schema: { type: integer }
+    PricingQuoteId:
+      in: path
+      name: quote
       required: true
       schema: { type: integer }
     CustomerId:
@@ -2975,6 +3150,19 @@ components:
             $ref: '#/components/schemas/ErrorMessage'
           example:
             message: Voucher not found.
+    Conflict:
+      description: Conflicto de estado, idempotencia, snapshot o regla de concurrencia
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorMessage'
+          examples:
+            quoteHashDrift:
+              value:
+                message: Pricing quote hash does not match the latest snapshot.
+            consumedQuote:
+              value:
+                message: Pricing quote was already consumed.
     ValidationError:
       description: Error de validacion o regla de negocio
       content:
@@ -3041,6 +3229,192 @@ components:
           type: integer
           minimum: 1
         reference: { type: string }
+    PricingQuoteCreateRequest:
+      type: object
+      required: [payment_method, items]
+      properties:
+        payment_method:
+          type: string
+          enum: [cash, card, transfer, credit]
+        customer_id:
+          type: [integer, 'null']
+          description: Obligatorio a nivel de negocio cuando `payment_method=credit`.
+        channel:
+          type: string
+          enum: [retail, wholesale, institutional, mixed]
+          default: retail
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [product_id, quantity]
+            properties:
+              product_id: { type: integer }
+              quantity:
+                type: integer
+                minimum: 1
+    PricingQuoteCheckoutRequest:
+      type: object
+      required: [quote_hash]
+      properties:
+        quote_hash:
+          type: string
+          description: Hash devuelto por la cotizacion. Protege contra snapshots stale.
+        due_at:
+          type: [string, 'null']
+          format: date
+        line_inputs:
+          type: array
+          description: Datos regulatorios por linea, principalmente productos controlados.
+          items:
+            type: object
+            required: [quote_item_id]
+            properties:
+              quote_item_id: { type: integer }
+              prescription_code:
+                type: [string, 'null']
+              approval_code:
+                type: [string, 'null']
+    PricingQuoteEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/PricingQuote'
+    PricingQuoteCheckoutEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/PricingQuoteCheckoutResult'
+    PricingQuoteCheckoutResult:
+      type: object
+      required: [quote, sale]
+      properties:
+        quote:
+          type: object
+          required: [id, status, quote_hash, sale_id, summary, currency]
+          properties:
+            id: { type: integer }
+            status:
+              type: string
+              enum: [consumed]
+            quote_hash: { type: string }
+            sale_id: { type: integer }
+            summary:
+              $ref: '#/components/schemas/PricingQuoteSummary'
+            currency: { type: string }
+        sale:
+          type: object
+          description: Resultado POS creado por `PosSaleService`; incluye `sale_id`, `reference`, totales, customer, receivable e items vendidos.
+          additionalProperties: true
+    PricingQuote:
+      type: object
+      required: [id, status, quote_hash, channel, payment_method, expires_at, currency, summary, items, warnings, applied_promotions]
+      properties:
+        id: { type: integer }
+        status:
+          type: string
+          enum: [draft, quoted, consumed, expired, cancelled]
+        quote_hash: { type: string }
+        channel:
+          type: string
+          enum: [retail, wholesale, institutional, mixed]
+        payment_method:
+          type: string
+          enum: [cash, card, transfer, credit]
+        expires_at:
+          type: string
+          format: date-time
+        currency: { type: string }
+        customer:
+          type: [object, 'null']
+          additionalProperties: true
+        price_list:
+          type: [object, 'null']
+          additionalProperties: true
+        summary:
+          $ref: '#/components/schemas/PricingQuoteSummary'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PricingQuoteItem'
+        warnings:
+          type: array
+          items: { type: string }
+        applied_promotions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PricingQuoteAppliedPromotion'
+    PricingQuoteSummary:
+      type: object
+      required: [subtotal_amount, discount_amount, total_amount]
+      properties:
+        subtotal_amount: { type: number }
+        discount_amount: { type: number }
+        total_amount: { type: number }
+    PricingQuoteItem:
+      type: object
+      required: [id, product_id, product_sku, product_name, requested_quantity, base_unit_price, final_unit_price, line_discount_amount, line_total, commercial_context, adjustments]
+      properties:
+        id: { type: integer }
+        product_id: { type: integer }
+        product_sku: { type: string }
+        product_name: { type: string }
+        requested_quantity: { type: integer }
+        resolved_price_list_item_id:
+          type: [integer, 'null']
+        base_unit_price: { type: number }
+        final_unit_price: { type: number }
+        line_discount_amount: { type: number }
+        line_total: { type: number }
+        commercial_context:
+          type: object
+          additionalProperties: true
+        adjustments:
+          type: array
+          items:
+            $ref: '#/components/schemas/PricingQuoteAdjustment'
+    PricingQuoteAdjustment:
+      type: object
+      required: [id, type, description, quantity, unit_delta, total_delta]
+      properties:
+        id: { type: integer }
+        type:
+          type: string
+          enum: [base_price, promotion_discount, manual_override]
+        description: { type: string }
+        promotion_id:
+          type: [integer, 'null']
+        promotion_rule_id:
+          type: [integer, 'null']
+        promotion_code:
+          type: [string, 'null']
+        promotion_name:
+          type: [string, 'null']
+        sponsor_supplier:
+          type: [object, 'null']
+          additionalProperties: true
+        quantity: { type: number }
+        unit_delta: { type: number }
+        total_delta: { type: number }
+        metadata:
+          type: object
+          additionalProperties: true
+    PricingQuoteAppliedPromotion:
+      type: object
+      required: [id, discount_amount]
+      properties:
+        id: { type: integer }
+        code:
+          type: [string, 'null']
+        name:
+          type: [string, 'null']
+        discount_amount: { type: number }
+        sponsor_supplier:
+          type: [object, 'null']
+          additionalProperties: true
     SaleCreateRequest:
       type: object
       properties:

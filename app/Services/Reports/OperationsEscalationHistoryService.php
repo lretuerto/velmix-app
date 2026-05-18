@@ -8,13 +8,13 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 class OperationsEscalationHistoryService
 {
     private const MAX_LIMIT = 20;
+
     private const MAX_HISTORY_DAYS = 90;
 
     public function __construct(
         private readonly BillingEscalationHistoryService $billingHistoryService,
         private readonly FinanceEscalationHistoryService $financeHistoryService,
-    ) {
-    }
+    ) {}
 
     public function index(
         int $tenantId,

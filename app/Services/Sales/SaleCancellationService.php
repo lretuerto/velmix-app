@@ -3,6 +3,7 @@
 namespace App\Services\Sales;
 
 use App\Services\Audit\TenantActivityLogService;
+use App\Services\Cash\CashLedgerService;
 use App\Services\Inventory\LotStockMutationService;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -24,7 +25,7 @@ class SaleCancellationService
                 ->where('id', $saleId)
                 ->where('tenant_id', $tenantId)
                 ->lockForUpdate()
-                ->first(['id', 'reference', 'status']);
+                ->first(['id', 'reference', 'status', 'payment_method', 'cash_session_id', 'total_amount']);
 
             if ($sale === null) {
                 throw new HttpException(404, 'Sale not found.');
@@ -49,6 +50,27 @@ class SaleCancellationService
 
             if ($receivable !== null && (float) $receivable->paid_amount > 0) {
                 throw new HttpException(422, 'Sales with customer payments cannot be cancelled.');
+            }
+
+            $cashSessionId = null;
+
+            if ($sale->payment_method === 'cash') {
+                if ($sale->cash_session_id === null) {
+                    throw new HttpException(422, 'Cash sale cancellation requires a linked cash session.');
+                }
+
+                $cashSession = DB::table('cash_sessions')
+                    ->where('tenant_id', $tenantId)
+                    ->where('id', $sale->cash_session_id)
+                    ->where('status', 'open')
+                    ->lockForUpdate()
+                    ->first(['id']);
+
+                if ($cashSession === null) {
+                    throw new HttpException(422, 'Cash sale cancellation requires its original cash session to be open.');
+                }
+
+                $cashSessionId = (int) $cashSession->id;
             }
 
             $items = DB::table('sale_items')
@@ -94,6 +116,17 @@ class SaleCancellationService
                     'cancelled_at' => now(),
                     'updated_at' => now(),
                 ]);
+
+            if ($cashSessionId !== null) {
+                app(CashLedgerService::class)->recordSaleCashReversal(
+                    $tenantId,
+                    $cashSessionId,
+                    $saleId,
+                    $userId,
+                    (float) $sale->total_amount,
+                    $sale->reference.'-VOID',
+                );
+            }
 
             if ($receivable !== null) {
                 DB::table('sale_receivables')

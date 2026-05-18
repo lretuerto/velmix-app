@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Platform;
 
+use App\Services\Frontend\FrontendUatArtifactPaths;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
@@ -124,6 +125,13 @@ class SystemObservabilityReportCommandTest extends TestCase
             $this->assertContains('stderr_json', $output['logging']['effective_channels']);
             $this->assertSame('database', $output['queue']['connection']);
             $this->assertContains($output['preflight']['status'], ['ok', 'warning']);
+            $this->assertSame('ok', $output['cash_ledger']['status']);
+            $this->assertFalse($output['cash_ledger']['enabled']);
+            $this->assertFalse($output['cash_ledger']['required']);
+            $this->assertSame(0, $output['cash_ledger']['issue_count']);
+            $this->assertSame('ok', $output['frontend_uat_release_gate']['status']);
+            $this->assertFalse($output['frontend_uat_release_gate']['enabled']);
+            $this->assertFalse($output['frontend_uat_release_gate']['required']);
             $this->assertSame(7, $output['scheduler']['alert_dispatch_every_minutes']);
             $this->assertSame(['log', 'webhook'], $output['notifications']['channels']);
             $this->assertSame('critical', $output['notifications']['minimum_severity']);
@@ -154,8 +162,12 @@ class SystemObservabilityReportCommandTest extends TestCase
 
     public function test_system_observability_report_command_surfaces_critical_preflight_state(): void
     {
+        File::deleteDirectory(FrontendUatArtifactPaths::baseDirectory());
+
         config([
             'queue.default' => 'missing-queue',
+            'velmix.frontend_uat_release_gate.enabled' => true,
+            'velmix.frontend_uat_release_gate.required_environments' => ['testing'],
         ]);
 
         $exitCode = Artisan::call('system:observability-report', [
@@ -167,5 +179,7 @@ class SystemObservabilityReportCommandTest extends TestCase
         $this->assertSame(0, $exitCode);
         $this->assertSame('critical', $output['status']);
         $this->assertSame('critical', $output['preflight']['status']);
+        $this->assertSame('critical', $output['frontend_uat_release_gate']['status']);
+        $this->assertSame('blocked', $output['frontend_uat_release_gate']['readiness_status']);
     }
 }

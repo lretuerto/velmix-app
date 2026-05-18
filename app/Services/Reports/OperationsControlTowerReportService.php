@@ -15,8 +15,7 @@ class OperationsControlTowerReportService
         private readonly FinanceOperationsReportService $financeOperations,
         private readonly OperationsEscalationReportService $operationsEscalations,
         private readonly OperationsEscalationMetricsService $operationsEscalationMetrics,
-    ) {
-    }
+    ) {}
 
     public function summary(
         int $tenantId,

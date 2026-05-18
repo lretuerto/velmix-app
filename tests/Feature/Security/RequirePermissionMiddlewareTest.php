@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\Security;
 
-use App\Models\ApiToken;
 use App\Http\Middleware\RequirePermission;
+use App\Models\ApiToken;
 use App\Models\User;
 use App\Services\Security\RbacService;
 use Illuminate\Foundation\Testing\RefreshDatabase;

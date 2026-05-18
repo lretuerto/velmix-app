@@ -23,6 +23,21 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         RateLimiter::for('security-api-tokens', fn (Request $request) => $this->jsonLimit('security-api-tokens', $request, 20));
+        RateLimiter::for('frontend-session-login', function (Request $request) {
+            $emailFingerprint = sha1(strtolower(trim((string) $request->input('email', 'missing'))));
+
+            return Limit::perMinute(5)
+                ->by(implode(':', [
+                    'frontend-session-login',
+                    $emailFingerprint,
+                    (string) $request->ip(),
+                ]))
+                ->response(function () {
+                    return response()->json([
+                        'message' => 'Too many login attempts. Please wait before trying again.',
+                    ], 429);
+                });
+        });
         RateLimiter::for('billing-provider-management', fn (Request $request) => $this->jsonLimit('billing-provider-management', $request, 15));
         RateLimiter::for('billing-outbox-write', fn (Request $request) => $this->jsonLimit('billing-outbox-write', $request, 10));
         RateLimiter::for('team-invitations-accept', function (Request $request) {

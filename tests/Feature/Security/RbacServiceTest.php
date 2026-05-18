@@ -14,14 +14,14 @@ class RbacServiceTest extends TestCase
 
     public function test_can_returns_true_when_permission_exists(): void
     {
-        $service = new RbacService();
+        $service = new RbacService;
 
         $this->assertTrue($service->can(['sales.read', 'sales.write'], 'sales.write'));
     }
 
     public function test_can_returns_false_when_permission_missing(): void
     {
-        $service = new RbacService();
+        $service = new RbacService;
 
         $this->assertFalse($service->can(['sales.read'], 'sales.approve'));
     }
@@ -41,7 +41,7 @@ class RbacServiceTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $service = new RbacService();
+        $service = new RbacService;
 
         $this->assertTrue($service->userHasPermission(10, $user->id, 'rbac.permission.manage'));
     }
@@ -61,7 +61,7 @@ class RbacServiceTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $service = new RbacService();
+        $service = new RbacService;
 
         $this->assertFalse($service->userHasPermission(20, $user->id, 'rbac.permission.manage'));
     }

@@ -82,6 +82,13 @@ class RbacCatalogSeederTest extends TestCase
         $this->assertDatabaseHas('permissions', ['code' => 'purchase.return.read']);
         $this->assertDatabaseHas('permissions', ['code' => 'stock.move.create']);
         $this->assertDatabaseHas('permissions', ['code' => 'stock.move.read']);
+        $this->assertDatabaseHas('permissions', ['code' => 'pricing.price-list.read']);
+        $this->assertDatabaseHas('permissions', ['code' => 'pricing.price-list.manage']);
+        $this->assertDatabaseHas('permissions', ['code' => 'pricing.promotion.read']);
+        $this->assertDatabaseHas('permissions', ['code' => 'pricing.promotion.manage']);
+        $this->assertDatabaseHas('permissions', ['code' => 'pricing.quote.create']);
+        $this->assertDatabaseHas('permissions', ['code' => 'pricing.quote.read']);
+        $this->assertDatabaseHas('permissions', ['code' => 'pos.sale.price.override']);
         $this->assertDatabaseHas('permissions', ['code' => 'rbac.role.assign']);
 
         $adminId = DB::table('roles')->where('code', 'ADMIN')->value('id');
@@ -104,6 +111,14 @@ class RbacCatalogSeederTest extends TestCase
         $platformObservabilityPermId = DB::table('permissions')->where('code', 'reports.platform-observability.read')->value('id');
         $providerReadPermId = DB::table('permissions')->where('code', 'billing.provider.read')->value('id');
         $providerUpdatePermId = DB::table('permissions')->where('code', 'billing.provider.update')->value('id');
+        $priceListReadPermId = DB::table('permissions')->where('code', 'pricing.price-list.read')->value('id');
+        $priceListManagePermId = DB::table('permissions')->where('code', 'pricing.price-list.manage')->value('id');
+        $promotionReadPermId = DB::table('permissions')->where('code', 'pricing.promotion.read')->value('id');
+        $promotionManagePermId = DB::table('permissions')->where('code', 'pricing.promotion.manage')->value('id');
+        $quoteCreatePermId = DB::table('permissions')->where('code', 'pricing.quote.create')->value('id');
+        $quoteReadPermId = DB::table('permissions')->where('code', 'pricing.quote.read')->value('id');
+        $priceOverridePermId = DB::table('permissions')->where('code', 'pos.sale.price.override')->value('id');
+        $inventoryProductReadPermId = DB::table('permissions')->where('code', 'inventory.product.read')->value('id');
         $teamReadPermId = DB::table('permissions')->where('code', 'team.user.read')->value('id');
         $teamManagePermId = DB::table('permissions')->where('code', 'team.user.manage')->value('id');
         $teamInvitationReadPermId = DB::table('permissions')->where('code', 'team.invitation.read')->value('id');
@@ -138,6 +153,41 @@ class RbacCatalogSeederTest extends TestCase
 
         $this->assertDatabaseHas('role_permission', [
             'role_id' => $adminId,
+            'permission_id' => $priceListReadPermId,
+        ]);
+
+        $this->assertDatabaseHas('role_permission', [
+            'role_id' => $adminId,
+            'permission_id' => $priceListManagePermId,
+        ]);
+
+        $this->assertDatabaseHas('role_permission', [
+            'role_id' => $adminId,
+            'permission_id' => $promotionReadPermId,
+        ]);
+
+        $this->assertDatabaseHas('role_permission', [
+            'role_id' => $adminId,
+            'permission_id' => $promotionManagePermId,
+        ]);
+
+        $this->assertDatabaseHas('role_permission', [
+            'role_id' => $adminId,
+            'permission_id' => $quoteCreatePermId,
+        ]);
+
+        $this->assertDatabaseHas('role_permission', [
+            'role_id' => $adminId,
+            'permission_id' => $quoteReadPermId,
+        ]);
+
+        $this->assertDatabaseHas('role_permission', [
+            'role_id' => $adminId,
+            'permission_id' => $priceOverridePermId,
+        ]);
+
+        $this->assertDatabaseHas('role_permission', [
+            'role_id' => $adminId,
             'permission_id' => $teamReadPermId,
         ]);
 
@@ -159,6 +209,21 @@ class RbacCatalogSeederTest extends TestCase
         $this->assertDatabaseHas('role_permission', [
             'role_id' => $cashierId,
             'permission_id' => $contextPermId,
+        ]);
+
+        $this->assertDatabaseHas('role_permission', [
+            'role_id' => $cashierId,
+            'permission_id' => $quoteCreatePermId,
+        ]);
+
+        $this->assertDatabaseHas('role_permission', [
+            'role_id' => $cashierId,
+            'permission_id' => $quoteReadPermId,
+        ]);
+
+        $this->assertDatabaseHas('role_permission', [
+            'role_id' => $cashierId,
+            'permission_id' => $inventoryProductReadPermId,
         ]);
 
         $this->assertDatabaseHas('role_permission', [

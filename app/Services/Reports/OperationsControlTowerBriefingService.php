@@ -3,7 +3,6 @@
 namespace App\Services\Reports;
 
 use App\Models\OperationsControlTowerSnapshot;
-use Carbon\CarbonImmutable;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class OperationsControlTowerBriefingService
@@ -13,8 +12,7 @@ class OperationsControlTowerBriefingService
     public function __construct(
         private readonly OperationsControlTowerReportService $controlTowerReport,
         private readonly OperationsControlTowerSnapshotService $snapshotService,
-    ) {
-    }
+    ) {}
 
     public function summary(
         int $tenantId,

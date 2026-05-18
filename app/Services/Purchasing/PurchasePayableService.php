@@ -387,6 +387,7 @@ class PurchasePayableService
             if ($bucket === 'paid') {
                 $buckets['paid']['count']++;
                 $buckets['paid']['amount'] = round($buckets['paid']['amount'] + (float) $payable->paid_amount, 2);
+
                 continue;
             }
 

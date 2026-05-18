@@ -17,7 +17,7 @@ class ReceivableRiskReportService
             ->join('customers', 'customers.id', '=', 'sale_receivables.customer_id')
             ->where('sale_receivables.tenant_id', $tenantId)
             ->where('sale_receivables.outstanding_amount', '>', 0)
-            ->selectRaw("
+            ->selectRaw('
                 customers.id as customer_id,
                 customers.name as customer_name,
                 customers.credit_limit,
@@ -26,7 +26,7 @@ class ReceivableRiskReportService
                 COALESCE(SUM(CASE WHEN sale_receivables.due_at IS NOT NULL AND sale_receivables.due_at < ? THEN sale_receivables.outstanding_amount ELSE 0 END), 0) as overdue_total,
                 COALESCE(SUM(CASE WHEN sale_receivables.due_at IS NULL OR sale_receivables.due_at >= ? THEN sale_receivables.outstanding_amount ELSE 0 END), 0) as current_total,
                 SUM(CASE WHEN sale_receivables.due_at IS NOT NULL AND sale_receivables.due_at < ? THEN 1 ELSE 0 END) as overdue_count
-            ", [now(), now(), now()])
+            ', [now(), now(), now()])
             ->groupBy('customers.id', 'customers.name', 'customers.credit_limit')
             ->orderByDesc('overdue_total')
             ->orderByDesc('outstanding_total')

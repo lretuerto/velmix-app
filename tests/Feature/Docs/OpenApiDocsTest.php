@@ -127,6 +127,12 @@ class OpenApiDocsTest extends TestCase
         $response->assertOk();
         $this->assertStringContainsString('/health/live', $response->getContent());
         $this->assertStringContainsString('/health/ready', $response->getContent());
+        $this->assertStringContainsString('/auth/session/login', $response->getContent());
+        $this->assertStringContainsString('/auth/session/logout', $response->getContent());
+        $this->assertStringContainsString('/pricing/quotes', $response->getContent());
+        $this->assertStringContainsString('/pricing/quotes/{quote}', $response->getContent());
+        $this->assertStringContainsString('/pricing/quotes/{quote}/checkout', $response->getContent());
+        $this->assertStringContainsString('PricingQuoteCheckoutRequest', $response->getContent());
         $this->assertStringContainsString('/pos/sales', $response->getContent());
         $this->assertStringContainsString('/admin/team/roles', $response->getContent());
         $this->assertStringContainsString('/admin/team/users', $response->getContent());
@@ -199,6 +205,48 @@ class OpenApiDocsTest extends TestCase
         $this->assertStringContainsString('X-Tenant-Id', $response->getContent());
     }
 
+    public function test_openapi_pricing_quote_contract_declares_required_paths_headers_and_schemas(): void
+    {
+        $yaml = (string) file_get_contents(base_path('docs/openapi/velmix.openapi.yaml'));
+
+        $quoteCreate = $this->openApiOperationSection($yaml, '/pricing/quotes', 'post');
+        $this->assertStringContainsString('tags: [Pricing]', $quoteCreate);
+        $this->assertStringContainsString('#/components/parameters/IdempotencyKey', $quoteCreate);
+        $this->assertStringContainsString('#/components/schemas/PricingQuoteCreateRequest', $quoteCreate);
+        $this->assertStringContainsString('#/components/schemas/PricingQuoteEnvelope', $quoteCreate);
+        $this->assertStringContainsString("'409':", $quoteCreate);
+        $this->assertStringContainsString('#/components/responses/Conflict', $quoteCreate);
+
+        $quoteDetail = $this->openApiOperationSection($yaml, '/pricing/quotes/{quote}', 'get');
+        $this->assertStringContainsString('#/components/parameters/PricingQuoteId', $quoteDetail);
+        $this->assertStringContainsString('#/components/schemas/PricingQuoteEnvelope', $quoteDetail);
+
+        $checkout = $this->openApiOperationSection($yaml, '/pricing/quotes/{quote}/checkout', 'post');
+        $this->assertStringContainsString('tags: [Pricing, POS]', $checkout);
+        $this->assertStringContainsString('#/components/parameters/PricingQuoteId', $checkout);
+        $this->assertStringContainsString('#/components/parameters/IdempotencyKey', $checkout);
+        $this->assertStringContainsString('#/components/schemas/PricingQuoteCheckoutRequest', $checkout);
+        $this->assertStringContainsString('#/components/schemas/PricingQuoteCheckoutEnvelope', $checkout);
+        $this->assertStringContainsString('lockForUpdate', $checkout);
+
+        $legacySale = $this->openApiOperationSection($yaml, '/pos/sales', 'post');
+        $this->assertStringContainsString('summary: Ejecuta venta POS legacy/directa', $legacySale);
+        $this->assertStringContainsString('#/components/schemas/SaleCreateRequest', $legacySale);
+
+        foreach ([
+            'PricingQuoteCreateRequest:',
+            'PricingQuoteCheckoutRequest:',
+            'PricingQuoteEnvelope:',
+            'PricingQuoteCheckoutEnvelope:',
+            'PricingQuoteCheckoutResult:',
+            'PricingQuote:',
+            'PricingQuoteItem:',
+            'PricingQuoteAdjustment:',
+        ] as $schemaName) {
+            $this->assertStringContainsString($schemaName, $yaml);
+        }
+    }
+
     public function test_serves_api_guide_and_release_checklist(): void
     {
         $this->seed([
@@ -217,9 +265,14 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('security.api-token.manage', false)
             ->assertSee('no acepta bearer tokens', false)
             ->assertSee('Idempotency-Key', false)
+            ->assertSee('POST /pricing/quotes', false)
+            ->assertSee('POST /pricing/quotes/{quote}/checkout', false)
+            ->assertSee('quote-first', false)
             ->assertSee('POST /pos/sales', false)
             ->assertSee('GET /health/live', false)
             ->assertSee('GET /health/ready', false)
+            ->assertSee('POST /auth/session/login', false)
+            ->assertSee('POST /auth/session/logout', false)
             ->assertSee('GET /admin/team/roles', false)
             ->assertSee('POST /admin/team/users', false)
             ->assertSee('GET /admin/team/invitations', false)
@@ -426,6 +479,67 @@ class OpenApiDocsTest extends TestCase
             ->assertSee('VELMIX_OPERATIONAL_CERTIFICATION_STORAGE_PATH', false)
             ->assertSee('ops/scripts/record-operational-certification.sh', false)
             ->assertSee('ops/scripts/check-operational-certification.sh', false);
+    }
+
+    private function openApiOperationSection(string $yaml, string $path, string $method): string
+    {
+        $pathSection = $this->openApiPathSection($yaml, $path);
+        $lines = preg_split('/\R/', $pathSection) ?: [];
+        $methodLine = sprintf('    %s:', $method);
+        $start = null;
+
+        foreach ($lines as $index => $line) {
+            if ($line === $methodLine) {
+                $start = $index;
+                break;
+            }
+        }
+
+        $this->assertNotNull($start, sprintf('OpenAPI operation %s %s was not found.', strtoupper($method), $path));
+
+        $operation = [];
+
+        for ($index = $start; $index < count($lines); $index++) {
+            $line = $lines[$index];
+
+            if ($index > $start && preg_match('/^    (get|post|put|patch|delete):$/', $line) === 1) {
+                break;
+            }
+
+            $operation[] = $line;
+        }
+
+        return implode(PHP_EOL, $operation);
+    }
+
+    private function openApiPathSection(string $yaml, string $path): string
+    {
+        $lines = preg_split('/\R/', $yaml) ?: [];
+        $pathLine = sprintf('  %s:', $path);
+        $start = null;
+
+        foreach ($lines as $index => $line) {
+            if ($line === $pathLine) {
+                $start = $index;
+                break;
+            }
+        }
+
+        $this->assertNotNull($start, sprintf('OpenAPI path %s was not found.', $path));
+
+        $section = [];
+
+        for ($index = $start; $index < count($lines); $index++) {
+            $line = $lines[$index];
+
+            if ($index > $start && preg_match('/^  \/\S.*:$/', $line) === 1) {
+                break;
+            }
+
+            $section[] = $line;
+        }
+
+        return implode(PHP_EOL, $section);
     }
 
     private function seedTenantUser(int $tenantId): User

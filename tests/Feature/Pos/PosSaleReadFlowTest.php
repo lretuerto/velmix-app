@@ -273,16 +273,33 @@ class PosSaleReadFlowTest extends TestCase
         $lotId = DB::table('lots')->where('tenant_id', $tenantId)->value('id');
         $lotCode = DB::table('lots')->where('id', $lotId)->value('code');
         $productId = DB::table('lots')->where('id', $lotId)->value('product_id');
+        $cashSessionId = DB::table('cash_sessions')->insertGetId([
+            'tenant_id' => $tenantId,
+            'opened_by_user_id' => $user->id,
+            'closed_by_user_id' => null,
+            'opening_amount' => 100,
+            'expected_amount' => 100,
+            'counted_amount' => null,
+            'discrepancy_amount' => null,
+            'status' => 'open',
+            'open_guard' => 'tenant:'.$tenantId,
+            'opened_at' => now(),
+            'closed_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         DB::table('sales')->insert([
             'id' => DB::table('sales')->max('id') + 1,
             'tenant_id' => $tenantId,
             'user_id' => $user->id,
+            'cash_session_id' => $cashSessionId,
             'cancelled_by_user_id' => null,
             'reference' => $reference,
             'status' => 'completed',
             'cancel_reason' => null,
             'cancelled_at' => null,
+            'payment_method' => 'cash',
             'total_amount' => 17.50,
             'gross_cost' => 6.50,
             'gross_margin' => 11.00,
