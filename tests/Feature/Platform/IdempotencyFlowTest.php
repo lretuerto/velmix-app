@@ -5,6 +5,7 @@ namespace Tests\Feature\Platform;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class IdempotencyFlowTest extends TestCase
@@ -293,6 +294,13 @@ class IdempotencyFlowTest extends TestCase
         $cashier = $this->seedTenantUserWithRole(10, 'CAJERO');
         $lotId = (int) DB::table('lots')->where('tenant_id', 10)->where('code', 'L-PARA-001')->value('id');
 
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/cash/sessions/open', [
+                'opening_amount' => 100,
+            ])
+            ->assertOk();
+
         $saleResponse = $this->actingAs($cashier)
             ->withHeader('X-Tenant-Id', '10')
             ->postJson('/pos/sales', [
@@ -326,6 +334,188 @@ class IdempotencyFlowTest extends TestCase
             ->assertJsonPath('data.sale_id', $saleId);
 
         $this->assertSame(1, DB::table('stock_movements')->where('sale_id', $saleId)->where('type', 'sale_reversal')->count());
+    }
+
+    public function test_replays_same_customer_create_for_same_idempotency_key(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $cashier = $this->seedTenantUserWithRole(10, 'CAJERO');
+        $payload = [
+            'document_type' => 'dni',
+            'document_number' => '44556677',
+            'name' => 'Cliente Replay',
+            'credit_limit' => 250,
+            'credit_days' => 15,
+        ];
+
+        $first = $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->withHeader('Idempotency-Key', 'customer-create-001')
+            ->postJson('/sales/customers', $payload);
+
+        $first->assertOk()
+            ->assertHeader('X-Idempotency-Status', 'stored');
+
+        $customerId = (int) $first->json('data.id');
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->withHeader('Idempotency-Key', 'customer-create-001')
+            ->postJson('/sales/customers', $payload)
+            ->assertOk()
+            ->assertHeader('X-Idempotency-Status', 'replayed')
+            ->assertJsonPath('data.id', $customerId);
+
+        $this->assertSame(1, DB::table('customers')->where('tenant_id', 10)->where('document_number', '44556677')->count());
+    }
+
+    public function test_replays_same_customer_update_for_same_idempotency_key(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $cashier = $this->seedTenantUserWithRole(10, 'CAJERO');
+        $customerId = $this->seedCustomer(10, 'Cliente Update Replay');
+        $payload = [
+            'credit_limit' => 480,
+            'credit_days' => 30,
+            'block_on_overdue' => false,
+        ];
+
+        $first = $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->withHeader('Idempotency-Key', 'customer-update-001')
+            ->patchJson("/sales/customers/{$customerId}", $payload);
+
+        $first->assertOk()
+            ->assertHeader('X-Idempotency-Status', 'stored')
+            ->assertJsonPath('data.credit_limit', 480);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->withHeader('Idempotency-Key', 'customer-update-001')
+            ->patchJson("/sales/customers/{$customerId}", $payload)
+            ->assertOk()
+            ->assertHeader('X-Idempotency-Status', 'replayed')
+            ->assertJsonPath('data.id', $customerId)
+            ->assertJsonPath('data.credit_days', 30);
+    }
+
+    public function test_replays_same_receivable_follow_up_for_same_idempotency_key(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $cashier = $this->seedTenantUserWithRole(10, 'CAJERO');
+        $customerId = $this->seedCustomer(10, 'Cliente Follow Up Replay');
+        $receivableId = $this->seedReceivable(10, $cashier->id, $customerId, 'SALE-FUP-IDEMP');
+        $payload = [
+            'type' => 'promise',
+            'note' => 'Promesa idempotente',
+            'promised_amount' => 12,
+            'promised_at' => now()->addDays(3)->toDateString(),
+        ];
+
+        $first = $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->withHeader('Idempotency-Key', 'follow-up-001')
+            ->postJson("/sales/receivables/{$receivableId}/follow-ups", $payload);
+
+        $first->assertOk()
+            ->assertHeader('X-Idempotency-Status', 'stored');
+
+        $followUpId = (int) $first->json('data.id');
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->withHeader('Idempotency-Key', 'follow-up-001')
+            ->postJson("/sales/receivables/{$receivableId}/follow-ups", $payload)
+            ->assertOk()
+            ->assertHeader('X-Idempotency-Status', 'replayed')
+            ->assertJsonPath('data.id', $followUpId);
+
+        $this->assertSame(1, DB::table('sale_receivable_follow_ups')->where('sale_receivable_id', $receivableId)->count());
+    }
+
+    public function test_idempotency_releases_server_error_responses_for_fresh_retry(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $cashier = $this->seedTenantUserWithRole(10, 'CAJERO');
+        $attempts = 0;
+
+        Route::post('/testing/idempotency-transient', function () use (&$attempts) {
+            $attempts++;
+
+            if ($attempts === 1) {
+                throw new \RuntimeException('Transient idempotency failure');
+            }
+
+            return response()->json(['data' => ['attempts' => $attempts]]);
+        })->middleware(['auth.hybrid', 'tenant.context', 'tenant.access', 'idempotent']);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->withHeader('Idempotency-Key', 'transient-001')
+            ->postJson('/testing/idempotency-transient')
+            ->assertStatus(500)
+            ->assertHeader('X-Idempotency-Status', 'released');
+
+        $failedRecord = DB::table('idempotency_keys')
+            ->where('idempotency_key', 'transient-001')
+            ->first();
+
+        $this->assertSame('failed', $failedRecord->status);
+        $this->assertNull($failedRecord->response_status);
+        $this->assertContains($failedRecord->error_class, [\RuntimeException::class, 'server_error_response']);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->withHeader('Idempotency-Key', 'transient-001')
+            ->postJson('/testing/idempotency-transient')
+            ->assertOk()
+            ->assertHeader('X-Idempotency-Status', 'stored')
+            ->assertJsonPath('data.attempts', 2);
+
+        $this->actingAs($cashier)
+            ->withHeader('X-Tenant-Id', '10')
+            ->withHeader('Idempotency-Key', 'transient-001')
+            ->postJson('/testing/idempotency-transient')
+            ->assertOk()
+            ->assertHeader('X-Idempotency-Status', 'replayed')
+            ->assertJsonPath('data.attempts', 2);
+    }
+
+    public function test_strict_idempotency_mode_requires_header_for_protected_route(): void
+    {
+        config(['velmix.idempotency.strict' => true]);
+
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $admin = $this->seedTenantAdminUser(10);
+
+        $this->actingAs($admin)
+            ->withHeader('X-Tenant-Id', '10')
+            ->postJson('/billing/vouchers', [
+                'sale_id' => 999,
+                'type' => 'boleta',
+            ])
+            ->assertStatus(428)
+            ->assertJsonPath('message', 'Idempotency-Key header is required for this operation.');
     }
 
     private function seedCompletedSale(int $tenantId, string $reference): int
@@ -397,6 +587,49 @@ class IdempotencyFlowTest extends TestCase
             'tax_id' => $taxId,
             'name' => $name,
             'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function seedCustomer(int $tenantId, string $name): int
+    {
+        return (int) DB::table('customers')->insertGetId([
+            'tenant_id' => $tenantId,
+            'document_type' => 'dni',
+            'document_number' => (string) random_int(10000000, 99999999),
+            'name' => $name,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function seedReceivable(int $tenantId, int $userId, int $customerId, string $reference): int
+    {
+        $saleId = DB::table('sales')->insertGetId([
+            'tenant_id' => $tenantId,
+            'user_id' => $userId,
+            'customer_id' => $customerId,
+            'reference' => $reference,
+            'status' => 'completed',
+            'payment_method' => 'credit',
+            'total_amount' => 24.00,
+            'gross_cost' => 10.00,
+            'gross_margin' => 14.00,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return (int) DB::table('sale_receivables')->insertGetId([
+            'tenant_id' => $tenantId,
+            'customer_id' => $customerId,
+            'sale_id' => $saleId,
+            'total_amount' => 24.00,
+            'paid_amount' => 0.00,
+            'outstanding_amount' => 24.00,
+            'status' => 'pending',
+            'due_at' => now()->addDays(7),
             'created_at' => now(),
             'updated_at' => now(),
         ]);

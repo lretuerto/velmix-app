@@ -14,6 +14,9 @@ class IdempotencyKey extends Model
         'request_hash',
         'status',
         'locked_until',
+        'completed_at',
+        'error_class',
+        'request_fingerprint_version',
         'response_status',
         'response_headers',
         'response_body',
@@ -23,6 +26,7 @@ class IdempotencyKey extends Model
     {
         return [
             'locked_until' => 'datetime',
+            'completed_at' => 'datetime',
             'response_headers' => 'array',
         ];
     }

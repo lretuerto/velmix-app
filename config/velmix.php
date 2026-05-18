@@ -40,6 +40,14 @@ $operationalCertificationRequiredEnvironments = array_values(array_filter(array_
     static fn ($environment) => trim((string) $environment),
     explode(',', (string) env('VELMIX_OPERATIONAL_CERTIFICATION_REQUIRED_ENVS', 'production'))
 )));
+$cashLedgerAuditRequiredEnvironments = array_values(array_filter(array_map(
+    static fn ($environment) => trim((string) $environment),
+    explode(',', (string) env('VELMIX_CASH_LEDGER_AUDIT_REQUIRED_ENVS', 'production'))
+)));
+$frontendUatReleaseGateRequiredEnvironments = array_values(array_filter(array_map(
+    static fn ($environment) => trim((string) $environment),
+    explode(',', (string) env('VELMIX_FRONTEND_UAT_RELEASE_GATE_REQUIRED_ENVS', ''))
+)));
 
 return [
     'alerts' => [
@@ -82,6 +90,22 @@ return [
         'outbox_attempts_days' => env('VELMIX_RETENTION_OUTBOX_ATTEMPTS_DAYS', 180),
         'team_invitations_days' => env('VELMIX_RETENTION_TEAM_INVITATIONS_DAYS', 90),
         'control_tower_snapshots_days' => env('VELMIX_RETENTION_CONTROL_TOWER_SNAPSHOTS_DAYS', 90),
+    ],
+    'idempotency' => [
+        'strict' => env('VELMIX_IDEMPOTENCY_STRICT', false),
+        'lock_minutes' => env('VELMIX_IDEMPOTENCY_LOCK_MINUTES', 5),
+    ],
+    'cash_ledger_audit' => [
+        'enabled' => env('VELMIX_CASH_LEDGER_AUDIT_ENABLED', false),
+        'required_environments' => $cashLedgerAuditRequiredEnvironments,
+        'tenant_id' => env('VELMIX_CASH_LEDGER_AUDIT_TENANT_ID'),
+        'session_id' => env('VELMIX_CASH_LEDGER_AUDIT_SESSION_ID'),
+        'issue_limit' => env('VELMIX_CASH_LEDGER_AUDIT_ISSUE_LIMIT', 200),
+    ],
+    'frontend_uat_release_gate' => [
+        'enabled' => env('VELMIX_FRONTEND_UAT_RELEASE_GATE_ENABLED', false),
+        'required_environments' => $frontendUatReleaseGateRequiredEnvironments,
+        'freshness_hours' => env('VELMIX_FRONTEND_UAT_RELEASE_GATE_FRESHNESS_HOURS', 24),
     ],
     'backup' => [
         'enabled' => env('VELMIX_BACKUP_ENABLED', false),
