@@ -2,9 +2,6 @@ name: Tests
 
 on:
   push:
-    branches:
-      - master
-      - '*.x'
   pull_request:
   schedule:
     - cron: '0 0 * * *'
@@ -13,7 +10,39 @@ permissions:
   contents: read
 
 jobs:
-  tests:
+  quality-gates:
+    runs-on: ubuntu-latest
+
+    name: Quality Gates PHP 8.3
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite
+          tools: composer:v2, phpstan
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Validate Composer manifest
+        run: composer validate --no-check-publish
+
+      - name: Run Laravel Pint
+        run: composer run velmix:lint
+
+      - name: Run PHPStan on platform and middleware slices
+        run: phpstan analyse --configuration=phpstan.neon.dist --no-progress --memory-limit=1G
+
+      - name: Run Composer audit
+        run: composer run velmix:audit
+
+  sqlite-tests:
     runs-on: ubuntu-latest
 
     strategy:
@@ -21,7 +50,7 @@ jobs:
       matrix:
         php: [8.2, 8.3, 8.4]
 
-    name: PHP ${{ matrix.php }}
+    name: SQLite PHP ${{ matrix.php }}
 
     steps:
       - name: Checkout code
@@ -43,5 +72,78 @@ jobs:
       - name: Generate app key
         run: php artisan key:generate
 
-      - name: Execute tests
-        run: php artisan test
+      - name: Validate Composer manifest
+        run: composer validate --no-check-publish
+
+      - name: Run Velmix QA
+        run: composer run velmix:qa
+
+      - name: Run readiness checks
+        run: composer run velmix:readiness
+
+      - name: Run outbox worker smoke
+        run: composer run velmix:outbox
+
+      - name: Run reconciliation smoke
+        run: composer run velmix:reconcile
+
+  mysql-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: velmix
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: velmix
+      DB_USERNAME: root
+      DB_PASSWORD: root
+
+    name: MySQL PHP 8.3
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_mysql, sqlite, pdo_sqlite
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Copy environment file
+        run: cp .env.example .env
+
+      - name: Generate app key
+        run: php artisan key:generate
+
+      - name: Wait for MySQL
+        run: |
+          for i in {1..30}; do
+            if php -r 'try { new PDO("mysql:host=".getenv("DB_HOST").";port=".getenv("DB_PORT").";dbname=".getenv("DB_DATABASE"), getenv("DB_USERNAME"), getenv("DB_PASSWORD")); exit(0); } catch (Throwable $e) { fwrite(STDERR, $e->getMessage().PHP_EOL); exit(1); }'; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "MySQL did not become ready in time." >&2
+          exit 1
+
+      - name: Run Velmix MySQL CI
+        run: composer run velmix:ci:mysql

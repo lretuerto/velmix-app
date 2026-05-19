@@ -1,0 +1,7 @@
+[Unit]
+Description=VELMiX backend process group
+Wants=velmix-scheduler.service velmix-queue-worker.service
+After=network.target
+
+[Install]
+WantedBy=multi-user.target

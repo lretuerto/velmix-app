@@ -2,17 +2,78 @@
 
 namespace Tests\Feature\Security;
 
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class RbacRoleIsolationTest extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_cajero_no_puede_aprobar_operacion_critica(): void
     {
-        $this->markTestIncomplete('Implementar autorizaciÃƒÆ’Ã‚Â³n por rol.');
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $user = User::factory()->create();
+        $cashierRoleId = DB::table('roles')->where('code', 'CAJERO')->value('id');
+
+        DB::table('tenant_user')->insert([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('tenant_user_role')->insert([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'role_id' => $cashierRoleId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->get('/pos/approve')
+            ->assertStatus(403);
     }
 
     public function test_admin_puede_gestionar_permisos_no_criticos(): void
     {
-        $this->markTestIncomplete('Implementar regla de autorizaciÃƒÆ’Ã‚Â³n ADMIN.');
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $user = User::factory()->create();
+        $adminRoleId = DB::table('roles')->where('code', 'ADMIN')->value('id');
+
+        DB::table('tenant_user')->insert([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('tenant_user_role')->insert([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'role_id' => $adminRoleId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->get('/rbac/permissions')
+            ->assertOk()
+            ->assertJson([
+                'ok' => true,
+                'flow' => 'rbac-permissions',
+            ]);
     }
 }

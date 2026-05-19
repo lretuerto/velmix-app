@@ -1,0 +1,581 @@
+<?php
+
+namespace Tests\Feature\Docs;
+
+use App\Models\ApiToken;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Tests\TestCase;
+
+class OpenApiDocsTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_docs_endpoints_require_authentication(): void
+    {
+        $this->getJson('/docs')->assertStatus(401);
+        $this->get('/docs/openapi.yaml')->assertStatus(401);
+        $this->get('/docs/openapi.yaml', ['Accept' => 'application/json'])->assertStatus(401);
+        $this->get('/docs/api-guide', ['Accept' => 'application/json'])->assertStatus(401);
+        $this->get('/docs/release-readiness', ['Accept' => 'application/json'])->assertStatus(401);
+        $this->get('/docs/operations-runbook', ['Accept' => 'application/json'])->assertStatus(401);
+        $this->get('/docs/deployment-rollback', ['Accept' => 'application/json'])->assertStatus(401);
+        $this->get('/docs/backup-restore', ['Accept' => 'application/json'])->assertStatus(401);
+        $this->get('/docs/staging-certification', ['Accept' => 'application/json'])->assertStatus(401);
+        $this->get('/docs/release-promotion', ['Accept' => 'application/json'])->assertStatus(401);
+        $this->get('/docs/release-cutover', ['Accept' => 'application/json'])->assertStatus(401);
+        $this->get('/docs/operational-certification', ['Accept' => 'application/json'])->assertStatus(401);
+        $this->get('/docs/evidence-governed-deploy', ['Accept' => 'application/json'])->assertStatus(401);
+    }
+
+    public function test_docs_endpoints_require_tenant_context_for_authenticated_session(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $user = $this->seedTenantAdminUser(10);
+
+        $this->actingAs($user)
+            ->getJson('/docs')
+            ->assertStatus(400)
+            ->assertJsonPath('message', 'Tenant context is required');
+    }
+
+    public function test_docs_endpoints_do_not_accept_bearer_tokens(): void
+    {
+        $this->seed(\Database\Seeders\TenantSeeder::class);
+
+        $user = User::factory()->create();
+        $plainTextToken = Str::random(64);
+
+        ApiToken::query()->create([
+            'tenant_id' => 10,
+            'user_id' => $user->id,
+            'name' => 'Docs probe',
+            'token_prefix' => substr($plainTextToken, 0, 12),
+            'token_hash' => hash('sha256', $plainTextToken),
+            'abilities' => ['*'],
+        ]);
+
+        $this->withToken($plainTextToken)
+            ->getJson('/docs')
+            ->assertStatus(401);
+
+        $this->withToken($plainTextToken)
+            ->get('/docs/openapi.yaml', ['Accept' => 'application/json'])
+            ->assertStatus(401);
+    }
+
+    public function test_tenant_member_without_docs_permission_cannot_read_docs(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $user = $this->seedTenantUser(10);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/docs')
+            ->assertStatus(403);
+    }
+
+    public function test_exposes_docs_index_with_expected_documents(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $user = $this->seedTenantAdminUser(10);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->getJson('/docs')
+            ->assertOk()
+            ->assertJsonPath('data.project', 'VELMiX ERP')
+            ->assertJsonFragment(['path' => '/docs/openapi.yaml'])
+            ->assertJsonFragment(['path' => '/docs/api-guide'])
+            ->assertJsonFragment(['path' => '/docs/release-readiness'])
+            ->assertJsonFragment(['path' => '/docs/operations-runbook'])
+            ->assertJsonFragment(['path' => '/docs/deployment-rollback'])
+            ->assertJsonFragment(['path' => '/docs/backup-restore'])
+            ->assertJsonFragment(['path' => '/docs/staging-certification'])
+            ->assertJsonFragment(['path' => '/docs/release-promotion'])
+            ->assertJsonFragment(['path' => '/docs/release-cutover'])
+            ->assertJsonFragment(['path' => '/docs/operational-certification'])
+            ->assertJsonFragment(['path' => '/docs/evidence-governed-deploy']);
+    }
+
+    public function test_serves_openapi_yaml_for_priority_endpoints(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $user = $this->seedTenantAdminUser(10);
+        $response = $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->get('/docs/openapi.yaml');
+
+        $response->assertOk();
+        $this->assertStringContainsString('/health/live', $response->getContent());
+        $this->assertStringContainsString('/health/ready', $response->getContent());
+        $this->assertStringContainsString('/auth/session/login', $response->getContent());
+        $this->assertStringContainsString('/auth/session/logout', $response->getContent());
+        $this->assertStringContainsString('/pricing/quotes', $response->getContent());
+        $this->assertStringContainsString('/pricing/quotes/{quote}', $response->getContent());
+        $this->assertStringContainsString('/pricing/quotes/{quote}/checkout', $response->getContent());
+        $this->assertStringContainsString('PricingQuoteCheckoutRequest', $response->getContent());
+        $this->assertStringContainsString('/pos/sales', $response->getContent());
+        $this->assertStringContainsString('/admin/team/roles', $response->getContent());
+        $this->assertStringContainsString('/admin/team/users', $response->getContent());
+        $this->assertStringContainsString('/admin/team/invitations', $response->getContent());
+        $this->assertStringContainsString('/admin/team/invitations/{invitation}/revoke', $response->getContent());
+        $this->assertStringContainsString('/team/invitations/accept', $response->getContent());
+        $this->assertStringContainsString('/billing/vouchers', $response->getContent());
+        $this->assertStringContainsString('/billing/vouchers/{voucher}/payloads', $response->getContent());
+        $this->assertStringContainsString('/billing/vouchers/{voucher}/payloads/regenerate', $response->getContent());
+        $this->assertStringContainsString('/billing/vouchers/{voucher}/replay', $response->getContent());
+        $this->assertStringContainsString('/billing/vouchers/{voucher}/reconcile', $response->getContent());
+        $this->assertStringContainsString('/billing/provider-profile', $response->getContent());
+        $this->assertStringContainsString('/billing/provider-profile/check', $response->getContent());
+        $this->assertStringContainsString('/billing/provider-metrics', $response->getContent());
+        $this->assertStringContainsString('/billing/credit-notes/{creditNote}/payloads', $response->getContent());
+        $this->assertStringContainsString('/billing/credit-notes/{creditNote}/payloads/regenerate', $response->getContent());
+        $this->assertStringContainsString('/billing/credit-notes/{creditNote}/replay', $response->getContent());
+        $this->assertStringContainsString('/billing/credit-notes/{creditNote}/reconcile', $response->getContent());
+        $this->assertStringContainsString('/billing/reconcile-pending', $response->getContent());
+        $this->assertStringContainsString('/billing/outbox/{event}/lineage', $response->getContent());
+        $this->assertStringContainsString('/billing/outbox/provider-trace', $response->getContent());
+        $this->assertStringContainsString('/billing/outbox/summary', $response->getContent());
+        $this->assertStringContainsString('/reports/platform-observability', $response->getContent());
+        $this->assertStringContainsString('/reports/operations-control-tower', $response->getContent());
+        $this->assertStringContainsString('/reports/operations-control-tower/briefing', $response->getContent());
+        $this->assertStringContainsString('/reports/operations-control-tower/briefing/export', $response->getContent());
+        $this->assertStringContainsString('/reports/operations-control-tower/history', $response->getContent());
+        $this->assertStringContainsString('/reports/operations-control-tower/compare', $response->getContent());
+        $this->assertStringContainsString('/reports/operations-control-tower/snapshots', $response->getContent());
+        $this->assertStringContainsString('/reports/operations-control-tower/snapshots/{snapshot}', $response->getContent());
+        $this->assertStringContainsString('/reports/operations-control-tower/snapshots/{snapshot}/export', $response->getContent());
+        $this->assertStringContainsString('/reports/operations-control-tower/snapshots/{snapshot}/compare', $response->getContent());
+        $this->assertStringContainsString('/reports/operations-control-tower/snapshots/{snapshot}/compare/export', $response->getContent());
+        $this->assertStringContainsString('/reports/billing-operations', $response->getContent());
+        $this->assertStringContainsString('/reports/billing-escalations', $response->getContent());
+        $this->assertStringContainsString('/reports/billing-escalation-metrics', $response->getContent());
+        $this->assertStringContainsString('/reports/finance-operations', $response->getContent());
+        $this->assertStringContainsString('/reports/finance-escalations', $response->getContent());
+        $this->assertStringContainsString('/reports/finance-escalations/history', $response->getContent());
+        $this->assertStringContainsString('/reports/finance-escalation-metrics', $response->getContent());
+        $this->assertStringContainsString('/reports/finance-escalations/{code}', $response->getContent());
+        $this->assertStringContainsString('/reports/finance-escalations/{code}/acknowledge', $response->getContent());
+        $this->assertStringContainsString('/reports/finance-escalations/{code}/resolve', $response->getContent());
+        $this->assertStringContainsString('/reports/operations-escalations', $response->getContent());
+        $this->assertStringContainsString('/reports/operations-escalations/history', $response->getContent());
+        $this->assertStringContainsString('/reports/operations-escalation-metrics', $response->getContent());
+        $this->assertStringContainsString('/reports/operations-escalations/{domain}/{code}', $response->getContent());
+        $this->assertStringContainsString('/reports/operations-escalations/{domain}/{code}/acknowledge', $response->getContent());
+        $this->assertStringContainsString('/reports/operations-escalations/{domain}/{code}/resolve', $response->getContent());
+        $this->assertStringContainsString('/reports/finance-operations/history', $response->getContent());
+        $this->assertStringContainsString('/reports/finance-operations/metrics', $response->getContent());
+        $this->assertStringContainsString('/reports/finance-operations/{kind}/{entity}', $response->getContent());
+        $this->assertStringContainsString('/reports/finance-operations/{kind}/{entity}/history', $response->getContent());
+        $this->assertStringContainsString('/reports/finance-operations/{kind}/{entity}/acknowledge', $response->getContent());
+        $this->assertStringContainsString('/reports/finance-operations/{kind}/{entity}/resolve', $response->getContent());
+        $this->assertStringContainsString('/reports/billing-escalations/history', $response->getContent());
+        $this->assertStringContainsString('/reports/billing-escalations/{code}', $response->getContent());
+        $this->assertStringContainsString('/reports/billing-escalations/{code}/acknowledge', $response->getContent());
+        $this->assertStringContainsString('/reports/billing-escalations/{code}/resolve', $response->getContent());
+        $this->assertStringContainsString('/audit/timeline', $response->getContent());
+        $this->assertStringContainsString('/auth/tokens', $response->getContent());
+        $this->assertStringContainsString('/docs/operations-runbook', $response->getContent());
+        $this->assertStringContainsString('/docs/deployment-rollback', $response->getContent());
+        $this->assertStringContainsString('/docs/release-promotion', $response->getContent());
+        $this->assertStringContainsString('/docs/release-cutover', $response->getContent());
+        $this->assertStringContainsString('/docs/operational-certification', $response->getContent());
+        $this->assertStringContainsString('/docs/evidence-governed-deploy', $response->getContent());
+        $this->assertStringContainsString('security.api-token.manage', $response->getContent());
+        $this->assertStringContainsString('bearerAuth', $response->getContent());
+        $this->assertStringContainsString('X-Tenant-Id', $response->getContent());
+    }
+
+    public function test_openapi_pricing_quote_contract_declares_required_paths_headers_and_schemas(): void
+    {
+        $yaml = (string) file_get_contents(base_path('docs/openapi/velmix.openapi.yaml'));
+
+        $quoteCreate = $this->openApiOperationSection($yaml, '/pricing/quotes', 'post');
+        $this->assertStringContainsString('tags: [Pricing]', $quoteCreate);
+        $this->assertStringContainsString('#/components/parameters/IdempotencyKey', $quoteCreate);
+        $this->assertStringContainsString('#/components/schemas/PricingQuoteCreateRequest', $quoteCreate);
+        $this->assertStringContainsString('#/components/schemas/PricingQuoteEnvelope', $quoteCreate);
+        $this->assertStringContainsString("'409':", $quoteCreate);
+        $this->assertStringContainsString('#/components/responses/Conflict', $quoteCreate);
+
+        $quoteDetail = $this->openApiOperationSection($yaml, '/pricing/quotes/{quote}', 'get');
+        $this->assertStringContainsString('#/components/parameters/PricingQuoteId', $quoteDetail);
+        $this->assertStringContainsString('#/components/schemas/PricingQuoteEnvelope', $quoteDetail);
+
+        $checkout = $this->openApiOperationSection($yaml, '/pricing/quotes/{quote}/checkout', 'post');
+        $this->assertStringContainsString('tags: [Pricing, POS]', $checkout);
+        $this->assertStringContainsString('#/components/parameters/PricingQuoteId', $checkout);
+        $this->assertStringContainsString('#/components/parameters/IdempotencyKey', $checkout);
+        $this->assertStringContainsString('#/components/schemas/PricingQuoteCheckoutRequest', $checkout);
+        $this->assertStringContainsString('#/components/schemas/PricingQuoteCheckoutEnvelope', $checkout);
+        $this->assertStringContainsString('lockForUpdate', $checkout);
+
+        $legacySale = $this->openApiOperationSection($yaml, '/pos/sales', 'post');
+        $this->assertStringContainsString('summary: Ejecuta venta POS legacy/directa', $legacySale);
+        $this->assertStringContainsString('#/components/schemas/SaleCreateRequest', $legacySale);
+
+        foreach ([
+            'PricingQuoteCreateRequest:',
+            'PricingQuoteCheckoutRequest:',
+            'PricingQuoteEnvelope:',
+            'PricingQuoteCheckoutEnvelope:',
+            'PricingQuoteCheckoutResult:',
+            'PricingQuote:',
+            'PricingQuoteItem:',
+            'PricingQuoteAdjustment:',
+        ] as $schemaName) {
+            $this->assertStringContainsString($schemaName, $yaml);
+        }
+    }
+
+    public function test_serves_api_guide_and_release_checklist(): void
+    {
+        $this->seed([
+            \Database\Seeders\TenantSeeder::class,
+            \Database\Seeders\RbacCatalogSeeder::class,
+        ]);
+
+        $user = $this->seedTenantAdminUser(10);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->get('/docs/api-guide')
+            ->assertOk()
+            ->assertSee('X-Tenant-Id', false)
+            ->assertSee('security.docs.read', false)
+            ->assertSee('security.api-token.manage', false)
+            ->assertSee('no acepta bearer tokens', false)
+            ->assertSee('Idempotency-Key', false)
+            ->assertSee('POST /pricing/quotes', false)
+            ->assertSee('POST /pricing/quotes/{quote}/checkout', false)
+            ->assertSee('quote-first', false)
+            ->assertSee('POST /pos/sales', false)
+            ->assertSee('GET /health/live', false)
+            ->assertSee('GET /health/ready', false)
+            ->assertSee('POST /auth/session/login', false)
+            ->assertSee('POST /auth/session/logout', false)
+            ->assertSee('GET /admin/team/roles', false)
+            ->assertSee('POST /admin/team/users', false)
+            ->assertSee('GET /admin/team/invitations', false)
+            ->assertSee('POST /admin/team/invitations', false)
+            ->assertSee('POST /admin/team/invitations/{invitation}/revoke', false)
+            ->assertSee('POST /team/invitations/accept', false)
+            ->assertSee('GET /billing/provider-profile', false)
+            ->assertSee('POST /billing/provider-profile/check', false)
+            ->assertSee('GET /billing/provider-metrics', false)
+            ->assertSee('GET /billing/vouchers/{voucher}/payloads', false)
+            ->assertSee('POST /billing/vouchers/{voucher}/payloads/regenerate', false)
+            ->assertSee('POST /billing/vouchers/{voucher}/replay', false)
+            ->assertSee('POST /billing/vouchers/{voucher}/reconcile', false)
+            ->assertSee('POST /billing/reconcile-pending', false)
+            ->assertSee('GET /billing/outbox/{event}/lineage', false)
+            ->assertSee('GET /billing/outbox/provider-trace', false)
+            ->assertSee('GET /reports/operations-control-tower', false)
+            ->assertSee('GET /reports/platform-observability', false)
+            ->assertSee('reports.platform-observability.read', false)
+            ->assertSee('GET /docs/evidence-governed-deploy', false)
+            ->assertSee('ops/scripts/deploy-release-over-ssh.sh', false)
+            ->assertSee('ops/scripts/check-github-environment-readiness.sh', false)
+            ->assertSee('ops/scripts/check-production-go-no-go.sh', false)
+            ->assertSee('ops/scripts/sync-github-environment-config.sh', false)
+            ->assertSee('ops/github-environments/staging.env.example', false)
+            ->assertSee('ops/github-environments/staging.variables.env.example', false)
+            ->assertSee('ops/github-environments/production.env.example', false)
+            ->assertSee('ops/github-environments/production.variables.env.example', false)
+            ->assertSee('deployment_strategy=remote_ssh', false)
+            ->assertSee('VELMIX_SSH_HOST', false)
+            ->assertSee('VELMIX_REMOTE_APP_ROOT', false)
+            ->assertSee('GET /reports/operations-control-tower/briefing', false)
+            ->assertSee('GET /reports/operations-control-tower/briefing/export', false)
+            ->assertSee('GET /reports/operations-control-tower/history', false)
+            ->assertSee('GET /reports/operations-control-tower/compare', false)
+            ->assertSee('POST /reports/operations-control-tower/snapshots', false)
+            ->assertSee('GET /reports/operations-control-tower/snapshots', false)
+            ->assertSee('GET /reports/operations-control-tower/snapshots/{snapshot}', false)
+            ->assertSee('GET /reports/operations-control-tower/snapshots/{snapshot}/export', false)
+            ->assertSee('GET /reports/operations-control-tower/snapshots/{snapshot}/compare', false)
+            ->assertSee('GET /reports/operations-control-tower/snapshots/{snapshot}/compare/export', false)
+            ->assertSee('GET /reports/billing-operations', false)
+            ->assertSee('GET /reports/billing-escalations', false)
+            ->assertSee('GET /reports/billing-escalation-metrics', false)
+            ->assertSee('GET /reports/finance-operations', false)
+            ->assertSee('GET /reports/finance-escalations', false)
+            ->assertSee('GET /reports/finance-escalations/history', false)
+            ->assertSee('GET /reports/finance-escalation-metrics', false)
+            ->assertSee('GET /reports/finance-escalations/{code}', false)
+            ->assertSee('POST /reports/finance-escalations/{code}/acknowledge', false)
+            ->assertSee('POST /reports/finance-escalations/{code}/resolve', false)
+            ->assertSee('GET /reports/operations-escalations', false)
+            ->assertSee('GET /reports/operations-escalations/history', false)
+            ->assertSee('GET /reports/operations-escalation-metrics', false)
+            ->assertSee('GET /reports/operations-escalations/{domain}/{code}', false)
+            ->assertSee('POST /reports/operations-escalations/{domain}/{code}/acknowledge', false)
+            ->assertSee('POST /reports/operations-escalations/{domain}/{code}/resolve', false)
+            ->assertSee('GET /reports/finance-operations/history', false)
+            ->assertSee('GET /reports/finance-operations/metrics', false)
+            ->assertSee('GET /reports/finance-operations/{kind}/{entity}', false)
+            ->assertSee('GET /reports/finance-operations/{kind}/{entity}/history', false)
+            ->assertSee('POST /reports/finance-operations/{kind}/{entity}/acknowledge', false)
+            ->assertSee('POST /reports/finance-operations/{kind}/{entity}/resolve', false)
+            ->assertSee('GET /reports/billing-escalations/history', false)
+            ->assertSee('GET /reports/billing-escalations/{code}', false)
+            ->assertSee('POST /reports/billing-escalations/{code}/acknowledge', false)
+            ->assertSee('POST /reports/billing-escalations/{code}/resolve', false)
+            ->assertSee('composer run velmix:lint', false)
+            ->assertSee('composer run velmix:lint:full', false)
+            ->assertSee('composer run velmix:audit', false)
+            ->assertSee('composer run velmix:preflight', false)
+            ->assertSee('composer run velmix:dispatch-alerts', false)
+            ->assertSee('composer run velmix:observability', false)
+            ->assertSee('composer run velmix:backup-readiness', false)
+            ->assertSee('composer run velmix:restore-drill', false)
+            ->assertSee('composer run velmix:staging-certification', false)
+            ->assertSee('composer run velmix:promotion-readiness', false)
+            ->assertSee('composer run velmix:cutover-readiness', false)
+            ->assertSee('composer run velmix:operational-certification', false)
+            ->assertSee('phpstan analyse --configuration=phpstan.neon.dist', false)
+            ->assertSee('ops/scripts/post-deploy.sh', false);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->get('/docs/release-readiness')
+            ->assertOk()
+            ->assertSee('composer run velmix:qa', false)
+            ->assertSee('docs internas accesibles desde `/docs`', false);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->get('/docs/operations-runbook')
+            ->assertOk()
+            ->assertSee('billing:dispatch-outbox --limit=20 --graceful-if-unmigrated', false)
+            ->assertSee('platform:prune-operational-data', false)
+            ->assertSee('system:alerts --fail-on-critical', false)
+            ->assertSee('system:dispatch-alerts --json', false)
+            ->assertSee('system:observability-report --json', false)
+            ->assertSee('VELMIX_SCHEDULER_ON_ONE_SERVER', false)
+            ->assertSee('VELMIX_ALERT_NOTIFY_CHANNELS', false)
+            ->assertSee('VELMIX_ALERT_WEBHOOK_URL', false)
+            ->assertSee('VELMIX_ALERT_SLACK_WEBHOOK_URL', false)
+            ->assertSee('VELMIX_BACKUP_ENABLED', false)
+            ->assertSee('VELMIX_BACKUP_STORAGE_PATH', false)
+            ->assertSee('VELMIX_RESTORE_DRILL_PATH', false)
+            ->assertSee('VELMIX_STAGING_CERTIFICATION_STORAGE_PATH', false)
+            ->assertSee('VELMIX_SCHEDULER_ALERT_DISPATCH_EVERY_MINUTES', false)
+            ->assertSee('scheduler_lock_store_not_shared', false)
+            ->assertSee('queue_connection_missing', false)
+            ->assertSee('queue_storage_not_ready', false)
+            ->assertSee('structured_logging_not_enabled', false)
+            ->assertSee('writable_path_not_writable', false)
+            ->assertSee('backup_encryption_passphrase_missing', false)
+            ->assertSee('backup_manifest_missing', false)
+            ->assertSee('outbox_attempts', false)
+            ->assertSee('system:preflight --json --fail-on-warning', false)
+            ->assertSee('system:backup-readiness --json --fail-on-warning', false)
+            ->assertSee('system:restore-drill --json --fail-on-warning', false)
+            ->assertSee('system:staging-certification --json', false)
+            ->assertSee('system:promotion-readiness --json', false)
+            ->assertSee('system:cutover-readiness --json', false)
+            ->assertSee('system:operational-certification --json', false)
+            ->assertSee('php artisan schedule:work', false)
+            ->assertSee('ops/systemd/velmix-app.env.example', false)
+            ->assertSee('ops/systemd/velmix-queue-worker.service', false)
+            ->assertSee('ops/systemd/velmix-backend.target', false)
+            ->assertSee('ops/scripts/install-systemd-units.sh', false)
+            ->assertSee('ops/scripts/prepare-release.sh', false)
+            ->assertSee('ops/scripts/promote-release.sh', false)
+            ->assertSee('ops/scripts/rollback-to-previous-release.sh', false)
+            ->assertSee('ops/scripts/check-backup-readiness.sh', false)
+            ->assertSee('ops/scripts/record-backup-success.sh', false)
+            ->assertSee('ops/scripts/run-restore-drill.sh', false);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->get('/docs/deployment-rollback')
+            ->assertOk()
+            ->assertSee('composer run velmix:ci:mysql', false)
+            ->assertSee('Rollback de aplicacion', false)
+            ->assertSee('Rollback de esquema', false)
+            ->assertSee('schedule:interrupt', false)
+            ->assertSee('system:preflight --json --fail-on-critical', false)
+            ->assertSee('php artisan queue:restart', false)
+            ->assertSee('ops/scripts/install-systemd-units.sh', false)
+            ->assertSee('ops/scripts/bootstrap-shared-path.sh', false)
+            ->assertSee('ops/scripts/prepare-release.sh', false)
+            ->assertSee('ops/scripts/promote-release.sh', false)
+            ->assertSee('ops/scripts/rollback-to-previous-release.sh', false)
+            ->assertSee('ops/scripts/check-backup-readiness.sh', false)
+            ->assertSee('ops/scripts/run-restore-drill.sh', false)
+            ->assertSee('ops/scripts/check-staging-certification.sh', false)
+            ->assertSee('ops/scripts/certify-staging-release.sh', false)
+            ->assertSee('ops/scripts/check-promotion-readiness.sh', false)
+            ->assertSee('ops/scripts/record-release-promotion.sh', false)
+            ->assertSee('ops/scripts/check-cutover-readiness.sh', false)
+            ->assertSee('ops/scripts/record-release-cutover.sh', false)
+            ->assertSee('ops/scripts/check-operational-certification.sh', false)
+            ->assertSee('ops/scripts/record-operational-certification.sh', false)
+            ->assertSee('velmix-backend.target', false);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->get('/docs/backup-restore')
+            ->assertOk()
+            ->assertSee('system:record-backup', false)
+            ->assertSee('VELMIX_BACKUP_ENABLED', false)
+            ->assertSee('VELMIX_RESTORE_DRILL_PATH', false)
+            ->assertSee('ops/scripts/record-backup-success.sh', false)
+            ->assertSee('ops/scripts/run-restore-drill.sh', false);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->get('/docs/staging-certification')
+            ->assertOk()
+            ->assertSee('system:record-staging-certification', false)
+            ->assertSee('VELMIX_STAGING_CERTIFICATION_STORAGE_PATH', false)
+            ->assertSee('ops/scripts/certify-staging-release.sh', false)
+            ->assertSee('ops/scripts/check-staging-certification.sh', false);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->get('/docs/release-promotion')
+            ->assertOk()
+            ->assertSee('system:record-release-promotion', false)
+            ->assertSee('VELMIX_RELEASE_PROMOTION_STORAGE_PATH', false)
+            ->assertSee('ops/scripts/record-release-promotion.sh', false)
+            ->assertSee('ops/scripts/check-promotion-readiness.sh', false);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->get('/docs/release-cutover')
+            ->assertOk()
+            ->assertSee('system:record-release-cutover', false)
+            ->assertSee('VELMIX_RELEASE_CUTOVER_STORAGE_PATH', false)
+            ->assertSee('ops/scripts/record-release-cutover.sh', false)
+            ->assertSee('ops/scripts/check-cutover-readiness.sh', false);
+
+        $this->actingAs($user)
+            ->withHeader('X-Tenant-Id', '10')
+            ->get('/docs/operational-certification')
+            ->assertOk()
+            ->assertSee('system:record-operational-certification', false)
+            ->assertSee('VELMIX_OPERATIONAL_CERTIFICATION_STORAGE_PATH', false)
+            ->assertSee('ops/scripts/record-operational-certification.sh', false)
+            ->assertSee('ops/scripts/check-operational-certification.sh', false);
+    }
+
+    private function openApiOperationSection(string $yaml, string $path, string $method): string
+    {
+        $pathSection = $this->openApiPathSection($yaml, $path);
+        $lines = preg_split('/\R/', $pathSection) ?: [];
+        $methodLine = sprintf('    %s:', $method);
+        $start = null;
+
+        foreach ($lines as $index => $line) {
+            if ($line === $methodLine) {
+                $start = $index;
+                break;
+            }
+        }
+
+        $this->assertNotNull($start, sprintf('OpenAPI operation %s %s was not found.', strtoupper($method), $path));
+
+        $operation = [];
+
+        for ($index = $start; $index < count($lines); $index++) {
+            $line = $lines[$index];
+
+            if ($index > $start && preg_match('/^    (get|post|put|patch|delete):$/', $line) === 1) {
+                break;
+            }
+
+            $operation[] = $line;
+        }
+
+        return implode(PHP_EOL, $operation);
+    }
+
+    private function openApiPathSection(string $yaml, string $path): string
+    {
+        $lines = preg_split('/\R/', $yaml) ?: [];
+        $pathLine = sprintf('  %s:', $path);
+        $start = null;
+
+        foreach ($lines as $index => $line) {
+            if ($line === $pathLine) {
+                $start = $index;
+                break;
+            }
+        }
+
+        $this->assertNotNull($start, sprintf('OpenAPI path %s was not found.', $path));
+
+        $section = [];
+
+        for ($index = $start; $index < count($lines); $index++) {
+            $line = $lines[$index];
+
+            if ($index > $start && preg_match('/^  \/\S.*:$/', $line) === 1) {
+                break;
+            }
+
+            $section[] = $line;
+        }
+
+        return implode(PHP_EOL, $section);
+    }
+
+    private function seedTenantUser(int $tenantId): User
+    {
+        $user = User::factory()->create();
+
+        DB::table('tenant_user')->insert([
+            'tenant_id' => $tenantId,
+            'user_id' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $user;
+    }
+
+    private function seedTenantAdminUser(int $tenantId): User
+    {
+        $user = User::factory()->create();
+        $roleId = DB::table('roles')->where('code', 'ADMIN')->value('id');
+
+        DB::table('tenant_user')->insert([
+            'tenant_id' => $tenantId,
+            'user_id' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('tenant_user_role')->insert([
+            'tenant_id' => $tenantId,
+            'user_id' => $user->id,
+            'role_id' => $roleId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $user;
+    }
+}

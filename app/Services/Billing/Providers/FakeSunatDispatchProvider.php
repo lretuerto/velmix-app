@@ -1,0 +1,113 @@
+<?php
+
+namespace App\Services\Billing\Providers;
+
+use Symfony\Component\HttpKernel\Exception\HttpException;
+
+class FakeSunatDispatchProvider implements BillingDispatchProvider
+{
+    public function code(): string
+    {
+        return 'fake_sunat';
+    }
+
+    public function checkHealth(array $profile): array
+    {
+        $environment = (string) ($profile['environment'] ?? 'sandbox');
+
+        return [
+            'status' => 'healthy',
+            'message' => sprintf('Provider %s is reachable in %s mode.', $this->code(), $environment),
+            'capabilities' => [
+                'voucher_dispatch' => true,
+                'credit_note_dispatch' => true,
+                'simulated' => true,
+            ],
+        ];
+    }
+
+    public function dispatch(object $event, array $payload, array $profile, array $options = []): array
+    {
+        $outcome = (string) ($options['simulate_result'] ?? $profile['default_outcome'] ?? 'accepted');
+
+        if (! in_array($outcome, ['accepted', 'rejected', 'transient_fail'], true)) {
+            throw new HttpException(422, 'Dispatch outcome is invalid.');
+        }
+
+        if ($outcome === 'transient_fail') {
+            return [
+                'provider_code' => $this->code(),
+                'provider_reference' => null,
+                'status' => 'failed',
+                'document_status' => 'failed',
+                'ticket' => null,
+                'message' => 'Temporary transport failure.',
+            ];
+        }
+
+        if ($outcome === 'rejected') {
+            return [
+                'provider_code' => $this->code(),
+                'provider_reference' => null,
+                'status' => 'rejected',
+                'document_status' => 'rejected',
+                'ticket' => null,
+                'message' => 'Rejected by SUNAT validation.',
+            ];
+        }
+
+        $ticket = 'SUNAT-'.str_pad((string) random_int(1, 999999), 6, '0', STR_PAD_LEFT);
+
+        return [
+            'provider_code' => $this->code(),
+            'provider_reference' => $ticket,
+            'status' => 'processed',
+            'document_status' => 'accepted',
+            'ticket' => $ticket,
+            'message' => null,
+        ];
+    }
+
+    public function reconcile(object $document, array $payload, array $profile, array $options = []): array
+    {
+        $outcome = (string) ($options['simulate_result'] ?? $profile['default_outcome'] ?? 'accepted');
+
+        if (! in_array($outcome, ['accepted', 'rejected', 'pending'], true)) {
+            throw new HttpException(422, 'Reconciliation outcome is invalid.');
+        }
+
+        if ($outcome === 'pending') {
+            return [
+                'provider_code' => $this->code(),
+                'provider_reference' => $document->sunat_ticket ?? null,
+                'status' => 'pending',
+                'document_status' => 'pending',
+                'ticket' => $document->sunat_ticket ?? null,
+                'message' => 'Document is still pending on provider side.',
+            ];
+        }
+
+        if ($outcome === 'rejected') {
+            return [
+                'provider_code' => $this->code(),
+                'provider_reference' => $document->sunat_ticket ?? null,
+                'status' => 'rejected',
+                'document_status' => 'rejected',
+                'ticket' => null,
+                'message' => 'Rejected during reconciliation.',
+            ];
+        }
+
+        $ticket = $document->sunat_ticket
+            ?: 'SUNAT-'.str_pad((string) random_int(1, 999999), 6, '0', STR_PAD_LEFT);
+
+        return [
+            'provider_code' => $this->code(),
+            'provider_reference' => $ticket,
+            'status' => 'accepted',
+            'document_status' => 'accepted',
+            'ticket' => $ticket,
+            'message' => null,
+        ];
+    }
+}

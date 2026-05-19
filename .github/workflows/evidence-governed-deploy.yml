@@ -1,0 +1,395 @@
+name: Evidence Governed Deploy
+
+on:
+  push:
+    branches:
+      - sprint1/day8-rbac-seeders-smoke
+    paths:
+      - '.github/workflows/evidence-governed-deploy.yml'
+      - 'ops/scripts/run-evidence-governed-deploy.sh'
+      - 'ops/scripts/bootstrap-remote-host-over-ssh.sh'
+      - 'ops/scripts/certify-staging-release.sh'
+      - 'ops/scripts/record-release-promotion.sh'
+      - 'ops/scripts/record-release-cutover.sh'
+      - 'ops/scripts/record-operational-certification.sh'
+      - 'ops/scripts/check-github-environment-readiness.sh'
+      - 'ops/scripts/check-production-go-no-go.sh'
+      - 'ops/scripts/sync-github-environment-config.sh'
+      - 'ops/github-environments/staging.env.example'
+      - 'ops/github-environments/production.env.example'
+      - 'ops/github-environments/production.variables.env.example'
+      - 'docs/operations/evidence-governed-deployment-workflow.md'
+      - 'docs/operations/deployment-and-rollback-runbook.md'
+      - 'docs/openapi/velmix.openapi.yaml'
+      - 'docs/api-guide.md'
+      - 'routes/web/platform.php'
+      - 'ops/README.md'
+      - 'README.md'
+      - 'tests/Feature/Platform/OpsAssetsIntegrityTest.php'
+      - 'tests/Feature/Docs/OpenApiDocsTest.php'
+  workflow_dispatch:
+    inputs:
+      deployment_strategy:
+        description: Deployment strategy for the governed release
+        required: false
+        default: remote_ssh
+        type: choice
+        options:
+          - remote_ssh
+          - control_only
+      target_environment:
+        description: Target environment for the controlled deployment gate
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      release_identifier:
+        description: Release identifier to certify
+        required: true
+        type: string
+      deploy_evidence:
+        description: Deploy evidence URL, ticket, or artifact reference
+        required: true
+        type: string
+      rollback_evidence:
+        description: Rollback evidence URL, ticket, or procedure reference
+        required: true
+        type: string
+      approval_evidence:
+        description: Promotion approval evidence URL or ticket
+        required: true
+        type: string
+      cutover_evidence:
+        description: Cutover evidence URL, ticket, or change record
+        required: true
+        type: string
+      backup_artifact:
+        description: Backup artifact identifier used for this change window
+        required: true
+        type: string
+      restore_evidence:
+        description: Restore or restore-drill evidence for the chosen backup
+        required: true
+        type: string
+      smoke_evidence:
+        description: Optional smoke evidence for staging validation
+        required: false
+        default: ''
+        type: string
+      monitoring_evidence:
+        description: Optional monitoring evidence for cutover and operational certification
+        required: false
+        default: ''
+        type: string
+      operator:
+        description: Operator or automation recording the evidence
+        required: false
+        default: release-bot
+        type: string
+      allow_warning:
+        description: Allow warning overrides while still blocking on critical findings
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evidence-governed-deploy-${{ github.ref_name }}-${{ inputs.target_environment || 'staging' }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  controlled-smoke:
+    if: github.event_name == 'push'
+    name: Evidence Smoke / ${{ format('release-{0}', github.run_id) }}
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: velmix
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      APP_ENV: staging
+      APP_DEBUG: false
+      LOG_CHANNEL: stack
+      LOG_STACK: single,daily_json
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: velmix
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      VELMIX_APP_PATH: ${{ github.workspace }}
+      VELMIX_APP_ROOT: ${{ github.workspace }}
+      VELMIX_SHARED_PATH: ${{ github.workspace }}/storage/app/shared
+      VELMIX_ENV_FILE: ${{ github.workspace }}/.env
+      VELMIX_RELEASE_IDENTIFIER: ${{ format('release-{0}', github.run_id) }}
+      VELMIX_STAGING_CERTIFICATION_ENV: staging
+      VELMIX_STAGING_CERTIFICATION_REQUIRED_ENVS: staging
+      VELMIX_RELEASE_PROMOTION_ENV: staging
+      VELMIX_RELEASE_PROMOTION_REQUIRED_ENVS: staging
+      VELMIX_RELEASE_CUTOVER_ENV: staging
+      VELMIX_RELEASE_CUTOVER_REQUIRED_ENVS: staging
+      VELMIX_OPERATIONAL_CERTIFICATION_ENV: staging
+      VELMIX_OPERATIONAL_CERTIFICATION_REQUIRED_ENVS: staging
+      VELMIX_BACKUP_ENABLED: true
+      VELMIX_BACKUP_ENCRYPTION_PASSPHRASE: workflow-evidence-passphrase
+      VELMIX_ALERT_NOTIFY_CHANNELS: log
+      VELMIX_DEPLOY_EVIDENCE_DIR: ${{ github.workspace }}/storage/app/evidence-governed-deploy
+      VELMIX_DEPLOY_EVIDENCE: ${{ format('https://staging.example.test/evidence/deploy-{0}', github.sha) }}
+      VELMIX_ROLLBACK_EVIDENCE: ${{ format('https://staging.example.test/evidence/rollback-{0}', github.sha) }}
+      VELMIX_APPROVAL_EVIDENCE: ${{ format('https://staging.example.test/evidence/approve-{0}', github.sha) }}
+      VELMIX_CUTOVER_EVIDENCE: ${{ format('https://staging.example.test/evidence/cutover-{0}', github.sha) }}
+      VELMIX_BACKUP_ARTIFACT: ${{ format('s3://velmix-staging/backups/{0}.sql.gz', github.sha) }}
+      VELMIX_RESTORE_EVIDENCE: ${{ format('https://staging.example.test/evidence/restore-{0}', github.sha) }}
+      VELMIX_SMOKE_EVIDENCE: ${{ format('https://staging.example.test/evidence/smoke-{0}', github.sha) }}
+      VELMIX_MONITORING_EVIDENCE: ${{ format('https://staging.example.test/evidence/monitoring-{0}', github.sha) }}
+      VELMIX_DEPLOY_OPERATOR: ${{ github.actor }}
+      VELMIX_DEPLOY_ALLOW_WARNING: false
+      VELMIX_DEPLOY_NOTES: GitHub Actions evidence-governed deployment workflow
+      VELMIX_TARGET_ENVIRONMENT: staging
+      VELMIX_BACKUP_DRIVER: github-actions
+      VELMIX_BACKUP_CHECKSUM: sha256:${{ github.sha }}
+      VELMIX_BACKUP_SIZE: 0
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_mysql, sqlite, pdo_sqlite
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Copy environment file
+        run: cp .env.example .env
+
+      - name: Generate app key
+        run: php artisan key:generate
+
+      - name: Wait for MySQL
+        run: |
+          for i in {1..30}; do
+            if php -r 'try { new PDO("mysql:host=".getenv("DB_HOST").";port=".getenv("DB_PORT").";dbname=".getenv("DB_DATABASE"), getenv("DB_USERNAME"), getenv("DB_PASSWORD")); exit(0); } catch (Throwable $e) { fwrite(STDERR, $e->getMessage().PHP_EOL); exit(1); }'; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "MySQL did not become ready in time." >&2
+          exit 1
+
+      - name: Bootstrap shared layout
+        run: bash ops/scripts/bootstrap-shared-path.sh
+
+      - name: Prepare controlled database state
+        run: composer run velmix:reset
+
+      - name: Validate scheduler and routes
+        run: |
+          composer run velmix:schedule
+          composer run velmix:routes
+
+      - name: Execute evidence-governed deployment chain
+        run: bash ops/scripts/run-evidence-governed-deploy.sh
+
+      - name: Publish job summary
+        if: always()
+        run: |
+          if [ -f "$VELMIX_DEPLOY_EVIDENCE_DIR/summary.md" ]; then
+            cat "$VELMIX_DEPLOY_EVIDENCE_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload deployment evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-governed-deploy-smoke-${{ format('release-{0}', github.run_id) }}
+          path: ${{ env.VELMIX_DEPLOY_EVIDENCE_DIR }}
+          if-no-files-found: error
+
+  governed-deploy:
+    if: github.event_name == 'workflow_dispatch'
+    name: Evidence Deploy ${{ inputs.target_environment }} / ${{ inputs.release_identifier }}
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.target_environment }}
+    env:
+      VELMIX_APP_PATH: ${{ github.workspace }}
+      VELMIX_APP_ROOT: ${{ github.workspace }}
+      VELMIX_RELEASE_IDENTIFIER: ${{ inputs.release_identifier }}
+      VELMIX_DEPLOY_EVIDENCE_DIR: ${{ github.workspace }}/storage/app/evidence-governed-deploy
+      VELMIX_DEPLOY_EVIDENCE: ${{ inputs.deploy_evidence }}
+      VELMIX_ROLLBACK_EVIDENCE: ${{ inputs.rollback_evidence }}
+      VELMIX_APPROVAL_EVIDENCE: ${{ inputs.approval_evidence }}
+      VELMIX_CUTOVER_EVIDENCE: ${{ inputs.cutover_evidence }}
+      VELMIX_BACKUP_ARTIFACT: ${{ inputs.backup_artifact }}
+      VELMIX_RESTORE_EVIDENCE: ${{ inputs.restore_evidence }}
+      VELMIX_SMOKE_EVIDENCE: ${{ inputs.smoke_evidence }}
+      VELMIX_MONITORING_EVIDENCE: ${{ inputs.monitoring_evidence }}
+      VELMIX_DEPLOY_OPERATOR: ${{ inputs.operator || github.actor }}
+      VELMIX_DEPLOY_ALLOW_WARNING: ${{ inputs.allow_warning && 'true' || 'false' }}
+      VELMIX_DEPLOYMENT_STRATEGY: ${{ inputs.deployment_strategy }}
+      VELMIX_DEPLOY_NOTES: GitHub Actions evidence-governed deployment workflow
+      VELMIX_TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
+      VELMIX_BACKUP_DRIVER: github-actions
+      VELMIX_BACKUP_CHECKSUM: sha256:${{ github.sha }}
+      VELMIX_BACKUP_SIZE: 0
+      VELMIX_REMOTE_HOST: ${{ secrets.VELMIX_SSH_HOST }}
+      VELMIX_REMOTE_USER: ${{ secrets.VELMIX_SSH_USER }}
+      VELMIX_REMOTE_PORT: ${{ vars.VELMIX_REMOTE_PORT }}
+      VELMIX_SSH_PRIVATE_KEY: ${{ secrets.VELMIX_SSH_PRIVATE_KEY }}
+      VELMIX_SSH_KNOWN_HOSTS: ${{ secrets.VELMIX_SSH_KNOWN_HOSTS }}
+      VELMIX_REMOTE_APP_ROOT: ${{ vars.VELMIX_REMOTE_APP_ROOT }}
+      VELMIX_REMOTE_RELEASES_PATH: ${{ vars.VELMIX_REMOTE_RELEASES_PATH }}
+      VELMIX_REMOTE_SHARED_PATH: ${{ vars.VELMIX_REMOTE_SHARED_PATH }}
+      VELMIX_REMOTE_ENV_FILE: ${{ vars.VELMIX_REMOTE_ENV_FILE }}
+      VELMIX_REMOTE_TMP_PATH: ${{ vars.VELMIX_REMOTE_TMP_PATH }}
+      VELMIX_REMOTE_USE_SYSTEMD: ${{ vars.VELMIX_REMOTE_USE_SYSTEMD }}
+      VELMIX_REMOTE_INSTALL_UNITS: ${{ vars.VELMIX_REMOTE_INSTALL_UNITS }}
+      VELMIX_REMOTE_TOPOLOGY_MODE: ${{ vars.VELMIX_REMOTE_TOPOLOGY_MODE }}
+      VELMIX_GOVERNANCE_MODE: ${{ vars.VELMIX_GOVERNANCE_MODE }}
+      VELMIX_REMOTE_PHP_BIN: ${{ vars.VELMIX_REMOTE_PHP_BIN }}
+      VELMIX_REMOTE_COMPOSER_BIN: ${{ vars.VELMIX_REMOTE_COMPOSER_BIN }}
+      VELMIX_REMOTE_SYSTEMD_TARGET: ${{ vars.VELMIX_REMOTE_SYSTEMD_TARGET }}
+      VELMIX_REMOTE_QUEUE_RESTART_SERVICE: ${{ vars.VELMIX_REMOTE_QUEUE_RESTART_SERVICE }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Initialize evidence workspace
+        run: mkdir -p "$VELMIX_DEPLOY_EVIDENCE_DIR"
+
+      - name: Validate remote deploy configuration
+        if: ${{ inputs.deployment_strategy == 'remote_ssh' }}
+        run: |
+          missing=0
+          blockers="$VELMIX_DEPLOY_EVIDENCE_DIR/blockers.json"
+          summary="$VELMIX_DEPLOY_EVIDENCE_DIR/summary.md"
+          required_secret_names=(
+            VELMIX_SSH_HOST
+            VELMIX_SSH_USER
+            VELMIX_SSH_PRIVATE_KEY
+            VELMIX_SSH_KNOWN_HOSTS
+          )
+          required_secret_runtime_names=(
+            VELMIX_REMOTE_HOST
+            VELMIX_REMOTE_USER
+            VELMIX_SSH_PRIVATE_KEY
+            VELMIX_SSH_KNOWN_HOSTS
+          )
+          printf '{\n  "status": "blocked",\n  "release": "%s",\n  "environment": "%s",\n  "missing_secrets": [\n' "$VELMIX_RELEASE_IDENTIFIER" "${{ inputs.target_environment }}" > "$blockers"
+          first=true
+          for idx in "${!required_secret_names[@]}"; do
+            secret_name="${required_secret_names[$idx]}"
+            runtime_name="${required_secret_runtime_names[$idx]}"
+            if [ -z "${!runtime_name}" ]; then
+              echo "::error::Missing required ${{ inputs.target_environment }} environment secret: $secret_name"
+              echo "::notice::GitHub Actions maps $secret_name into runtime variable $runtime_name for the remote deploy wrapper."
+              if [ "$first" = true ]; then
+                first=false
+              else
+                printf ',\n' >> "$blockers"
+              fi
+              printf '    "%s"' "$secret_name" >> "$blockers"
+              missing=1
+            fi
+          done
+          for name in \
+            VELMIX_REMOTE_PORT \
+            VELMIX_REMOTE_APP_ROOT \
+            VELMIX_REMOTE_RELEASES_PATH \
+            VELMIX_REMOTE_SHARED_PATH \
+            VELMIX_REMOTE_ENV_FILE \
+            VELMIX_REMOTE_TMP_PATH \
+            VELMIX_REMOTE_USE_SYSTEMD \
+            VELMIX_REMOTE_INSTALL_UNITS \
+            VELMIX_REMOTE_PHP_BIN \
+            VELMIX_REMOTE_COMPOSER_BIN \
+            VELMIX_REMOTE_SYSTEMD_TARGET \
+            VELMIX_REMOTE_QUEUE_RESTART_SERVICE; do
+            if [ -z "${!name}" ]; then
+              echo "::warning::Remote deploy setting $name is not configured in the GitHub environment. Workflow defaults will be used."
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            printf '\n  ]\n}\n' >> "$blockers"
+            cat > "$summary" <<EOF
+          # Evidence Governed Deploy Blocked
+
+          - Release: \`$VELMIX_RELEASE_IDENTIFIER\`
+          - Environment: \`${{ inputs.target_environment }}\`
+          - Status: \`blocked\`
+          - Reason: missing required SSH environment secrets for live remote deploy
+          - Required secrets:
+            - \`VELMIX_SSH_HOST\`
+            - \`VELMIX_SSH_USER\`
+            - \`VELMIX_SSH_PRIVATE_KEY\`
+            - \`VELMIX_SSH_KNOWN_HOSTS\`
+          - Runtime mapping:
+            - \`VELMIX_SSH_HOST -> VELMIX_REMOTE_HOST\`
+            - \`VELMIX_SSH_USER -> VELMIX_REMOTE_USER\`
+          EOF
+            exit 1
+          fi
+          printf '\n  ]\n}\n' >> "$blockers"
+
+      - name: Configure SSH access
+        if: ${{ inputs.deployment_strategy == 'remote_ssh' }}
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$VELMIX_SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$VELMIX_SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 644 "$HOME/.ssh/known_hosts"
+
+      - name: Execute remote staging deploy over SSH
+        if: ${{ inputs.deployment_strategy == 'remote_ssh' }}
+        run: bash ops/scripts/deploy-release-over-ssh.sh
+
+      - name: Setup PHP for control-only execution
+        if: ${{ inputs.deployment_strategy == 'control_only' }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.3
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_mysql, sqlite, pdo_sqlite
+          coverage: none
+
+      - name: Run control-only evidence chain
+        if: ${{ inputs.deployment_strategy == 'control_only' }}
+        run: |
+          echo "::warning::Running control-only mode. No live remote deploy was executed."
+          exit 1
+
+      - name: Publish job summary
+        if: always()
+        run: |
+          if [ -f "$VELMIX_DEPLOY_EVIDENCE_DIR/summary.md" ]; then
+            cat "$VELMIX_DEPLOY_EVIDENCE_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload deployment evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-governed-deploy-${{ inputs.target_environment }}-${{ inputs.release_identifier }}
+          path: ${{ env.VELMIX_DEPLOY_EVIDENCE_DIR }}
+          if-no-files-found: error

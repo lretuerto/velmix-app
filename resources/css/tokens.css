@@ -1,0 +1,31 @@
+:root {
+    --velmix-bg: #edf0ea;
+    --velmix-bg-elevated: #f8f3ea;
+    --velmix-panel: rgb(255 253 247 / 0.9);
+    --velmix-panel-strong: #ffffff;
+    --velmix-panel-muted: #f3ece1;
+    --velmix-sidebar: #0c201b;
+    --velmix-sidebar-elevated: #17392f;
+    --velmix-border: rgb(17 35 30 / 0.13);
+    --velmix-border-strong: rgb(17 35 30 / 0.26);
+    --velmix-ink: #111b17;
+    --velmix-muted: #69736c;
+    --velmix-brand: #a9572b;
+    --velmix-brand-strong: #743516;
+    --velmix-brand-soft: #f0d6c5;
+    --velmix-accent: #245f68;
+    --velmix-accent-soft: #dcecee;
+    --velmix-success: #167250;
+    --velmix-success-soft: #dff3e8;
+    --velmix-danger: #9f3445;
+    --velmix-danger-soft: #fae6e9;
+    --velmix-warning: #9d681b;
+    --velmix-warning-soft: #f7ebcf;
+    --velmix-info: #245f68;
+    --velmix-shadow: 0 30px 80px rgb(12 32 27 / 0.13);
+    --velmix-shadow-tight: 0 18px 40px rgb(12 32 27 / 0.09);
+    --velmix-shadow-inset: inset 0 1px 0 rgb(255 255 255 / 0.72);
+    --velmix-radius-xl: 1.35rem;
+    --velmix-radius-lg: 1rem;
+    --velmix-radius-md: 0.7rem;
+}
