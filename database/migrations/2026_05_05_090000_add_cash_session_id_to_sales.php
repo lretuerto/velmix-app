@@ -22,8 +22,12 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('sales', function (Blueprint $table) {
+            $table->dropForeign(['cash_session_id']);
+        });
+
+        Schema::table('sales', function (Blueprint $table) {
             $table->dropIndex('sales_tenant_cash_session_idx');
-            $table->dropConstrainedForeignId('cash_session_id');
+            $table->dropColumn('cash_session_id');
         });
     }
 };
