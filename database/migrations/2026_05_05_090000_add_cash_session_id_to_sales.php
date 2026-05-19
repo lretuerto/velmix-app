@@ -21,12 +21,19 @@ return new class extends Migration
 
     public function down(): void
     {
+        $driver = Schema::getConnection()->getDriverName();
+
         Schema::table('sales', function (Blueprint $table) {
             $table->dropForeign(['cash_session_id']);
         });
 
+        if ($driver !== 'mysql') {
+            Schema::table('sales', function (Blueprint $table) {
+                $table->dropIndex('sales_tenant_cash_session_idx');
+            });
+        }
+
         Schema::table('sales', function (Blueprint $table) {
-            $table->dropIndex('sales_tenant_cash_session_idx');
             $table->dropColumn('cash_session_id');
         });
     }
