@@ -3,7 +3,7 @@ name: Evidence Governed Deploy
 on:
   push:
     branches:
-      - sprint1/day8-rbac-seeders-smoke
+      - main
     paths:
       - '.github/workflows/evidence-governed-deploy.yml'
       - 'ops/scripts/run-evidence-governed-deploy.sh'

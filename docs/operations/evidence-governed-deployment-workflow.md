@@ -201,7 +201,7 @@ ops/scripts/configure-github-environment-protection.sh \
 
 ```powershell
 gh workflow run evidence-governed-deploy.yml `
-  --ref sprint1/day8-rbac-seeders-smoke `
+  --ref main `
   -f deployment_strategy=remote_ssh `
   -f target_environment=staging `
   -f release_identifier=release-2026-04-21-001 `

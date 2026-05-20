@@ -439,6 +439,8 @@ class OpsAssetsIntegrityTest extends TestCase
         $workflow = file_get_contents(base_path('.github/workflows/evidence-governed-deploy.yml'));
         $this->assertIsString($workflow);
         $this->assertStringContainsString('workflow_dispatch:', $workflow);
+        $this->assertStringContainsString('- main', $workflow);
+        $this->assertStringNotContainsString('sprint1/day8-rbac-seeders-smoke', $workflow);
         $this->assertStringContainsString('environment:', $workflow);
         $this->assertStringContainsString('ops/scripts/run-evidence-governed-deploy.sh', $workflow);
         $this->assertStringContainsString('ops/scripts/bootstrap-remote-host-over-ssh.sh', $workflow);
